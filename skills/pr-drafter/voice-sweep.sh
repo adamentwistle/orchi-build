@@ -2,11 +2,11 @@
 # voice-sweep.sh -- sweep authored text before it leaves the machine.
 #
 # A PR body, a commit message and a review comment all go out under
-# Adam's name, and the same four things have been caught in them
+# the user's name, and the same four things have been caught in them
 # before: a non-ASCII character (7 em dashes on one branch, 3 on
 # another, ~150 in one README), a git trailer, an AI reference, an
-# internal URL. Those rules live in skills/pr-drafter/SKILL.md, where a
-# human reads them. This is the same rules made mechanical, so that
+# internal URL. Those rules live in the SKILL.md beside this file, where
+# a human reads them. This is the same rules made mechanical, so that
 # "the text is clean" is something somebody ran rather than something
 # somebody believed.
 #
@@ -24,8 +24,8 @@
 # product name in a change that is genuinely about that product, a
 # trailer-shaped last block, a localhost URL, a long line inside pasted
 # command output. A human settles those, and gets a line and a column
-# to settle them from. Both severities exit 1, as secret-sweep.sh does,
-# because both mean look before you send.
+# to settle them from. Both severities exit 1, because both mean look
+# before you send.
 #
 # It reads a named file rather than stdin on purpose. The text that
 # goes out has to exist as a file anyway (gh pr create --body-file, git
@@ -265,7 +265,7 @@ BEGIN {
     # phrase three times teaches the reader to skim the output.
     aihit = 0
     if (match(low, AI_ATTRIB)) {
-      scan("BLOCK", NR, low, AI_ATTRIB, "AI attribution: the author is Adam and nobody else", 0)
+      scan("BLOCK", NR, low, AI_ATTRIB, "AI attribution: the author is the user and nobody else", 0)
       aihit = 1
     } else if (match(low, AI_PHRASE)) {
       scan("BLOCK", NR, low, AI_PHRASE, "AI reference: cut it, the tooling is not the subject", 0)

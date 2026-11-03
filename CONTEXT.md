@@ -11,6 +11,10 @@
   `legwork:<project>` or `md:<file>#<anchor>`. A bare `ENG-12` is Linear's.
 - **Step**: one thing `orchi` checks and can fix, such as Herdr, the themes or the ticket sources.
 - **Private home**: a throwaway Herdr and Claude home for tests, never a real one.
+- **Usage cache**: the JSON file of how full each Claude usage window is, `~/.cache/orchi/usage.json`, kept fresh by
+  usage-watch. usage-guard reads it, and ccstatusline's file only as a fallback.
+- **Bundled piece**: a skill or script Orchi ships for every user: pr-drafter, ux-test, usage-guard and pane-notify.
+  None names a person, an employer or a work path, and each runs from the installed package's own copy.
 - **Check**: the part of a step that looks and changes nothing. It says ok, needs a fix, or broken.
 - **Fix**: the part of a step that makes the change. Only bare `orchi` runs fixes; `orchi doctor` never does.
 - **State folder**: `~/.local/state/orchi`, where `orchi` keeps its lock, its record of runs, what it owns and its

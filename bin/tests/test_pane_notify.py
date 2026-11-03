@@ -347,7 +347,7 @@ def test_failed_banner_still_exits_zero(env):
 def test_missing_terminal_notifier_exits_zero(env):
     (env.bin / "terminal-notifier").unlink()
     env.pane(title="orch-birch")
-    done = env.run(stop(), PATH=str(env.bin), PANE_NOTIFY_NOTIFIER=str(env.bin / "terminal-notifier"))
+    done = env.run(stop(), PATH=str(env.bin))
     assert done.returncode == 0
     assert done.stdout == ""
 
@@ -360,3 +360,73 @@ def test_body_goes_on_stdin_so_a_leading_dash_or_bracket_survives(env, first):
     [show] = env.shows()
     assert "-message" not in show
     assert opt(show, "STDIN") == first
+
+
+# No path of its own, and a banner even where terminal-notifier is not installed.
+
+def test_the_script_names_no_install_folder():
+    text = SCRIPT.read_text()
+    assert "/opt/" not in text
+    assert "/usr/local" not in text
+    assert "PANE_NOTIFY_NOTIFIER" not in text
+
+
+def osascript_only(env):
+    (env.bin / "terminal-notifier").unlink()
+    stub = env.bin / "osascript"
+    stub.write_text(RECORDER.format(python=sys.executable, calls=str(env.calls_file), cfg=str(env.cfg_file),
+                                    name="osascript", rc="osa_rc"))
+    stub.chmod(0o755)
+    return f"{env.wrong}:{env.bin}:/usr/bin:/bin"
+
+
+def banners(env):
+    return [c for c in env.calls() if c[0] == "osascript"]
+
+
+def test_without_terminal_notifier_the_banner_goes_through_osascript(env):
+    path = osascript_only(env)
+    env.pane(title="orch-birch")
+    done = env.run(stop(last_assistant_message="PR 30 is open.\nmore"), PATH=path)
+    assert done.returncode == 0
+    [shown] = banners(env)
+    # Title and body are arguments the script reads, never text spliced into it.
+    assert shown[shown.index("--"):] == ["--", "orch-birch: done", "PR 30 is open."]
+    assert "orch-birch" not in " ".join(shown[1:shown.index("--")])
+    assert env.shows() == []
+
+
+@pytest.mark.parametrize("first", ['say "hi" & quit', "- a bullet", "\\ backslash", "-e extra"])
+def test_osascript_gets_awkward_text_as_arguments(env, first):
+    path = osascript_only(env)
+    env.pane(title="orch-birch")
+    env.run(stop(last_assistant_message=first), PATH=path)
+    [shown] = banners(env)
+    assert shown[-1] == first
+    assert first not in " ".join(shown[1:shown.index("--")])
+
+
+def test_osascript_is_not_used_when_terminal_notifier_is_there(env):
+    stub = env.bin / "osascript"
+    stub.write_text(RECORDER.format(python=sys.executable, calls=str(env.calls_file), cfg=str(env.cfg_file),
+                                    name="osascript", rc="osa_rc"))
+    stub.chmod(0o755)
+    env.pane(title="orch-birch")
+    env.run(stop())
+    assert len(env.shows()) == 1
+    assert banners(env) == []
+
+
+def test_a_failing_osascript_still_exits_zero(env):
+    path = osascript_only(env)
+    env.configure(pane={"title": "orch-birch", "cwd": "/x"}, osa_rc=1)
+    done = env.run(stop(), PATH=path)
+    assert done.returncode == 0
+    assert done.stdout == ""
+
+
+def test_a_worker_pane_is_quiet_on_every_banner_route(env):
+    path = osascript_only(env)
+    env.pane(label="fw-b7-bundled", title="Make the bundled pieces")
+    env.run(stop(), PATH=path)
+    assert banners(env) == [] and env.shows() == []

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ux-test scaffold. Installs the UX testing stack into a target: writes the files
 # that are missing and installs the pinned dev dependencies. It never runs git
-# (decision 3) and never edits a file it did not create (decision 4). Safe to
+# and never edits a file it did not create. Safe to
 # re-run: a second run writes nothing.
 #
 # Usage: scaffold.sh <target>
@@ -26,7 +26,7 @@ stop() { say STOP "$1"; exit 1; }
 command -v node >/dev/null || stop "node is not on PATH"
 . "$SKILL/scripts/lib.sh"
 
-# Target kind (decision 6) and package manager (decision 17). Wails is detected in
+# Target kind and package manager. Wails is detected in
 # frontend/ and installed at the root; Next is both at the root.
 detect_kind
 case $kind in
@@ -75,16 +75,16 @@ tpl() {
   place "$out" "${2:-$1}"
 }
 
-# Files (decisions 5, 10, 12, 13, 14, 18, 19).
+# The files the scaffold places.
 while read -r src dest; do
   tpl "$src" "$dest"
   [ "$dest" != .github/workflows/ux-test.yml ] || ci_placed=$placed
 done < <(scaffold_files)
 
-# Install @playwright/test at the pin, from the root (decisions 13, 17). The Wails
+# Install @playwright/test at the pin, from the root. The Wails
 # root package.json template already carries the exact pin, so that case is a plain
 # install that never rewrites it. A root package.json the scaffold did not write
-# (every Next target) gets the dev dependency added, the one edit decision 3 allows.
+# (every Next target) gets the dev dependency added, the one edit the scaffold makes to a file it did not write.
 have="$(dep "$T/package.json" @playwright/test)"
 if [ -n "$have" ] && [ "$have" != "$PW_PIN" ]; then
   stop "@playwright/test is $have in package.json, the pin is $PW_PIN; change one of them first"
@@ -99,7 +99,7 @@ case "$pm:${have:+pinned}" in
 esac
 npx --no-install playwright install chromium
 
-# Playwright agents and .mcp.json (decision 8). init-agents overwrites .mcp.json
+# Playwright agents and .mcp.json. init-agents overwrites .mcp.json
 # wholesale, so it runs in a temporary copy and only its output is placed.
 init_agents "$tmp/agents"
 for a in planner generator healer; do

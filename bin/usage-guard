@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """UserPromptSubmit + PostToolUse hook: tell Claude to pause at a safe point before a usage limit hits.
 
-Reads ccstatusline's usage cache (~/.cache/ccstatusline/usage.json, refreshed every 3 min while
-the status line is alive). Silent unless a window is at its pause line with enough time left
-before its reset that hitting the limit would strand work. The pause line is usage_guard_percent
-in Orchi's settings (95 when unset), the same for every window:
+Reads the usage cache usage-watch keeps fresh. If there is none, or it is stale or holds an error, it reads
+ccstatusline's cache instead when that is installed; nothing needs ccstatusline. Silent unless a window is at its
+pause line with enough time left before its reset that hitting the limit would strand work. The pause line is
+usage_guard_percent in Orchi's settings (95 when unset), the same for every window, the 5-hour one too: the
+15 minutes below already leave a window that is about to reset alone, so it needs no line of its own:
 
   5-hour window            at the percent used, more than 15 minutes to reset
   weekly all-models limit  at the percent used, more than 1 hour to reset
@@ -17,7 +18,7 @@ every REPEAT_AFTER seconds per session so a turn that is already wrapping up is 
 
   usage-guard            hook mode (stdin = hook JSON, stdout = hook JSON or nothing)
   usage-guard --check    show every window's numbers and the verdict
-Env for testing: USAGE_GUARD_CACHE (path), USAGE_GUARD_NOW (epoch seconds),
+Env for testing: USAGE_GUARD_CACHE (the one file to read, no fallback), USAGE_GUARD_NOW (epoch seconds),
 USAGE_GUARD_STAMPS (throttle dir).
 """
 import json
@@ -29,7 +30,9 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 import orchi_settings  # noqa: E402
 
-CACHE = os.environ.get("USAGE_GUARD_CACHE") or os.path.expanduser("~/.cache/ccstatusline/usage.json")
+# The usage cache, in the order it is tried: usage-watch's, then ccstatusline's as an optional fallback. This is the
+# only place either path is written.
+CACHES = ("~/.cache/orchi/usage.json", "~/.cache/ccstatusline/usage.json")
 STAMPS = os.environ.get("USAGE_GUARD_STAMPS") or os.path.expanduser("~/.cache/usage-guard")
 CACHE_STALE_AFTER = 3600
 REPEAT_AFTER = 600
@@ -63,14 +66,31 @@ def fmt_duration(secs):
     return f"{m}m"
 
 
+def cache_files():
+    override = os.environ.get("USAGE_GUARD_CACHE")
+    return [override] if override else [os.path.expanduser(c) for c in CACHES]
+
+
+def judgeable(data, now):
+    """Whether any window has a usage that is a number and a reset still ahead. The percent does not matter here."""
+    return any(to_reset > 0 for _, _, _, to_reset, _ in assess(data, now, 100))
+
+
 def load(now):
-    try:
-        if now - os.path.getmtime(CACHE) > CACHE_STALE_AFTER:
-            return None
-        data = json.load(open(CACHE))
-        return None if data.get("error") else data
-    except Exception:
-        return None
+    """The first usable cache, or None. One is skipped when it is stale, is not JSON, holds an error or has no window
+    left to judge, which is a usage that is a number with a reset still ahead. A cache whose windows have all reset
+    is as good as none, so the fallback is read instead of a file that can only say "ok"."""
+    for path in cache_files():
+        try:
+            if now - os.path.getmtime(path) > CACHE_STALE_AFTER:
+                continue
+            with open(path) as f:
+                data = json.load(f)
+            if isinstance(data, dict) and not data.get("error") and judgeable(data, now):
+                return data
+        except Exception:
+            continue
+    return None
 
 
 def assess(data, now, percent):
@@ -84,7 +104,10 @@ def assess(data, now, percent):
             reset_ts = datetime.fromisoformat(str(reset).replace("Z", "+00:00")).timestamp()
         except Exception:
             continue
-        used = float(used)
+        try:
+            used = float(used)
+        except (TypeError, ValueError):
+            continue
         to_reset = reset_ts - now
         yield name, used, reset_ts, to_reset, used >= percent and to_reset > min_away
 

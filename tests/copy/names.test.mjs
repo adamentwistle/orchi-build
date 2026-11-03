@@ -18,8 +18,8 @@ export const DENY = [
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const TEXT = /\.(md|js|mjs|json|py|sh|css|html|svg|txt|ya?ml|ts)$|\/[^./]+$/;
-// Bundled separately, and made generic in its own pass. It comes off this list once it is clean.
-const NOT_YET = ["skills/pr-drafter"];
+// Folders not yet made generic. They come off this list once clean. None are left.
+const NOT_YET = [];
 
 function files(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {

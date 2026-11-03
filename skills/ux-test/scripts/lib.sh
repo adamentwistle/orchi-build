@@ -11,7 +11,7 @@ json() { node -e 'let v = require(process.argv[1]); for (const k of process.argv
 dep() { local v; v="$(json "$1" devDependencies "$2")"; printf '%s' "${v:-$(json "$1" dependencies "$2")}"; }
 has_dep() { [ -f "$T/package.json" ] && [ -n "$(dep "$T/package.json" "$1")" ]; }
 
-# detect_kind: sets kind to wails, next or vite (decision 6), empty when none fits.
+# detect_kind: sets kind to wails, next or vite, empty when none fits.
 detect_kind() {
   kind=
   if [ -f "$T/wails.json" ]; then
@@ -26,7 +26,7 @@ detect_kind() {
 # pm_dir: where the package manager is detected. Wails in frontend/, Next at the root.
 pm_dir() { if [ "$kind" = wails ]; then printf '%s' "$T/frontend"; else printf '%s' "$T"; fi; }
 
-# detect_pm <dir> (decision 17): the lockfile decides, then packageManager. Sets pm to
+# detect_pm <dir>: the lockfile decides, then packageManager. Sets pm to
 # npm or pnpm, or pm_err to the reason there is none. pm_note carries a disagreement
 # between the lockfile and packageManager, which the lockfile wins.
 detect_pm() {
@@ -57,7 +57,7 @@ detect_pm() {
 }
 
 # target_vars: after detect_kind and detect_pm, sets the values templates use: name,
-# dev_server, and for Next the CI values (decisions 13, 17, 18). Node comes from .nvmrc
+# dev_server, and for Next the CI values. Node comes from .nvmrc
 # or .node-version, else 20; actions are pinned by hash in versions.json.
 target_vars() {
   local f
@@ -99,7 +99,7 @@ render() {
 }
 
 # scaffold_files: the files the scaffold places for this kind, as "<template> <target
-# path>" lines (decisions 5, 10, 12, 13, 14, 18, 19). The agent files and .mcp.json come
+# path>" lines. The agent files and .mcp.json come
 # from init-agents, not templates, and are not listed.
 scaffold_files() {
   if [ "$kind" = wails ]; then
@@ -114,7 +114,7 @@ scaffold_files() {
 }
 
 # init_agents <dir>: run init-agents at the target's installed Playwright in a temporary
-# copy (decision 8), leaving .claude/agents/ and .mcp.json in <dir>. It overwrites
+# copy, leaving .claude/agents/ and .mcp.json in <dir>. It overwrites
 # .mcp.json wholesale, which is why it never runs in the target. The target's config
 # is not copied: it only moves the seed spec init-agents writes, which nothing uses, and a
 # config that imports a file beside it fails to load in the copy.

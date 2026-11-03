@@ -5,8 +5,10 @@ description: Install and use the UX testing stack (Playwright Test, the Playwrig
 
 # ux-test
 
-Source of truth: Orchi's `skills/ux-test/`. The profile's copy is a link to it; edit it
-there.
+Setup links this folder into `<claude_dir>/skills`. Install agent-browser at the pin in
+`versions.json` with `npm install -g agent-browser@<pin>`, then `agent-browser install`.
+Doctor reports agent-browser MISSING until then. Edit the skill in Orchi's
+`skills/ux-test/`, never in the link.
 
 The stack in a target: Playwright Test with one smoke spec, the three Playwright agents
 (planner, generator, healer) talking to the `playwright-test` MCP server bundled with
@@ -92,7 +94,7 @@ flow touches money, auth or data loss. The planner runs on features, never on bu
 The healer edits specs only; the hook enforces it.
 
 The three agents are Claude Code subagents in the target's `.claude/agents/`, so they
-run from a Claude Code session in the target, interactive or `claude -p`. From Hermes
+run from a Claude Code session in the target, interactive or `claude -p`. From a script
 use `claude -p "<prompt>" --permission-mode acceptEdits --max-turns 60 --output-format
 json --no-session-persistence` with `CLAUDE_CONFIG_DIR` set, and `--allowedTools` as
 below. The `.playwright-mcp/` directory the `playwright-test` server writes belongs in
@@ -131,8 +133,8 @@ and an app file path into `e2e/healer-hook.sh`: it must print a deny.
 
 **Auth.** A journey behind a login needs a session the runner can mint without a human.
 The pattern: a `globalSetup` in `e2e/` that creates a user and session through the
-app's own auth admin API (Supabase: `auth.admin.generateLink` with the service role key
-against a local instance) and saves `storageState` for the specs. Never loosen an app's
+app's own auth admin API (for example a generated login link, from a local instance with its
+service key) and saves `storageState` for the specs. Never loosen an app's
 local auth bypass to make a test pass; that is a security default and the user decides.
 A hand-exported `storageState` from the user's own browser is a stopgap for local runs
 only, it expires and cannot run in CI. Not yet built for any target.

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ux-test doctor. Reports a target's state against the skill: its kind and package
 # manager, every file the scaffold places, the pins in versions.json, the agent files
-# against init-agents at the pin, and the global agent-browser (decision 16). Read-only:
+# against init-agents at the pin, and the global agent-browser. Read-only:
 # it never writes to the target, and it runs init-agents only in a temporary copy.
 #
 # Usage: doctor.sh [--json] <target>
@@ -59,7 +59,7 @@ finish() {
   exit "$code"
 }
 
-# Kind (decision 6). Anything but Wails or Next ends the report here.
+# Kind. Anything but Wails or Next ends the report here.
 detect_kind
 case $kind in
   wails|next) report INFO kind "$kind" ;;
@@ -67,7 +67,7 @@ case $kind in
   *) report UNSUPPORTED kind "no wails.json, no next or vite dependency"; finish ;;
 esac
 
-# Package manager (decision 17). Without one, the checks that need it are skipped.
+# Package manager. Without one, the checks that need it are skipped.
 detect_pm "$(pm_dir)"
 where=root; [ "$kind" != wails ] || where=frontend/
 if [ -n "$pm_err" ]; then
@@ -91,7 +91,7 @@ if [ "$kind" = wails ]; then
   report INFO CI "none: Wails journeys run locally in version one"
 fi
 
-# Pins (decision 9): the root package.json, then what is installed.
+# Pins: the root package.json, then what is installed.
 if [ ! -f "$T/package.json" ]; then
   report MISSING "@playwright/test" "no package.json at the root" "$SCAFFOLD"
   install=$SCAFFOLD
@@ -131,7 +131,7 @@ if [ -n "$installed" ] && [ -f "$browsers" ]; then
   fi
 fi
 
-# Healer hook registration (decision 12): a PreToolUse entry whose matcher covers Edit,
+# Healer hook registration: a PreToolUse entry whose matcher covers Edit,
 # Write and MultiEdit and that runs e2e/healer-hook.sh.
 hook_registered() {
   node -e '
@@ -143,7 +143,7 @@ hook_registered() {
   ' "$1" 2>/dev/null
 }
 
-# ux-test.yml actions against the hashes in versions.json (decision 18). Prints the
+# ux-test.yml actions against the hashes in versions.json. Prints the
 # drifted ones, nothing when all match.
 action_drift() {
   node -e '
@@ -158,7 +158,7 @@ action_drift() {
   ' "$1" "$SKILL/versions.json"
 }
 
-# Files the scaffold places (decisions 4, 5, 10, 12, 13, 14, 18, 19). The same bytes as
+# Files the scaffold places. The same bytes as
 # the template are OK. A file that differs is one the scaffold will not touch, so doctor
 # says what it lacks, and the fix is an in-session merge, never a script.
 merge="merge it in-session from templates/$kind, diff shown"
@@ -223,7 +223,7 @@ while read -r src dest; do
     report DRIFT "$dest" "not executable" "chmod +x $dest"
 done < <(scaffold_files)
 
-# Agent files and .mcp.json against init-agents at the pin (decisions 8, 13). Only
+# Agent files and .mcp.json against init-agents at the pin. Only
 # possible when the pin is what is installed.
 generated= why="@playwright/test $PW_PIN is not installed"
 if [ "$installed" = "$PW_PIN" ] && [ -f "$T/package.json" ]; then
@@ -257,7 +257,7 @@ else
     "merge the playwright-test entry from init-agents in-session, diff shown"
 fi
 
-# Next only: pnpm/action-setup needs a version from packageManager (decision 18).
+# Next only: pnpm/action-setup needs a version from packageManager.
 if [ "$kind" = next ] && [ "$pm" = pnpm ] && [ -z "$(json "$T/package.json" packageManager)" ]; then
   report INFO "packageManager" "not set; pnpm/action-setup in ux-test.yml needs a version"
 fi
@@ -269,7 +269,7 @@ if git -C "$T" rev-parse --git-dir >/dev/null 2>&1; then
   [ -z "$ignored" ] || report INFO gitignored "${ignored% }: local to this checkout, never committed"
 fi
 
-# The global agent-browser pin (decisions 8, 15).
+# The global agent-browser pin.
 AB_PIN="$(json "$SKILL/versions.json" global agent-browser)"
 if ! command -v agent-browser >/dev/null; then
   report MISSING agent-browser "not on PATH" "npm install -g agent-browser@$AB_PIN, then agent-browser install"

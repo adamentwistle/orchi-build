@@ -4,7 +4,7 @@
 Usage: pane-notify   (as a Stop and Notification hook; reads the hook's JSON on stdin)
 
 The Herdr app plays its own sounds, so this hook adds only a macOS banner,
-with terminal-notifier, from an orchestrator pane (label or title
+with terminal-notifier (osascript where that is not installed), from an orchestrator pane (label or title
 orch-<project>) and from a normal Claude session. It asks the app which
 terminal it runs in (HC_TERMINAL_ID) with `herdr pane current`, through the
 bin/herdr beside it, never the herdr on PATH. It says
@@ -38,7 +38,9 @@ HERDR_TIMEOUT = 5
 TITLE_MAX = 80
 BODY_MAX = 120
 ASKS = {"permission_prompt", "elicitation_dialog"}
-NOTIFIER = "/opt/homebrew/bin/terminal-notifier"
+# AppleScript that shows its two arguments: the title, then the body. The text is passed in, never spliced into
+# the script, so a quote or a backslash in a message cannot change what runs.
+SCRIPT = ["on run argv", "display notification (item 2 of argv) with title (item 1 of argv)", "end run"]
 NOTIFY_TIMEOUT = 5
 
 
@@ -52,14 +54,16 @@ def herdr(*args):
 
 
 def banner(title, body):
-    # A hook's PATH may lack Homebrew; PANE_NOTIFY_NOTIFIER is for the tests.
-    notifier = (os.environ.get("PANE_NOTIFY_NOTIFIER") or shutil.which("terminal-notifier")
-                or NOTIFIER)
+    notifier = shutil.which("terminal-notifier")
     try:
-        # The body goes on stdin: as -message, one starting with -, [, (, { or a
-        # quote is refused, and a Markdown bullet is a common first line.
-        subprocess.run([notifier, "-title", title], input=body, text=True,
-                       capture_output=True, timeout=NOTIFY_TIMEOUT)
+        if notifier:
+            # The body goes on stdin: as -message, one starting with -, [, (, { or a
+            # quote is refused, and a Markdown bullet is a common first line.
+            subprocess.run([notifier, "-title", title], input=body, text=True,
+                           capture_output=True, timeout=NOTIFY_TIMEOUT)
+        elif shutil.which("osascript"):
+            subprocess.run(["osascript", *[a for line in SCRIPT for a in ("-e", line)], "--", title, body],
+                           capture_output=True, text=True, timeout=NOTIFY_TIMEOUT)
     except (OSError, subprocess.SubprocessError):
         pass
 
