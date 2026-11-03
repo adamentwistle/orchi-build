@@ -9,26 +9,24 @@ import argparse
 import sys
 from collections import namedtuple
 
-from orchi import __version__
+from orchi import __version__, engine
 
 Command = namedtuple("Command", "help handler")
 
-EXIT_USAGE = 2
 
-
-def _not_built(name):
+def _steps(fix):
+    """Run every step: checked and fixed, or, for doctor, only checked."""
     def handler(args):
-        print("orchi %s is not built yet." % name if name else "orchi is not built yet.", file=sys.stderr)
-        return EXIT_USAGE
+        return engine.main(fix=fix, as_json=args.json)
 
     return handler
 
 
 # Bare `orchi` runs the handler under None.
-DEFAULT = Command("set up or fix everything", _not_built(""))
+DEFAULT = Command("set up or fix everything", _steps(fix=True))
 
 COMMANDS = {
-    "doctor": Command("check everything and change nothing", _not_built("doctor")),
+    "doctor": Command("check everything and change nothing", _steps(fix=False)),
 }
 
 
@@ -40,6 +38,7 @@ def build_parser():
         "With no command it sets up or fixes; `doctor` only checks.",
     )
     parser.add_argument("--version", action="version", version="orchi %s" % __version__)
+    parser.add_argument("--json", action="store_true", help="print one JSON object instead of lines")
     sub = parser.add_subparsers(dest="command", metavar="command")
     for name, command in COMMANDS.items():
         sub.add_parser(name, help=command.help, description=command.help, allow_abbrev=False)

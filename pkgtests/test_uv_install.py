@@ -21,9 +21,11 @@ def test_uv_tool_install_gives_a_working_orchi(uv, tmp_path):
     assert ran.returncode == 0, ran.stderr
     assert ran.stdout == "orchi 0.1.0\n"
 
+    # The installed copy runs its steps, and finds its own files.
+    doctor = subprocess.run([str(exe), "doctor"], env=env, capture_output=True, text=True, cwd=str(tmp_path))
+    assert doctor.stdout.splitlines()[0] == "✓  Orchi files", doctor.stdout + doctor.stderr
     bare = subprocess.run([str(exe)], env=env, capture_output=True, text=True, cwd=str(tmp_path))
-    assert bare.returncode == 2
-    assert "not built yet" in bare.stderr
+    assert bare.returncode == 0, bare.stdout + bare.stderr
 
     # The installed copy finds its content inside the package, not in a checkout.
     python = Path(env["UV_TOOL_DIR"]) / "orchi" / "bin" / "python"

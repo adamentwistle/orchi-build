@@ -1,11 +1,11 @@
-"""The orchi command: --version and --help work, everything else says it is not built yet and exits 2."""
+"""The orchi command: --version and --help, bare `orchi` and `doctor` on the engine, and the global --json."""
 import subprocess
 import sys
 
 import pytest
 
 from conftest import SRC, scratch_env
-from orchi import cli
+from orchi import cli, engine
 
 
 def test_version_prints_name_and_number(capsys):
@@ -23,15 +23,18 @@ def test_help_exits_zero_and_names_the_command(capsys):
     assert "orchi" in out and "--version" in out
 
 
-@pytest.mark.parametrize("argv", [[], ["doctor"]])
-def test_unbuilt_commands_print_one_plain_line_and_exit_2(argv, capsys):
-    assert cli.main(argv) == 2
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    lines = captured.err.splitlines()
-    assert len(lines) == 1
-    assert "not built yet" in lines[0]
-    assert "—" not in lines[0]
+@pytest.mark.parametrize("argv, fix", [([], True), (["doctor"], False), (["--json"], True),
+                                       (["--json", "doctor"], False)])
+def test_bare_orchi_and_doctor_run_the_steps(argv, fix, monkeypatch):
+    seen = {}
+
+    def fake(fix, as_json):
+        seen.update(fix=fix, as_json=as_json)
+        return 7
+
+    monkeypatch.setattr(engine, "main", fake)
+    assert cli.main(argv) == 7
+    assert seen == {"fix": fix, "as_json": "--json" in argv}
 
 
 def test_an_unknown_command_is_a_usage_error():
