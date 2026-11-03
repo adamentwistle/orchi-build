@@ -58,7 +58,7 @@ export async function ensureSwitchboard(io, choice) {
   try {
     const terminal = await startClaude(io, {
       ...claudeChoice(choice), task: "/switchboard resume", tab: "Switchboard", folder, space: localSpace(io.spaces(), folder),
-      name: "switchboard", labels: ["orchi.switchboard=1"],
+      name: "switchboard", labels: ["orchi.switchboard=1"], pinProfile: true,
     });
     return { where: "app", terminal, started: true };
   } catch (e) {

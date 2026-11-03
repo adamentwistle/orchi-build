@@ -1,17 +1,7 @@
 // What holds Start back for the whole Herdr: too many workers already running across every run, or a usage meter
 // heading past its limit. No Herdr imports, so `node --test` can load this file.
 
-// `~/.config/herdr-app/orchi.json` may set `{ "workerLimit": 8 }`. Without it, or with a value that isn't a whole number
-// from 1 to 50, the default holds.
-export const DEFAULT_WORKER_LIMIT = 6;
-const MAX_WORKER_LIMIT = 50;
-
-export function parseSettings(text) {
-  let raw = null;
-  try { raw = JSON.parse(text ?? ""); } catch { /* defaults */ }
-  const limit = raw?.workerLimit;
-  return { workerLimit: Number.isInteger(limit) && limit >= 1 && limit <= MAX_WORKER_LIMIT ? limit : DEFAULT_WORKER_LIMIT };
-}
+// The worker limit is worker_limit in Orchi's settings (settings.js).
 
 // Workers running now, across every orchestrator on show.
 export const liveWorkers = (orchestrators) => orchestrators.reduce((n, o) => n + (o.running?.length ?? 0), 0);

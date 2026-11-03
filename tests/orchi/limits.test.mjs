@@ -1,15 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_WORKER_LIMIT, liveWorkers, overrideUntil, parseSettings, startHolds, usageHold, usageHolds } from "../../mods/orchi/limits.js";
+import { liveWorkers, overrideUntil, startHolds, usageHold, usageHolds } from "../../mods/orchi/limits.js";
 import { usageMeter } from "../../mods/orchi/usage.js";
-
-test("the worker limit comes from orchi.json, and a missing or odd value keeps the default", () => {
-  assert.equal(DEFAULT_WORKER_LIMIT, 6);
-  assert.deepEqual(parseSettings('{"workerLimit": 9}'), { workerLimit: 9 });
-  for (const text of [null, "", "not json", '{"workerLimit": 0}', '{"workerLimit": 2.5}', '{"workerLimit": "8"}', '{"workerLimit": 500}', "[]"]) {
-    assert.equal(parseSettings(text).workerLimit, DEFAULT_WORKER_LIMIT, String(text));
-  }
-});
 
 test("workers are counted across every run", () => {
   assert.equal(liveWorkers([{ running: [1, 2] }, { running: [3] }, {}]), 3);

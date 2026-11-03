@@ -18,7 +18,7 @@ const HELPER = () => `${appHome()}/mods/orch-pane/agents.py`;
 const text = (path) => readTextFile(path).then((t) => t ?? "").catch(() => "");
 // Orchi's settings, read once.
 let orchiSettings = null;
-const orchi = () => (orchiSettings ??= readSettings(readTextFile, home()));
+const orchi = () => (orchiSettings ??= readSettings(readTextFile, home(), appHome()));
 
 // `{ agents, error }`. A missing python3, a crash or bad output is named, so the pane can say so.
 async function readAgents(session, title, since, sleep) {

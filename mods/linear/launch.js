@@ -3,12 +3,17 @@
 // `zsh -i` gives it the shell's profile, the task stays one argument, never shell text, and a shell stays when it ends.
 // `PATH` is set after zsh starts, because ~/.zshenv puts Homebrew first. It gives this session and all it starts
 // orchi's herdr wrapper, and nothing else in the app gets it. `HERDR_ENV=1` marks an app session for `/fanout`.
-// `exec` and `hc` are passed in for `node --test`.
+// When Orchi's settings set claude_dir (`orchi` is the read settings), the shell exports it as CLAUDE_CONFIG_DIR after
+// ~/.zshrc, so the session runs under the folder the panels read, and a `claude` shell function still runs. `pinProfile`
+// gives it ~/.claude even when claude_dir is unset, for the switchboard, whose files are there, as the watcher does. `exec` and `hc` are passed in for `node --test`.
+import { claudeDir, profileDir } from "./settings.js";
+
 export const claudeArgv = (model, effort, task, flags = []) => ["claude", ...flags, "--model", model, "--effort", effort, task];
 
 export const appBin = (home) => `${home}/.local/libexec/orchi-app`;
 
 const OPEN = 'export PATH="$1:$PATH" HERDR_ENV=1; shift; "$@"; exec zsh -i';
+const OPEN_AS = 'export PATH="$1:$PATH" HERDR_ENV=1 CLAUDE_CONFIG_DIR="$2"; shift 2; "$@"; exec zsh -i';
 const NAME_TRIES = 20;
 
 // A space on this Mac: the folder's, else the shown one. Terminals here can't join another machine's space.
@@ -28,12 +33,13 @@ async function nameIt(exec, kind, id, name) {
 }
 
 // `name` is the terminal's unique name, and `labels` its `key=value` labels. `spaceName` names a space this start opens.
-export async function startClaude({ exec, hc, home }, { model, effort, flags, task, tab, folder, space, spaceName, name, labels = [] }) {
+export async function startClaude({ exec, hc, home, orchi }, { model, effort, flags, task, tab, folder, space, spaceName, name, labels = [], pinProfile = false }) {
   if (!space) throw new Error("Could not start Claude Code: there's no space on this Mac");
+  const profile = pinProfile ? claudeDir(orchi, home()) : profileDir(orchi, home());
   const id = `tb${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
   const r = await hc(["run", "--json", "--bg", "--keep", "--no-parent", "--outlive-parent", ...(name ? ["--name", name] : []), "--cwd", folder,
     "--label", `herdr.space=${space}`, "--label", `herdr.tab=${id}`, ...labels.flatMap((label) => ["--label", label]),
-    "--", "/bin/zsh", "-ic", OPEN, "zsh", appBin(home()), ...claudeArgv(model, effort, task, flags)]);
+    "--", "/bin/zsh", "-ic", profile ? OPEN_AS : OPEN, "zsh", appBin(home()), ...(profile ? [profile] : []), ...claudeArgv(model, effort, task, flags)]);
   let terminal = null;
   try { terminal = JSON.parse(r.stdout).address; } catch { /* reported below */ }
   if (r.code !== 0 || !terminal) throw new Error("Could not start Claude Code");

@@ -200,6 +200,9 @@ class Bed:
     def write(self, state):
         self.state.write_text(json.dumps(state))
 
+    def settings(self, value):
+        (self.tmp / "settings.json").write_text(json.dumps(value))
+
     def terminals(self, *terminals):
         self.write({"terminals": list(terminals)})
 
@@ -215,7 +218,9 @@ class Bed:
         env.update({"PATH": self.path, "HC_TERMINAL_ID": "t4", "ORCHI_HERDR_REAL": str(self.real),
                     "ORCHI_APP_BIN": str(self.app_bin),
                     "STUB_STATE": str(self.state), "STUB_CALLS": str(self.calls),
-                    "STUB_REAL_CALLS": str(self.real_calls)})
+                    "STUB_REAL_CALLS": str(self.real_calls),
+                    "ORCHI_SETTINGS": str(self.tmp / "settings.json"),
+                    "HERDR_APP_HOME": str(self.tmp / "herdr-app")})
         env.update(extra)
         return env
 
@@ -748,6 +753,30 @@ def test_start_quotes_the_launcher_folder(bed):
     bed.ok("agent", "start", "fw-one", "--kind", "claude", "--pane", "t7",
            env={"ORCHI_APP_BIN": str(folder)})
     assert bed.terminal("t7")["sent"] == [f"""HERDR_ENV=1 PATH='{folder}':"$PATH" claude"""]
+
+
+def test_start_runs_the_agent_under_the_profile_the_settings_set(bed):
+    bed.settings({"claude_dir": "~/.claude-alt/"})
+    bed.terminals(term("t7", None, after_send=READY))
+    bed.ok("agent", "start", "fw-one", "--kind", "claude", "--pane", "t7", "--", "--model", "sonnet",
+           env={"HOME": str(bed.tmp)})
+    assert bed.terminal("t7")["sent"] == [
+        f'HERDR_ENV=1 PATH={bed.app_bin}:"$PATH" CLAUDE_CONFIG_DIR={bed.tmp}/.claude-alt claude --model sonnet']
+
+
+def test_start_quotes_the_profile_folder(bed):
+    bed.settings({"claude_dir": "/p q/it's"})
+    bed.terminals(term("t7", None, after_send=READY))
+    bed.ok("agent", "start", "fw-one", "--kind", "claude", "--pane", "t7")
+    assert bed.terminal("t7")["sent"] == [
+        f"""HERDR_ENV=1 PATH={bed.app_bin}:"$PATH" CLAUDE_CONFIG_DIR='/p q/it'"'"'s' claude"""]
+
+
+def test_start_with_no_profile_set_leaves_the_shells_own(bed):
+    bed.settings({"claude_dir": "  ", "worker_limit": 3})
+    bed.terminals(term("t7", None, after_send=READY))
+    bed.ok("agent", "start", "fw-one", "--kind", "claude", "--pane", "t7", env={"CLAUDE_CONFIG_DIR": "/env"})
+    assert bed.terminal("t7")["sent"] == [f'HERDR_ENV=1 PATH={bed.app_bin}:"$PATH" claude']
 
 
 def test_start_refuses_when_the_launcher_is_missing(bed):

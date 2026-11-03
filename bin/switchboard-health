@@ -57,7 +57,8 @@ is checked first (bin/switchboard-lock). A live owner, or one that can't be
 checked, means a switchboard is running where the watcher can't see it, so
 nothing is started and the pass logs a note saying where. Otherwise open a
 workspace in the Orchi checkout (the folder above bin/) with CLAUDE_CONFIG_DIR set to
-claude_dir from Orchi's settings and DISABLE_AUTO_UPDATE=true (a launch agent has
+claude_dir from Orchi's settings (~/.claude when unset, where the switchboard's
+files are) and DISABLE_AUTO_UPDATE=true (a launch agent has
 no current pane to split), name the pane, `herdr agent start switchboard
 --kind claude ... -- --model opus --effort high`, then send "/rename switchboard" and
 "/switchboard resume". The new pane takes the lock before Claude Code starts, and
@@ -110,9 +111,10 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, HERE)
 import orchi_settings  # noqa: E402
 
-DEFAULT_STATE_DIR = orchi_settings.switchboard_dir()
+SETTINGS = orchi_settings.read()
+DEFAULT_STATE_DIR = orchi_settings.switchboard_dir(SETTINGS)
 ORCHI = os.path.dirname(HERE)
-CLAUDE_CONFIG_DIR = orchi_settings.claude_dir()
+CLAUDE_CONFIG_DIR = orchi_settings.claude_dir(SETTINGS)
 NOTIFIER = "/opt/homebrew/bin/terminal-notifier"
 WAIT = os.path.join(HERE, "switchboard-wait")
 STATE_FILE = os.path.join(DEFAULT_STATE_DIR, "state.md")  # set per pass

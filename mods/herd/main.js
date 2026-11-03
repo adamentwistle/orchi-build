@@ -23,7 +23,7 @@ const USAGE_MS = 15000;
 const HELPER = () => `${appHome()}/mods/herd/herd.py`;
 // Orchi's settings, read once.
 let orchiSettings = null;
-const orchi = () => (orchiSettings ??= readSettings(readTextFile, home()));
+const orchi = () => (orchiSettings ??= readSettings(readTextFile, home(), appHome()));
 
 function find(node, id) {
   if (node?.id === id) return node;

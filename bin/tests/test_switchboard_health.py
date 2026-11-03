@@ -313,6 +313,14 @@ def test_default_state_dir_is_the_switchboard_folder_from_settings(tmp_path, mon
     assert mod.CLAUDE_CONFIG_DIR == str(tmp_path / "profile")
 
 
+def test_with_no_profile_in_the_settings_the_switchboard_still_runs_under_the_default(tmp_path, monkeypatch):
+    # The switchboard's files are in ~/.claude then, so the shell's own profile mustn't win.
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", "/env/claude")
+    monkeypatch.setenv("ORCHI_SETTINGS", str(tmp_path / "none.json"))
+    assert load_script().CLAUDE_CONFIG_DIR == str(tmp_path / ".claude")
+
+
 def test_restart_opens_the_orchi_checkout_beside_bin():
     assert load_script().ORCHI == str(SCRIPT.resolve().parent.parent)
 

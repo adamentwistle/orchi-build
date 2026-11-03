@@ -13,9 +13,9 @@ import { ensureSwitchboard, planningDir, requestLine, sendRequest, writeRunRules
 import { NOTICE_MS, actionAnswer, answerProblem, answerText, copyText, discussLine, finishRun, noticeExpired, pasteInto, sendAnswer, settlePending } from "./actions.js";
 import { PR_HINT, runRules, startOptions } from "./options.js";
 import { completeProblem, killFailures, liveWorkers, stopTargets } from "./runs.js";
-import { DEFAULT_WORKER_LIMIT, overrideUntil, parseSettings, startHolds, usageHolds } from "./limits.js";
+import { overrideUntil, startHolds, usageHolds } from "./limits.js";
 import { orchiView } from "./view.js";
-import { legworkDir as settingsLegworkDir, readSettings as readOrchiSettings, switchboardDir } from "./settings.js";
+import { WORKER_LIMIT, legworkDir, readSettings, switchboardDir } from "./settings.js";
 
 const REFRESH_MS = 15000;
 const LOAD_LIMIT_MS = 60000;
@@ -36,10 +36,9 @@ fm{print; next}
 inp && /^\`\`\`/{ if(fence){inp=0; fence=0; print "@@endprompt"} else {fence=1; print "@@prompt"} next}
 inp && fence{print}' projects/*.md`;
 
-// Orchi's settings from ~/.config/orchi/settings.json, read once. A load reads them before anything else, so the
-// presses that follow find them read.
+// Orchi's settings, read once. A load reads them before anything else, so the presses that follow find them read.
 let orchiSettings = null;
-const orchi = async () => (orchiSettings ??= await readOrchiSettings(readTextFile, home()));
+const orchi = async () => (orchiSettings ??= await readSettings(readTextFile, home(), appHome()));
 const planningFile = (file) => `${planningDir(orchiSettings, home())}/${file}.md`;
 const expand = (path) => (path?.startsWith("~/") ? `${home()}${path.slice(1)}` : path);
 const attempt = async (job, fallback = null) => { try { return (await job()) ?? fallback; } catch { return fallback; } };
@@ -48,20 +47,9 @@ const hex = (length) => Array.from({ length }, () => Math.floor(Math.random() * 
 const agents = () => terminalAgents(exec);
 const io = async () => ({ exec, hc, home, readTextFile, writeTextFile, terminals, spaces, agents, now: Date.now, random: () => hex(8), discarded: () => shared(DISCARDED) ?? [], orchi: await orchi() });
 
-// Orchi's own settings, such as the worker limit, from `~/.config/herdr-app/orchi.json`.
-const readSettings = async () => parseSettings(await readText(`${appHome()}/orchi.json`));
-
 async function readUsage() {
   const text = await readText(`${home()}/.cache/ccstatusline/usage.json`);
   return text ? metersFrom(JSON.parse(text), Date.now()) : [];
-}
-
-// The legwork folder from Orchi's settings, else from the Linear panel's config. The API key in that file is never read out.
-async function legworkDir() {
-  const set = settingsLegworkDir(await orchi(), home());
-  if (set) return set;
-  const dir = JSON.parse((await readText(`${appHome()}/linear.json`)) || "{}").legwork?.dir;
-  return typeof dir === "string" && dir.trim() ? expand(dir.trim()) : null;
 }
 
 async function readTracker(dir) {
@@ -78,9 +66,10 @@ async function screenOf(o) {
 }
 
 async function load() {
-  await orchi();
-  const dir = await attempt(legworkDir);
-  const [world, usage, tracker, settings] = await Promise.all([loadWorld(await io()), attempt(readUsage, []), attempt(() => readTracker(dir), []), readSettings()]);
+  // Read afresh each load, so an edited worker limit or legwork folder counts at the next refresh.
+  const settings = orchiSettings = await readSettings(readTextFile, home(), appHome());
+  const dir = legworkDir(settings, home());
+  const [world, usage, tracker] = await Promise.all([loadWorld(await io()), attempt(readUsage, []), attempt(() => readTracker(dir), [])]);
   const { state, live, agents: herdrAgents, found, holder, sessions, busy, held, requested } = world;
   const byFile = new Map(tracker.map((p) => [p.file, p]));
   const repoOf = (project, cwd) => state.watching.find((w) => w.project === project)?.repo ?? cwd ?? expand(byFile.get(project)?.repo) ?? null;
@@ -129,7 +118,7 @@ async function load() {
   const trust = await trustOf(exec, home(), planFolders(plans, sessions), await orchi());
   return {
     usage, orchestrators, decisions, hidden, plans, projects, planners, holder, sessions, tracker, busy, held, requested, trust, paused: state.paused,
-    terminalsRead: live.length > 0, dir, workerLimit: settings.workerLimit,
+    terminalsRead: live.length > 0, dir, workerLimit: settings.worker_limit,
   };
 }
 
@@ -142,7 +131,7 @@ const planFolders = (plans, sessions) => [
 export default class Orchi extends View {
   init(_props, cx) {
     this.loaded = { decisions: [], plans: [] };
-    this.data = { usage: [], orchestrators: [], decisions: [], hidden: 0, plans: [], projects: [], planners: [], dismissedDecisions: 0, dismissedPlans: 0, holder: { where: null, terminal: null }, sessions: [], tracker: [], busy: new Set(), held: new Map(), requested: { start: new Set(), run: new Set() }, trust: {}, paused: [], dir: null, workerLimit: DEFAULT_WORKER_LIMIT };
+    this.data = { usage: [], orchestrators: [], decisions: [], hidden: 0, plans: [], projects: [], planners: [], dismissedDecisions: 0, dismissedPlans: 0, holder: { where: null, terminal: null }, sessions: [], tracker: [], busy: new Set(), held: new Map(), requested: { start: new Set(), run: new Set() }, trust: {}, paused: [], dir: null, workerLimit: WORKER_LIMIT.default };
     this.dismissed = new Set();
     try { this.dismissed = new Set(JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? "[]")); } catch { /* start with none */ }
     this.planFor = null; this.planOpen = false; this.planSearch = ""; this.planError = null;
@@ -504,7 +493,7 @@ export default class Orchi extends View {
     this.planError = null;
     cx.spawn(async (cx) => {
       try {
-        const terminal = await startClaude({ exec, hc, home }, {
+        const terminal = await startClaude({ exec, hc, home, orchi: await orchi() }, {
           ...PLANNER, task: planTask(project.name, planningFile(project.file), project.file), tab: `Plan ${project.name}`, folder, space, labels: [`orchi.plan=${project.file}`],
         });
         run("agent.focus", { terminal });

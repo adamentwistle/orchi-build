@@ -64,7 +64,7 @@ export default class Chat extends View {
     this.editors = new Map(); this.watched = new Set(); this.sessionRead = latest(); this.misses = 0;
     this.foot = FOOT_START;
     // Orchi's settings say which Claude Code profile folder sessions run under. Read once, when the pane opens.
-    this.settings = readSettings(readTextFile, home());
+    this.settings = readSettings(readTextFile, home(), appHome());
     this.composer = new Composer(cx, {
       terminal: this.terminal, settings: this.settings, intercept: (text, cx) => route(text, cx, this), changed: (cx) => this.composerChanged(cx),
       // Step 7: `typing` and `key` drive the / list and the panels, and `delivered` starts the dialog safety net.

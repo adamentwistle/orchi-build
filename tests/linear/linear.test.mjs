@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ISSUES_QUERY, DESCRIPTIONS_QUERY, issuesFilter, groupIssues, parseConfig, parseIssues, parseIssuePage, parseDescriptions, descriptionsToFetch, withDescriptions, keptDescriptions, withTimeout, linearError, filterIssues, STATUSES, ago } from "../../mods/linear/linear.js";
+import { ISSUES_QUERY, DESCRIPTIONS_QUERY, issuesFilter, groupIssues, keyFile, parseKey, parseIssues, parseIssuePage, parseDescriptions, descriptionsToFetch, withDescriptions, keptDescriptions, withTimeout, linearError, filterIssues, STATUSES, ago } from "../../mods/linear/linear.js";
 import { safeUrl } from "../../mods/linear/urls.js";
 
 const node = (over = {}) => ({
@@ -74,20 +74,17 @@ test("issuesFilter scopes to teams, else to the viewer", () => {
   assert.deepEqual(issuesFilter([]), { state: open, assignee: { isMe: { eq: true } } });
 });
 
-test("parseConfig reads apiKey and expands ~ in team repos", () => {
-  const config = parseConfig('{ "apiKey": " lin_api_x ", "repos": { "ENG": "~/dev/app", "OPS": "/srv/ops" } }', "/home/me");
-  assert.deepEqual(config, { apiKey: "lin_api_x", repos: { ENG: "/home/me/dev/app", OPS: "/srv/ops" }, teams: [], legwork: null });
+test("the API key is the only thing the panel reads out of linear.json", () => {
+  assert.equal(keyFile("/app"), "/app/linear.json");
+  assert.deepEqual(parseKey('{ "apiKey": " fixture-key-0000 ", "repos": { "ENG": "~/dev/app" }, "teams": ["eng"], "legwork": { "dir": "~/l" } }'), { apiKey: "fixture-key-0000" });
+  assert.deepEqual(parseKey('{ "teams": ["eng"] }'), { apiKey: null });
+  assert.deepEqual(parseKey('{ "apiKey": 3 }'), { apiKey: null });
 });
 
-test("parseConfig reads teams and the legwork folder", () => {
-  const config = parseConfig('{ "teams": [" eng "], "legwork": { "dir": "~/legwork", "projects": { "Atlas app": "atlas" } } }', "/home/me");
-  assert.deepEqual(config.teams, ["ENG"]);
-  assert.deepEqual(config.legwork, { dir: "/home/me/legwork", projects: { "Atlas app": "atlas" } });
-});
-
-test("parseConfig tolerates a missing or broken file", () => {
-  assert.deepEqual(parseConfig(null, "/h"), { apiKey: null, repos: {}, teams: [], legwork: null });
-  assert.deepEqual(parseConfig("not json", "/h"), { apiKey: null, repos: {}, teams: [], legwork: null, error: "linear.json is not valid JSON" });
+test("parseKey tolerates a missing or broken file", () => {
+  assert.deepEqual(parseKey(null), { apiKey: null });
+  assert.deepEqual(parseKey("not json"), { apiKey: null, error: "linear.json is not valid JSON" });
+  assert.deepEqual(parseKey("[]"), { apiKey: null });
 });
 
 test("parseIssues flattens labels and keeps what rows need", () => {

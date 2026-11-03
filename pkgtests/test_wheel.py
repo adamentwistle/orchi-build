@@ -75,7 +75,8 @@ def test_the_wheel_is_named_for_the_version(wheel):
 
 
 def test_the_code_is_in_the_wheel(entries):
-    for name in ("orchi/__init__.py", "orchi/__main__.py", "orchi/cli.py", "orchi/paths.py"):
+    for name in ("orchi/__init__.py", "orchi/__main__.py", "orchi/cli.py", "orchi/paths.py", "orchi/settings.py",
+                 "orchi/settings.schema.json"):
         assert name in entries, name
 
 

@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Orchi settings",
+  "description": "~/.config/orchi/settings.json. Every key can be left out, and then its default holds. No secret is ever a setting, the Linear API key included.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "claude_dir": {
+      "description": "The Claude Code profile folder. Sessions Orchi starts run under it. Left out, Claude Code's own: ~/.claude, or the shell's CLAUDE_CONFIG_DIR for a session.",
+      "type": "string",
+      "pattern": "\\S"
+    },
+    "orchi_dir": {
+      "description": "Orchi's checkout, whose bin/ holds the scripts.",
+      "type": "string",
+      "pattern": "\\S",
+      "default": "~/orchi-build"
+    },
+    "legwork_dir": {
+      "description": "The legwork tracker. Left out, there is none.",
+      "type": "string",
+      "pattern": "\\S"
+    },
+    "worker_limit": {
+      "description": "Workers that can run at once, across every run.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50,
+      "default": 6
+    },
+    "usage_guard_percent": {
+      "description": "How full a usage limit can get, in percent, before usage-guard asks a session to pause.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100,
+      "default": 95
+    },
+    "sources": {
+      "description": "The ticket sources planning reads. Legwork is always one, listed or not.",
+      "type": "array",
+      "items": { "enum": ["legwork", "github", "linear", "markdown"] },
+      "uniqueItems": true,
+      "default": ["legwork"]
+    },
+    "github": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "own_owners": {
+          "description": "GitHub users and organisations that are yours.",
+          "type": "array",
+          "items": { "type": "string", "pattern": "\\S" },
+          "default": []
+        },
+        "repos": {
+          "description": "The repos whose issues are tickets, as owner/repo.",
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$" },
+          "default": []
+        }
+      }
+    },
+    "linear": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "teams": {
+          "description": "The Linear teams to pull in, by key. None means the issues assigned to you.",
+          "type": "array",
+          "items": { "type": "string", "pattern": "\\S" },
+          "default": []
+        },
+        "projects": {
+          "description": "The Linear projects to pull in, by id.",
+          "type": "array",
+          "items": { "type": "string", "pattern": "\\S" },
+          "default": []
+        },
+        "repos": {
+          "description": "The folder each Linear team's work happens in, by team key.",
+          "type": "object",
+          "additionalProperties": { "type": "string", "pattern": "\\S" },
+          "default": {}
+        },
+        "legwork_projects": {
+          "description": "The legwork project file each Linear project belongs to, by Linear project id.",
+          "type": "object",
+          "additionalProperties": { "type": "string", "pattern": "\\S" },
+          "default": {}
+        }
+      }
+    },
+    "markdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "paths": {
+          "description": "Markdown task files, or folders of them.",
+          "type": "array",
+          "items": { "type": "string", "pattern": "\\S" },
+          "default": []
+        }
+      }
+    }
+  }
+}

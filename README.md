@@ -22,14 +22,28 @@ agents and answers for you when they need a decision.
 
 ## Settings
 
-Orchi reads `~/.config/orchi/settings.json`. Every value has a default.
+Orchi reads `~/.config/orchi/settings.json` (`$ORCHI_SETTINGS` for the scripts). Every key can be left out, and then
+its default holds. `src/orchi/settings.schema.json` is the schema. No secret ever goes in this file.
 
 | Key | What it is | Default |
 | --- | --- | --- |
-| `claude_dir` | The Claude Code profile folder | `~/.claude` |
-| `orchi_dir` | This checkout | `~/orchi-build` |
+| `claude_dir` | The Claude Code profile folder sessions Orchi starts run under | Claude Code's own, `~/.claude` |
+| `orchi_dir` | Orchi's checkout | `~/orchi-build` |
 | `legwork_dir` | The legwork tracker | none |
-| `github.own_owners` | GitHub owners that are yours | none |
+| `worker_limit` | Workers that can run at once, across every run, from 1 to 50 | `6` |
+| `usage_guard_percent` | How full a usage limit gets, from 1 to 100, before usage-guard pauses a session (usage-guard doesn't read it yet) | `95` |
+| `sources` | The ticket sources planning reads: `legwork`, `github`, `linear`, `markdown` | `["legwork"]` |
+| `github.own_owners` | GitHub users and organisations that are yours | none |
+| `github.repos` | GitHub repos whose issues are tickets, as `owner/repo` | none |
+| `linear.teams` | Linear teams to pull in, by key | none, so the issues assigned to you |
+| `linear.projects` | Linear projects to pull in, by id | none |
+| `linear.repos` | The folder each Linear team works in, by team key | none |
+| `linear.legwork_projects` | The legwork project each Linear project belongs to, by Linear project id | none |
+| `markdown.paths` | Markdown task files, or folders of them | none |
+
+Legwork is always a source. Until setup moves them, `workerLimit` in `~/.config/herdr-app/orchi.json`, and `teams`,
+`repos`, `legwork.dir` and `legwork.projects` in `~/.config/herdr-app/linear.json`, count for any of these keys the
+file leaves out.
 
 ## Use it
 

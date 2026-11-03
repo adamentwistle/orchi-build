@@ -5,7 +5,7 @@ import { View } from "gpui-kit";
 import { v_flex, InputState, TextareaState } from "gpui-base";
 import { exec, hc, terminals, spaces, theme, home, appHome, readTextFile, writeTextFile, nextCommand, shared, setShared, run, watchFolder } from "herdr";
 import {
-  API_URL, ISSUES_QUERY, STATES_QUERY, DESCRIPTIONS_QUERY, MAX_PAGES, DESCRIPTION_BATCH, issuesFilter, parseConfig, parseIssuePage, parseStates, parseDescriptions,
+  API_URL, ISSUES_QUERY, STATES_QUERY, DESCRIPTIONS_QUERY, MAX_PAGES, DESCRIPTION_BATCH, issuesFilter, keyFile, NO_KEY, parseKey, parseIssuePage, parseStates, parseDescriptions,
   descriptionsToFetch, withDescriptions, keptDescriptions, withTimeout, linearError,
 } from "./linear.js";
 import { githubRepo, workerPulls, stagePulls, settleLinks, settleSeen } from "./pulls.js";
@@ -17,7 +17,7 @@ import { queueView } from "./queue-view.js";
 import { PR_SUGGESTION, restoreSession, sessionProblems } from "./review.js";
 import { emptyWorld, loadWorld, removeHold, sessionRows, terminalAgents, ticketSessions, trustOf, writeHold } from "./sessions.js";
 import { ensureSwitchboard, planningDir, switchboardDir } from "./switchboard.js";
-import { readSettings, legworkDir } from "./settings.js";
+import { readSettings } from "./settings.js";
 import { goPlan, newSession, plannerPlace } from "./go.js";
 import { reviewView } from "./review-view.js";
 import { detailsView } from "./details-view.js";
@@ -28,7 +28,6 @@ const RENDER_RETRY_MS = 1000;
 const SESSIONS_MS = 15000;
 const FETCH_LIMIT_MS = 20000;
 const WORLD_LIMIT_MS = 60000;
-const NO_KEY = "No Linear API key. Add it to ~/.config/herdr-app/linear.json or set LINEAR_API_KEY.";
 const ASSIGNED = "linear.assignments";
 const SESSION = "linear.session";
 const STAGED = "linear.staged";
@@ -37,27 +36,19 @@ const PULLS_SEEN = "linear.pulls-seen";
 const DISCARDED = "orchi.discarded";
 const FOCUS = "orchi.focus";
 
-// LINEAR_API_KEY from the shell agents start in, when linear.json has none.
+// LINEAR_API_KEY from the shell agents start in, when there's no key on file.
 async function envKey() {
   const r = await exec("sh", ["-c", 'printf %s "$LINEAR_API_KEY"']).catch(() => null);
   return r?.code === 0 && r.stdout.trim() ? r.stdout.trim() : null;
 }
 
-function projectMap(text) {
-  try {
-    const projects = JSON.parse(text)?.legwork?.projects;
-    return projects && typeof projects === "object" && !Array.isArray(projects) ? projects : {};
-  } catch { return {}; }
-}
-
+// The key, then the teams and the legwork folder and projects from Orchi's settings.
 async function loadConfig() {
-  const text = await readTextFile(`${appHome()}/linear.json`).catch(() => null);
-  const config = parseConfig(text, home());
-  const dir = legworkDir(await orchi(), home());
-  // Orchi's legwork_dir wins over linear.json's, and linear.json's project map still applies without its dir.
-  if (dir && !config.error) config.legwork = { dir, projects: config.legwork?.projects ?? projectMap(text) };
-  if (!config.apiKey && !config.error) config.apiKey = await envKey();
-  return config;
+  const { apiKey, error } = parseKey(await readTextFile(keyFile(appHome())).catch(() => null));
+  // Read afresh each refresh, so edited teams or legwork projects count at once.
+  const s = await (orchiSettings = readSettings(readTextFile, home(), appHome()));
+  const legwork = s.legwork_dir ? { dir: s.legwork_dir, projects: s.linear.legwork_projects } : null;
+  return { apiKey: apiKey ?? (error ? null : await envKey()), error, teams: s.linear.teams, legwork };
 }
 
 // One GraphQL read, given up after FETCH_LIMIT_MS. `sleep` is the view's `cx.sleep`, the only timer a mod has.
@@ -119,7 +110,7 @@ const hex = (length) => Array.from({ length }, () => Math.floor(Math.random() * 
 const agents = () => terminalAgents(exec);
 // Orchi's settings, read once. They say where the switchboard's files are.
 let orchiSettings = null;
-const orchi = () => (orchiSettings ??= readSettings(readTextFile, home()));
+const orchi = () => (orchiSettings ??= readSettings(readTextFile, home(), appHome()));
 const io = async () => ({ exec, hc, home, readTextFile, writeTextFile, terminals, spaces, agents, now: Date.now, random: () => hex(8), discarded: () => shared(DISCARDED) ?? [], orchi: await orchi() });
 
 // A stored value read back, or `fallback` when it's missing or not JSON.
@@ -267,7 +258,7 @@ export default class Linear extends View {
     try {
       await ensureSwitchboard(await io(), choices.switchboard);
       const place = plannerPlace(plan.repos, this.config?.legwork?.dir, spaces(), () => `sp${hex(32)}`);
-      await startClaude({ exec, hc, home }, { model: plan.model, effort: plan.effort, task: plan.task, tab: plan.tab, labels: plan.labels, ...place });
+      await startClaude({ exec, hc, home, orchi: await orchi() }, { model: plan.model, effort: plan.effort, task: plan.task, tab: plan.tab, labels: plan.labels, ...place });
     } catch (e) {
       await removeHold(await io(), session);
       throw e;
@@ -383,7 +374,7 @@ export default class Linear extends View {
     this.starting = true; this.updateError = null;
     cx.spawn(async (cx) => {
       const folder = this.config?.legwork?.dir ?? home();
-      try { started(await startClaude({ exec, hc, home }, { ...runner, task, tab, folder, space: localSpace(spaces(), folder) })); }
+      try { started(await startClaude({ exec, hc, home, orchi: await orchi() }, { ...runner, task, tab, folder, space: localSpace(spaces(), folder) })); }
       catch (e) { this.updating = null; this.updateError = String(e.message ?? e); }
       finally { this.starting = false; cx.notify(); }
     });

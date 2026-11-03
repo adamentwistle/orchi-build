@@ -89,7 +89,8 @@ class Bed:
         env = {k: v for k, v in os.environ.items()
                if not k.startswith(("HC_", "HERDR_", "ORCHI_", "SWITCHBOARD_"))}
         env.update({"PATH": f"{self.bin}{os.pathsep}/usr/bin:/bin", "ORCHI_HERDR_REAL": str(self.real),
-                    "SWITCHBOARD_NOW": "2026-10-30 22:40"})
+                    "SWITCHBOARD_NOW": "2026-10-30 22:40",
+                    "ORCHI_SETTINGS": os.environ["ORCHI_SETTINGS"], "HERDR_APP_HOME": os.environ["HERDR_APP_HOME"]})
         env.update(extra)
         return env
 

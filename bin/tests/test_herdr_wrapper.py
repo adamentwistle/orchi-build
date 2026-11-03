@@ -59,6 +59,7 @@ class Bed:
         env = {k: v for k, v in os.environ.items()
                if not k.startswith(("HC_", "HERDR_", "ORCHI_"))}
         env["ORCHI_HERDR_REAL"] = str(self.real)
+        env.update(ORCHI_SETTINGS=os.environ["ORCHI_SETTINGS"], HERDR_APP_HOME=os.environ["HERDR_APP_HOME"])
         env.update(extra)
         return env
 

@@ -88,23 +88,17 @@ export const STATUSES = [
   { id: "backlog", label: "Backlog", types: ["backlog", "triage"] },
 ];
 
-const expand = (path, home) => (path.startsWith("~/") ? `${home}${path.slice(1)}` : path);
+// The Linear API key, from linear.json in Herdr's app home, until setup moves it to the keychain. It is the only thing
+// the panel reads out of that file itself: its teams, repos and legwork folder and projects come from Orchi's settings
+// (settings.js), which never read the key.
+export const keyFile = (appHome) => `${appHome}/linear.json`;
+export const NO_KEY = "No Linear API key. Add it to ~/.config/herdr-app/linear.json or set LINEAR_API_KEY.";
 
-// `~/.config/herdr-app/linear.json`: { "apiKey": "lin_api_…", "repos": { "<TEAM KEY>": "~/dev/repo" },
-// "teams": ["<TEAM KEY>"], "legwork": { "dir": "~/legwork", "projects": { "<Linear project>": "<file>" } } }.
-export function parseConfig(text, home) {
-  if (text == null) return { apiKey: null, repos: {}, teams: [], legwork: null };
+export function parseKey(text) {
+  if (text == null) return { apiKey: null };
   let raw;
-  try { raw = JSON.parse(text); } catch { return { apiKey: null, repos: {}, teams: [], legwork: null, error: "linear.json is not valid JSON" }; }
-  const apiKey = typeof raw?.apiKey === "string" && raw.apiKey.trim() ? raw.apiKey.trim() : null;
-  const repos = {};
-  for (const [team, folder] of Object.entries(raw?.repos ?? {})) {
-    if (typeof folder === "string" && folder.trim()) repos[team.toUpperCase()] = expand(folder.trim(), home);
-  }
-  const teams = Array.isArray(raw?.teams) ? raw.teams.filter((t) => typeof t === "string" && t.trim()).map((t) => t.trim().toUpperCase()) : [];
-  const dir = typeof raw?.legwork?.dir === "string" && raw.legwork.dir.trim() ? expand(raw.legwork.dir.trim(), home) : null;
-  const legwork = dir ? { dir, projects: raw.legwork.projects ?? {} } : null;
-  return { apiKey, repos, teams, legwork };
+  try { raw = JSON.parse(text); } catch { return { apiKey: null, error: "linear.json is not valid JSON" }; }
+  return { apiKey: typeof raw?.apiKey === "string" && raw.apiKey.trim() ? raw.apiKey.trim() : null };
 }
 
 const isAuthError = (message) => /authenticat/i.test(message ?? "");

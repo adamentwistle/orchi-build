@@ -24,6 +24,9 @@ import sys
 import time
 import uuid
 
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+import orchi_settings  # noqa: E402
+
 REAL = os.environ.get("ORCHI_HERDR_REAL") or "/opt/homebrew/bin/herdr"
 APP_BIN = os.environ.get("ORCHI_APP_BIN") or os.path.expanduser("~/.local/libexec/orchi-app")
 HC_TIMEOUT = 25  # under the 30 s orchi's scripts give a herdr call
@@ -436,7 +439,11 @@ def agent_start(args):
     # The agent and all it runs reach this wrapper, and nothing else in the app does.
     # A shell can't set this up: ~/.zshenv puts Homebrew first in every zsh.
     # /fanout reads HERDR_ENV before it uses panes.
+    # It runs under the profile Orchi's settings set, the one the panels read, whatever
+    # the shell's own is.
+    profile = orchi_settings.profile_dir()
     send(t["address"], f'HERDR_ENV=1 PATH={shlex.quote(APP_BIN)}:"$PATH" '
+         + (f"CLAUDE_CONFIG_DIR={shlex.quote(profile)} " if profile else "")
          + shlex.join(["claude", *extra]))
     started = wait_for(t["address"], STATES, START_TIMEOUT_MS if timeout is None else timeout)
     if entry_of(started)["agent_status"] == "blocked":

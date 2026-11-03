@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { appBin, claudeArgv, localSpace, startClaude } from "../../mods/linear/launch.js";
 
 const standIns = (run, renames = [{ code: 0, stdout: "{}" }]) => {
@@ -145,4 +146,44 @@ test("the space is the folder's, else the shown one, and never another machine's
   assert.equal(localSpace(list, "/none"), "c");
   assert.equal(localSpace(list.map((s) => ({ ...s, active: false })), "/none"), "a");
   assert.equal(localSpace([list[0]], "/l"), null);
+});
+
+test("the Linear and Orchi panels start sessions with the same launch.js", () => {
+  const read = (m) => readFileSync(new URL(`../../mods/${m}/launch.js`, import.meta.url), "utf8");
+  assert.equal(read("linear"), read("orchi"));
+});
+
+const argvOf = (s) => { const run = s.calls[0]; return run.slice(run.indexOf("--") + 1); };
+
+test("a session runs under the profile the settings set, so it is the one the panels read", async () => {
+  const s = { ...standIns(STARTED), orchi: { claude_dir: "/Users/x/.claude-alt", orchi_dir: "/Users/x/orchi-build" } };
+  await startClaude(s, { ...ask, task: 'a; rm "$x"' });
+  // Exported by the shell, not put in front with env, so a `claude` function in ~/.zshrc still runs.
+  assert.match(argvOf(s)[2], /^export PATH="\$1:\$PATH" HERDR_ENV=1 CLAUDE_CONFIG_DIR="\$2"; shift 2; "\$@"; exec zsh -i$/);
+  assert.deepEqual(argvOf(s).slice(3), ["zsh", appBin("/Users/x"), "/Users/x/.claude-alt", "claude", "--model", "m", "--effort", "low", 'a; rm "$x"']);
+});
+
+test("a profile folder with spaces or quotes stays one argument", async () => {
+  const s = { ...standIns(STARTED), orchi: { claude_dir: `/Users/x/my "profile"; rm` } };
+  await startClaude(s, ask);
+  assert.equal(argvOf(s)[5], `/Users/x/my "profile"; rm`);
+});
+
+test("the switchboard is pinned to ~/.claude when the settings set no profile, as the watcher does", async () => {
+  const s = { ...standIns(STARTED), orchi: {} };
+  await startClaude(s, { ...ask, pinProfile: true });
+  assert.equal(argvOf(s)[5], "/Users/x/.claude");
+  const set = { ...standIns(STARTED), orchi: { claude_dir: "/p" } };
+  await startClaude(set, { ...ask, pinProfile: true });
+  assert.equal(argvOf(set)[5], "/p");
+});
+
+test("with no profile in the settings the session keeps the shell's own", async () => {
+  for (const orchi of [undefined, {}, { claude_dir: null }, { claude_dir: "  " }]) {
+    const s = { ...standIns(STARTED), orchi };
+    await startClaude(s, ask);
+    assert.deepEqual(argvOf(s).slice(3, 6), ["zsh", appBin("/Users/x"), "claude"]);
+    assert.ok(!argvOf(s).some((a) => a.includes("CLAUDE_CONFIG_DIR")));
+    assert.match(argvOf(s)[2], /; shift; /);
+  }
 });
