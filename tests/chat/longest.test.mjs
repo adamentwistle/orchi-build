@@ -6,8 +6,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import { buildStats, longestRanges, parseStatsCache, statsFigures, withLongest, duration } from "../../mods/claude-chat/usage-data.js";
+import { fileURLToPath } from "node:url";
 
-const HELPER = new URL("../../mods/claude-chat/longest.py", import.meta.url).pathname;
+// Windows has no python3: that name is the Microsoft Store stand-in.
+const PYTHON = process.platform === "win32" ? "python" : "python3";
+
+const HELPER = fileURLToPath(new URL("../../mods/claude-chat/longest.py", import.meta.url));
 const END = "2026-10-30";
 const cache = parseStatsCache(readFileSync(new URL("./fixtures/stats-cache.json", import.meta.url), "utf8"));
 
@@ -39,7 +43,7 @@ function projects(files) {
   }
   return root;
 }
-const run = (root, end = END) => JSON.parse(execFileSync("python3", ["-I", "-S", HELPER, root, end]));
+const run = (root, end = END) => JSON.parse(execFileSync(PYTHON, ["-I", "-S", HELPER, root, end]));
 const H = 3600e3;
 
 test("a session is first message to last, counted for each range it started in", () => {

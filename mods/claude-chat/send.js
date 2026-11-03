@@ -1,7 +1,7 @@
 // What the composer does to a live session: sending, stopping, and Claude Code's own queue. No Herdr imports, so
 // `node --test` can load this file. `io` holds `hc(args)` and `pause(ms)`. Everything read back from a screen or a
 // transcript is data, and only ever decides whether a fixed key is pressed.
-import { sendAside, STASH_HELD } from "./draft.js";
+import { runsClaude, sendAside, STASH_HELD } from "./draft.js";
 import { dialogUp } from "./route.js";
 
 // The screen shows the prompt between its last two rules, starting at `❯`, with later rows indented by two.
@@ -91,7 +91,7 @@ export async function sessionNow(io, terminal) {
   if (!ADDRESS.test(terminal ?? "")) return { live: false };
   const r = await io.hc(["get", "--json", terminal]).catch(() => null);
   const info = r?.code === 0 ? parse(r.stdout) : null;
-  if (info?.state !== "live" || !info.foreground?.name?.startsWith("claude")) return { live: false };
+  if (info?.state !== "live" || !runsClaude(info, io.windows)) return { live: false };
   return { live: true, state: info.status?.state ?? null, cols: info.cols ?? 0 };
 }
 

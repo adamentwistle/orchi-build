@@ -98,8 +98,8 @@ export function parseUsageText(text) {
 export const topOf = (range, title) => range?.tops.find((t) => t.title === title) ?? { title, items: [], more: 0 };
 
 // The headless read for the What's using it tab. `trusted` is whether the folder is trusted (see folderTrusted). Throws when claude didn't run, or its text had no ranges.
-export async function loadDetail(exec, folder, trusted) {
-  const stdout = await runHeadless(exec, folder, "/usage", trusted);
+export async function loadDetail(exec, folder, trusted, win = null) {
+  const stdout = await runHeadless(exec, folder, "/usage", trusted, { win });
   const text = usageText(stdout);
   const parsed = parseUsageText(text);
   if (!parsed.ranges.length) throw new Error("no usage ranges in the text");
@@ -109,9 +109,9 @@ export async function loadDetail(exec, folder, trusted) {
 // One headless read per folder at a time. Opening the panel and Refresh can come while one runs, and each would start another
 // `claude -p`. A later press runs a new read, because Refresh is meant to.
 const reading = new Map();
-export function sharedDetail(exec, folder, trusted) {
+export function sharedDetail(exec, folder, trusted, win = null) {
   if (reading.has(folder)) return reading.get(folder);
-  const read = loadDetail(exec, folder, trusted).finally(() => reading.delete(folder));
+  const read = loadDetail(exec, folder, trusted, win).finally(() => reading.delete(folder));
   reading.set(folder, read);
   return read;
 }
@@ -188,8 +188,8 @@ function rangeStart(cache, key) {
 // The longest session of the last 7 and 30 days. The cache holds only the all-time one, so for the shorter ranges /stats
 // rescans the transcripts, and longest.py does the same. Resolves to { d7, d30 } in milliseconds, a null for a range with
 // no session, and to null when the helper didn't run or its answer wasn't that shape.
-export async function longestRanges({ exec }, helper, projects, end) {
-  const r = await exec("python3", ["-I", "-S", helper, projects, end]).catch(() => null);
+export async function longestRanges({ exec, python = "python3" }, helper, projects, end) {
+  const r = await exec(python, ["-I", "-S", helper, projects, end]).catch(() => null);
   if (r?.code !== 0) return null;
   let d;
   try { d = JSON.parse(r.stdout); } catch { return null; }

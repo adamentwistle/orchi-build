@@ -10,14 +10,21 @@ export function staleNote(error, count, cut = false) {
   return null;
 }
 
+// A legwork panel filters by a project's category instead of a ticket's state.
+export const BUCKETS = [["all", "All"], ["active", "Active"], ["backlog", "Backlog"], ["review", "In review"]];
+export const LEGWORK_BUCKETS = [["all", "All"], ["business", "Business"], ["work", "Work"], ["personal", "Personal"]];
+
 export function bucketOf(issue) {
+  if (issue.legwork) return issue.category ?? "";
   if (/review/i.test(issue.state ?? "")) return "review";
   return ["backlog", "triage"].includes(issue.stateType) ? "backlog" : "active";
 }
 
 export function counts(issues) {
-  const totals = { all: issues.length, active: 0, backlog: 0, review: 0 };
-  for (const issue of issues) totals[bucketOf(issue)]++;
+  const buckets = issues.some((issue) => issue.legwork) ? LEGWORK_BUCKETS : BUCKETS;
+  const totals = Object.fromEntries(buckets.map(([id]) => [id, 0]));
+  totals.all = issues.length;
+  for (const issue of issues) { const b = bucketOf(issue); if (b in totals && b !== "all") totals[b]++; }
   return totals;
 }
 

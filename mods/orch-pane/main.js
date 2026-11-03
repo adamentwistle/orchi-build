@@ -8,6 +8,7 @@ import { helperFailure, helperReply, missed, noteGap, paneShowing, timed } from 
 import { findSession, terminalFacts, terminalName } from "./session.js";
 import { readSettings } from "./settings.js";
 import { paneView } from "./view.js";
+import { pythonName, winHelper } from "./platform.js";
 
 const REFRESH_MS = 5000;
 const CLOCK_MS = 1000;
@@ -25,7 +26,7 @@ async function readAgents(session, title, since, sleep) {
   const args = ["-I", "-S", HELPER(), "--config", session.dir, "--session", session.sessionId];
   if (title && since) args.push("--title", title, "--since", String(since));
   let r;
-  try { r = await timed(exec("python3", args), HELPER_MS, "agents.py", sleep); } catch (e) { return { agents: [], error: helperFailure(e, "agents.py") }; }
+  try { r = await timed(exec(pythonName(), args), HELPER_MS, "agents.py", sleep); } catch (e) { return { agents: [], error: helperFailure(e, "agents.py") }; }
   const { value, error } = helperReply(r, "agents.py", "agents");
   return { agents: Array.isArray(value) ? value : [], error };
 }
@@ -114,7 +115,7 @@ export default class OrchPane extends View {
     this.closed = false;
     const facts = (address) => terminalFacts({ hc: (args) => timed(hc(args), HC_MS, `hc ${args[0]}`, sleep) }, address);
     const mine = await facts(this.terminal);
-    const session = await findSession({ readTextFile, home, orchi: await orchi() }, mine);
+    const session = await findSession({ readTextFile, home, orchi: await orchi(), exec, win: winHelper(appHome(), "orch-pane"), python: pythonName() }, mine);
     const cwd = session?.cwd ?? me.cwd, name = session?.name ?? (terminalName(me) || me.title || "orchestrator");
     if (!cwd) { this.problem = "Can't tell which folder the orchestrator is in yet."; return; }
     const [fanout, board] = await Promise.all([text(`${cwd}/.legwork/fanout-state.md`), text(`${cwd}/.legwork/switchboard.md`)]);

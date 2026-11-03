@@ -1,8 +1,8 @@
-// The Linear and Orchi buttons that sit beside the tab bar's Files and Changes buttons, and the chat and terminal toggle.
+// The Linear, Orchi and Herd buttons that sit beside the tab bar's Files and Changes buttons, and the chat and terminal toggle.
 // Looks like `panelButton` in the shipped `tabs` mod, which stays untouched.
 import { View, div, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { nextCommand, panes, run, layout, terminals, theme, shared, setShared } from "herdr";
+import { nextCommand, panes, run, layout, terminals, theme, shared, setShared, window } from "herdr";
 import { SPLIT_MS, splitPending, swapState, swapSteps, tidyPairs } from "./swap.js";
 import { closeSteps, newPane, openSteps, openedSteps, progressState } from "./progress.js";
 import { herdBlocked, sessionOf } from "./herd-badge.js";
@@ -19,6 +19,8 @@ function find(node, id) {
   }
   return null;
 }
+
+const ownsWindowButtons = (root) => Boolean(window()?.buttons) && find(root, "tabs")?.content?.mod === "windows-tabs";
 
 const nameOf = (address) => {
   const t = terminals().find((x) => x.address === address);
@@ -135,11 +137,29 @@ export default class PanelButtons extends View {
         .when(badge > 0, (e) => e.child(div().min_w(16).h(16).px(4).flex().items_center().justify_center().rounded(8)
           .bg(t.blocked).text_color(t.background).text_size(11).font_semibold().child(String(badge))));
     };
-    return h_flex().size_full().min_w(0).pr(10).gap(2).items_center().bg(t.chrome).border_b(1).border_color(t.border)
-      .child(button("linear", "Linear", "mods/linear/linear.svg", 0))
-      .child(button("orchi", "Orchi", "mods/orchi/orchi.svg", open))
+    // With the window buttons here, everything sits against the right edge, so they stay at the window's corner whether
+    // or not the chat toggle and the progress button show. install.ps1 makes the block wide enough for all of them.
+    const corner = ownsWindowButtons(root);
+    return h_flex().size_full().min_w(0).pr(corner ? 6 : 10).gap(2).items_center().when(corner, (e) => e.justify_end()).bg(t.chrome).border_b(1).border_color(t.border)
+      // A layout without the Linear or Orchi panel gets no button for it. On Windows the Linear panel lists legwork projects.
+      .when(Boolean(find(body, "linear")), (e) => e.child(button("linear", window()?.platform === "windows" ? "Legwork" : "Linear", "mods/linear/linear.svg", 0)))
+      .when(Boolean(find(body, "orchi")), (e) => e.child(button("orchi", "Orchi", "mods/orchi/orchi.svg", open)))
       .child(button("herd", "Herd", "mods/herd/herd.svg", herdBlocked(terminals(), sessionOf(list))))
       .when(Boolean(swap), (e) => e.child(this.toggle(t, swap)))
-      .when(Boolean(orchestrator), (e) => e.child(this.progressButton(t, orchestrator)));
+      .when(Boolean(orchestrator), (e) => e.child(this.progressButton(t, orchestrator)))
+      .when(ownsWindowButtons(root), (e) => e.child(this.windowButtons(t)));
+  }
+
+  // Minimise, maximise and close at the window's edge, as the shipped tab bar draws them, for a layout whose tab bar is
+  // `windows-tabs`, which leaves them out. Only where the system draws none: Windows, with the title bar hidden.
+  windowButtons(t) {
+    const w = window();
+    const stop = (_e, cx) => cx.stop_propagation();
+    const button = (id, icon, action) => div().id(id).size(26).flex_none().flex().items_center().justify_center().rounded(6).text_color(t.dim)
+      .hover((s) => s.bg(t.hover).text_color(t.foreground)).on_mouse_down("left", stop).on_click(() => run(action)).child(svg(icon).size(16));
+    return h_flex().ml(8).gap(3).flex_none().items_center()
+      .child(button("minimize", "mods/tabs/win-min.svg", "window.minimize"))
+      .child(button("maximize", `mods/tabs/${w?.maximized ? "win-restore" : "win-max"}.svg`, "window.maximize"))
+      .child(button("close-window", "mods/tabs/win-close.svg", "window.close"));
   }
 }

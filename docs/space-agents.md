@@ -13,7 +13,7 @@
 - Folds and each agent's last change are kept in the mod's `localStorage`, so they survive a restart. A fold for a space that's gone goes. On another machine it stays while that machine is away, because its spaces aren't listed then, and goes once the machine is connected, its layout has been read and the space isn't in it. Nothing is pruned before this computer's layout has been read.
 - `agent.next` and `agent.prev` follow the drawn order, including agents in a fold.
 - An agent's name is a tab someone named, else the name its terminal was given with `hc run --name` (`name` in `terminals()`), else its own title. Without the terminal's name, an agent whose program sets no title would read as its address, such as `t3`.
-- On the rail there's no room for folds. Each space is its icon and number, which ctrl plus that number selects, with its agents below it, whatever's folded.
+- On the rail there's no room for folds, so each space's agents sit below its tile, whatever's folded. See "The rail" below.
 - An agent no listed space holds goes under "No space" at the end, so none goes missing.
 
 ## Needs you
@@ -43,7 +43,6 @@ A worker with a pane of its own is in `agents()`, so it gets the app's sounds, n
 - The agents list's Pin to the top.
 - The agents list's sort menu, because the grouping is now the list.
 - The machine name on an agent row, because the machine header above says it.
-- The space's status dot on the rail, because its agents are listed under it.
 - The colored letter avatars. Colors are still assigned, because the space picker draws them.
 
 The shipped `spaces` and `agents` mods are untouched, and other layouts still use them.
@@ -52,6 +51,10 @@ The shipped `spaces` and `agents` mods are untouched, and other layouts still us
 
 - Agent in a new worktree in the + menu. That menu is the shipped `new-menu`, and `programs.json` only describes programs (name, icon, `run`), with no way to say "in a new worktree". The shipped `worktree` dialog takes `{branch, tab?, argv?}`, so a button of our own could do it later.
 - Answering a dialog from the inbox, for the reason above.
+
+## The rail
+
+Collapsed, the sidebar is a rail one tile wide. Each space is a 32 point tile with two letters from its name (`rail.js`, `initials`) in the space's colour, outlined when it's the shown space. Its corner shows the most urgent status of its agents: ! when one is blocked, a dot when one is done, a spinner while one or a worker under it is working, and nothing when all are idle. Its name and the key that selects it show on hover: ctrl plus its number, or alt on Windows. Each agent follows as its program's icon, with its own status at the bottom right, so it doesn't read as the tile's above it. A press on a tile selects the space, and on an agent focuses its pane.
 
 ## Installing
 

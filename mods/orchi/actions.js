@@ -43,38 +43,53 @@ export function answerArgv(home, d, text, s) {
   return [`ORCHI_HERDR=${where}`, `PATH=${path}`, script, ...(d.planner ? ["--board", d.board] : [d.board]), d.pane, d.id, text];
 }
 
+// On Windows the script runs under `python`, from Orchi's checkout there. There's no env wrapper or PATH to set: Orchi's
+// scripts reach the app through herdr-adapter on Windows, and there's no terminal Herdr to choose.
+export const windowsAnswer = (s, home) => `${orchiDir(s, home)}/bin/switchboard-answer`;
+
+export function windowsAnswerArgv(home, d, text, s) {
+  if (answerProblem(text) || !ID.test(d.id ?? "") || !PANE.test(d.pane ?? "") || !ABSOLUTE.test(d.board ?? "")) return null;
+  return [windowsAnswer(s, home), ...(d.planner ? ["--board", d.board] : [d.board]), d.pane, d.id, text];
+}
+
 const firstLine = (text) => String(text ?? "").trim().split("\n")[0];
 
-export async function sendAnswer(exec, home, d, text, s) {
-  const argv = answerArgv(home, d, text, s);
+export async function sendAnswer(exec, home, d, text, s, windows = false) {
+  const argv = windows ? windowsAnswerArgv(home, d, text, s) : answerArgv(home, d, text, s);
   if (!argv) throw new Error(answerProblem(text) ?? `Can't reply to ${d.orch} from here`);
-  const r = await exec("/usr/bin/env", argv);
+  const r = await exec(windows ? "python" : "/usr/bin/env", argv);
   if (r.code !== 0) throw new Error(firstLine(r.stderr) || firstLine(r.stdout) || "The reply didn't send");
 }
 
 // Ends a run on Adam's word: closes what's open on its board and writes its `DONE`, which a run that went quiet never did.
-export async function finishRun(exec, home, repo, why, s) {
+export async function finishRun(exec, home, repo, why, s, windows = false) {
   if (!ABSOLUTE.test(repo ?? "")) throw new Error("That run has no repo to write to");
+  if (windows) {
+    const r = await exec("python", [windowsAnswer(s, home), "--finish", repo, why]);
+    if (r.code !== 0) throw new Error(firstLine(r.stderr) || firstLine(r.stdout) || "The run didn't finish");
+    return;
+  }
   const path = [`${home}/.local/bin`, "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"].join(":");
   const r = await exec("/usr/bin/env", [`PATH=${path}`, `${orchiDir(s, home)}/bin/switchboard-answer`, "--finish", repo, why]);
   if (r.code !== 0) throw new Error(firstLine(r.stderr) || firstLine(r.stdout) || "The run didn't finish");
 }
 
 // `exec` takes no input, so a small fixed script pipes its argument. The text stays an argument, never shell text.
-export async function copyText(exec, text) {
-  const r = await exec("sh", ["-c", 'printf %s "$1" | pbcopy', "sh", text]);
+// On Windows `win` is the path of win.py, which puts it on the clipboard instead of pbcopy.
+export async function copyText(exec, text, win = null) {
+  const r = win ? await exec("python", ["-I", "-S", win, "copy-text", text]) : await exec("sh", ["-c", 'printf %s "$1" | pbcopy', "sh", text]);
   if (r.code !== 0) throw new Error("Could not copy that");
 }
 
 // Copies, shows the terminal and pastes with no Enter. It pastes only once that terminal has the keyboard, because
 // `terminal.paste` goes wherever focus is. False if it never did, with the text still on the clipboard.
-export async function pasteInto({ exec, run, focused }, terminal, text) {
+export async function pasteInto({ exec, run, focused, win = null }, terminal, text) {
   if (!pasteable(text)) throw new Error("That has a control character or newline, so it can't go in a terminal");
-  await copyText(exec, text);
+  await copyText(exec, text, win);
   run("pane.focus", { terminal });
   for (let i = 0; i < FOCUS_TRIES; i++) {
     if (focused()?.terminal === terminal) { run("terminal.paste"); return true; }
-    await exec("sleep", ["0.1"]);
+    await (win ? exec("python", ["-I", "-S", win, "sleep", "0.1"]) : exec("sleep", ["0.1"]));
   }
   return false;
 }

@@ -10,6 +10,7 @@ import { findSession, terminalFacts } from "./session.js";
 import { readSettings } from "./settings.js";
 import { metersFrom } from "./meters.js";
 import { FLIGHT, SLIDE, paneView } from "./view.js";
+import { pythonName, winHelper } from "./platform.js";
 
 const REFRESH_MS = 3000;
 const CLOCK_MS = 1000;
@@ -46,7 +47,7 @@ async function readSessions(sessions, since, sleep) {
   const args = ["-I", "-S", HELPER(), "--since", String(since)];
   for (const s of sessions) args.push("--session", JSON.stringify(s));
   let r;
-  try { r = await timed(exec("python3", args), HELPER_MS, "herd.py", sleep); } catch (e) { return { sessions: {}, error: helperFailure(e, "herd.py") }; }
+  try { r = await timed(exec(pythonName(), args), HELPER_MS, "herd.py", sleep); } catch (e) { return { sessions: {}, error: helperFailure(e, "herd.py") }; }
   const { value, error } = helperReply(r, "herd.py", "sessions");
   return { sessions: value && typeof value === "object" ? value : {}, error };
 }
@@ -162,7 +163,7 @@ export default class Herd extends View {
     const facts = {};
     await Promise.all(everyone.map(async (n) => { facts[n.address] = await this.facts(n.address, n.live, sleep); }));
     const found = {};
-    await Promise.all(everyone.filter((n) => n.agent && n.live).map(async (n) => { found[n.address] = await findSession({ readTextFile, home, orchi: await orchi() }, facts[n.address]); }));
+    await Promise.all(everyone.filter((n) => n.agent && n.live).map(async (n) => { found[n.address] = await findSession({ readTextFile, home, orchi: await orchi(), exec, win: winHelper(appHome(), "herd"), python: pythonName() }, facts[n.address]); }));
     const now = this.now();
     const sessions = Object.entries(found).filter(([, s]) => s).map(([key, s]) => ({ key, dir: s.dir, id: s.sessionId, from: s.startedAt ?? 0 }));
     const reply = await readSessions(sessions, now - WINDOW_MS, sleep);

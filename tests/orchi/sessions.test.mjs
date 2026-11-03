@@ -277,7 +277,8 @@ test("each folder is asked about once", async () => {
   assert.equal(asked, 2);
 });
 
-test("the real command answers true, false and missing from a stand-in file", async (t) => {
+// Mac only: it runs the python3 that Orchi calls, and Orchi isn't installed on Windows.
+test("the real command answers true, false and missing from a stand-in file", { skip: process.platform === "win32" && "Mac only" }, async (t) => {
   const { execFile } = await import("node:child_process");
   const { mkdtemp, mkdir, rm, writeFile } = await import("node:fs/promises");
   const { tmpdir } = await import("node:os");

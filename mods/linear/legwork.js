@@ -26,11 +26,11 @@ export function parseProjects(text) {
   let prompt = null;
   for (const line of text.split("\n")) {
     const opened = /^@@(.*\/([^/]+)\.md)$/.exec(line), project = projects[projects.length - 1];
-    if (opened) { projects.push({ path: opened[1], file: opened[2], name: opened[2], category: "", repo: null, blocked_on: null, prompt: "", ids: new Set() }); prompt = null; continue; }
+    if (opened) { projects.push({ path: opened[1], file: opened[2], name: opened[2], category: "", status: "", updated: null, repo: null, blocked_on: null, prompt: "", ids: new Set() }); prompt = null; continue; }
     if (line === "@@prompt") { prompt = []; continue; }
     if (line === "@@endprompt") { if (project) project.prompt = (prompt ?? []).join("\n"); prompt = null; continue; }
     if (prompt) { prompt.push(line); continue; }
-    const field = /^(name|category|repo|linear|blocked_on):\s*(.*?)\s*$/.exec(line);
+    const field = /^(name|category|status|updated|repo|linear|blocked_on):\s*(.*?)\s*$/.exec(line);
     if (!field || !project) continue;
     if (field[1] === "linear") project.ids = linkedIds(field[2]);
     else if (field[1] === "repo" || field[1] === "blocked_on") project[field[1]] = field[2] && field[2] !== "none" ? field[2] : null;
@@ -58,8 +58,10 @@ export function filterProjects(projects, text) {
   return needle ? projects.filter((p) => `${p.name} ${p.file}`.toLowerCase().includes(needle)) : projects;
 }
 
-// The project's repo on this computer, or null when it has none.
+// The project's repo on this computer, or null when it has none. A Windows path comes back with forward slashes,
+// as the planner's board writes it, whether the tracker wrote it with them or not.
 export function projectFolder(project, home) {
   if (!project.repo) return null;
-  return project.repo.startsWith("~/") ? `${home}${project.repo.slice(1)}` : project.repo;
+  const folder = project.repo.startsWith("~/") ? `${home}${project.repo.slice(1)}` : project.repo;
+  return /^[A-Za-z]:[\\/]/.test(folder) ? folder.replace(/\\/g, "/") : folder;
 }

@@ -7,6 +7,7 @@
 import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { agents, terminals, panes, focused, spaces, machines, run, openOverlay, exec, hc, theme, shared, setShared, setAgentOrder, settings, playSound, watchFolder, window, layout, appHome, nextCommand } from "herdr";
+import { initials, railStatus, railTip } from "./rail.js";
 import {
   CONTEXT_WARN, NO_SPACE, RANK, agentNames, agentTree, blockedReason, changedPaths, contextShare, displayOrder, dropTarget, finishedWorkers, fleetCounts,
   foldKey, foldPressed, foldSummary, inbox, kidStatus, nextHeld, pruneFolds, sharedEdits, spaceActive, subtree, terminalName, unseenCount, urgencyOf,
@@ -47,6 +48,7 @@ const base = (path) => path.replace(/\/+$/, "").split("/").pop();
 const FALLBACK = 60000;
 
 const SPARK = "mods/space-agents/spark.svg";
+const TILE = 32;
 const BRANCH = "mods/workspace-chrome/branch.svg";
 const WORKER_SOUND = "sounds/worker.mp3";
 const WORKER_SOUND_GAP_MS = 1500; // Workers finishing together play it once.
@@ -413,7 +415,8 @@ export default class SpaceAgents extends View {
       const machine = this.machines.find((k) => k.name === m);
       const connected = !m || machine?.state === "connected";
       const folded = this.machinesFolded.has(m);
-      const head = h_flex().id(`machine-${m ?? "local"}`).h(26).flex_none().px(collapsed ? 2 : 8).gap(7).items_center().text_size(11).text_color(t.dim)
+      const head = h_flex().id(`machine-${m ?? "local"}`).h(26).flex_none().px(collapsed ? 0 : 8).gap(7).items_center().text_size(11).text_color(t.dim)
+        .when(collapsed, (el) => el.mt(6).justify_center().tooltip(m ?? "This computer"))
         .cursor_pointer().hover((s) => s.bg(t.hover))
         .on_click((_e, cx) => {
           folded ? this.machinesFolded.delete(m) : this.machinesFolded.add(m);
@@ -730,42 +733,41 @@ export default class SpaceAgents extends View {
     return div().size(7).mx(3).flex_none().rounded(4).bg(a.status === "done" ? color : t.dim + "00");
   }
 
-  // On the rail: a space's icon and number, which ctrl plus that number selects, and its agents below it,
-  // whatever's folded, because a rail has no room for folds.
-  compact({ w, i, tree: branch }, t, tree) {
-    const groups = tree.get(w.id) ?? [];
-    const tile = h_flex()
-      .id(`space-${w.id}`)
-      .h(28)
-      .flex_none()
-      .gap(5)
-      .justify_center()
-      .items_center()
-      .rounded(6)
-      .when(w.active, (el) => el.bg(t.selected))
-      .hover((s) => s.bg(t.hover))
+  // On the rail: a tile a space, with two letters from its name in its colour, the most urgent status in its corner and
+  // its name on hover. Its agents follow, each its program's icon with a status mark, whatever's folded, because a rail
+  // has no room for folds. Everything is centred, since the rail is only a tile wide.
+  compact({ w, i }, t, tree) {
+    const groups = tree.get(w.id) ?? [], members = groups.flatMap((g) => g.members);
+    const status = railStatus(members, spaceActive(groups, this.all, this.listed));
+    const color = t[(shared("space.colors") ?? {})[w.id]] ?? t.accent;
+    const key = window()?.platform === "windows" ? "Alt" : "Ctrl";
+    const tile = div().id(`space-${w.id}`).relative().mt(i ? 8 : 2).size(TILE).flex_none().self_center().flex().items_center().justify_center()
+      .rounded(8).cursor_pointer().bg(w.active ? t.selected : t.raised).border_1().border_color(w.active ? color : t.border)
+      .hover((s) => s.bg(t.hover)).tooltip(railTip(w.name, i, key)).accessibility_label(w.name)
       .on_click(() => run("space.select", { id: w.id }))
-      .child(this.mark(branch ? BRANCH : SPARK, spaceActive(groups, this.all, this.listed), t))
-      .child(div().text_size(11).text_color(w.active ? t.foreground : t.dim).child(String(i + 1)));
-    const rows = groups.flatMap((g) => g.members).map((a) => this.compactAgent(a, t));
-    return [tile, ...rows];
+      .child(div().text_size(12).font_semibold().text_color(w.active ? t.foreground : color).child(initials(w.name)))
+      .when(Boolean(status), (el) => el.child(this.corner(t, status, TILE)));
+    return [tile, ...members.map((a) => this.compactAgent(a, t))];
+  }
+
+  // A status in a corner: ! for blocked, a spinner for working, a dot for done. A space's sits top right, an agent's
+  // bottom right, so an agent's mark doesn't read as the tile's above it.
+  corner(t, status, size, low = false) {
+    const at = (s) => div().absolute().top(low ? size - s + 3 : -4).left(size - s + 3).size(s).flex().items_center().justify_center().rounded_full();
+    if (status === "blocked") return at(14).bg(t.blocked).border_2().border_color(t.chrome).text_size(9).font_bold().text_color(t.background).child("!");
+    if (status === "working") return at(14).bg(t.chrome).child(svg("mods/workspace-chrome/spinner.svg").size(11).text_color(t.working).spin(900));
+    return at(10).bg(t.done ?? t.ansi2).border_2().border_color(t.chrome);
   }
 
   compactAgent(a, t) {
     const pic = icon(a.program, 14, t.foreground);
-    return h_flex()
-      .id(`ag-${a.address}`)
-      .h(24)
-      .flex_none()
-      .gap(6)
-      .items_center()
-      .justify_center()
-      .rounded(6)
-      .when(a.focused, (el) => el.bg(t.selected))
-      .hover((s) => s.bg(t.hover))
+    const status = a.status === "idle" ? null : a.status;
+    return div().id(`ag-${a.address}`).relative().mt(3).size(26).flex_none().self_center().flex().items_center().justify_center()
+      .rounded(6).cursor_pointer().when(a.focused, (el) => el.bg(t.selected)).hover((s) => s.bg(t.hover))
+      .tooltip(this.agentNames.get(a.address) || a.program?.name || a.address)
       .on_click(() => run("pane.focus", { pane: a.pane }))
-      .when(Boolean(pic), (el) => el.child(pic))
-      .child(h_flex().w(14).flex_none().items_center().justify_center().child(this.status(t, a, true)));
+      .child(pic ?? div().size(6).rounded_full().bg(t.dim))
+      .when(Boolean(status), (el) => el.child(this.corner(t, status, 26, true)));
   }
 
   // Agents no listed space holds, so none goes missing.
@@ -826,11 +828,11 @@ export default class SpaceAgents extends View {
       .on_hover((hovered, cx) => { if (!hovered) this.endDrag(cx); })
       .on_mouse_up("left", (_e, cx) => this.endDrag(cx))
       .on_mouse_down_out((_e, cx) => this.endDrag(cx))
-      .child(h_flex().h(31).pl(16).pr(10).flex_none().items_center().justify_between().gap(6).text_size(11.5).text_color(t.dim)
+      .child(h_flex().h(31).pl(collapsed ? 0 : 16).pr(collapsed ? 0 : 10).flex_none().items_center().when(collapsed, (el) => el.justify_center()).when(!collapsed, (el) => el.justify_between()).gap(6).text_size(11.5).text_color(t.dim)
         .when(!collapsed, (el) => el.child(div().flex_none().child("Spaces")).child(this.fleet(t, fleetCounts(tree, waiting, this.all, this.listed))))
         .child(div().id("space-new").size(26).flex_none().flex().items_center().justify_center().rounded(6).hover((s) => s.bg(t.hover).text_color(t.foreground))
           .on_click(() => run("space.new")).child(svg("mods/workspace-chrome/plus.svg").size(14))))
-      .child(v_flex().id("space-list").flex_1().min_h(0).px(8).pb(14).overflow_y_scrollbar().mode("always")
+      .child(v_flex().id("space-list").flex_1().min_h(0).px(collapsed ? 0 : 8).pb(14).overflow_y_scrollbar().mode("always")
         .children([...this.inboxRows(waiting, t), ...this.grouped(t, collapsed, rows, tree), ...this.noSpaceRows(t, collapsed, tree)]))
       .when(collapsed, (el) => el.child(h_flex().h(28).flex_none().items_center().justify_center()
         .child(div().id("collapse").text_size(13).text_color(t.dim).hover((s) => s.text_color(t.foreground)).on_click(toggleSidebar).child("»"))));

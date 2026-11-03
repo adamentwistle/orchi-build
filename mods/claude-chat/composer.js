@@ -11,12 +11,14 @@ import { clipboardImage, droppedImage, forgetImage, forgetImages, previewPath, p
 import { spring, transitionPolicy } from "./motion.js";
 import { waitingOnDialog } from "./route.js";
 import { findSession } from "./session.js";
+import { pythonName, winHelper } from "./platform.js";
 import { KEY_CONTEXT, LIST_KEYS, SEND_ACTION, keyAction, keyBindings } from "./slash.js";
 import { NOTES, cleanText, plainQueued, pullQueue, removeQueued, sendMessage, sendNow, serial, settleSent, stopTurn, trayRows, withPaths, withoutEnter } from "./send.js";
 
 const PLACEHOLDER = "Reply to Claude, or type / for commands";
 const MIN_ROWS = 1, MAX_ROWS = 10;
 const THUMB = 44;
+const WIN = () => winHelper(appHome(), "claude-chat");
 
 const stroke = (width, points) => {
   const path = PathBuilder.stroke(width).move_to(points[0][0], points[0][1]);
@@ -154,8 +156,9 @@ export class Composer {
     this.changed = changed;
     this.intercept = intercept;
     this.io = {
-      hc, pause: (ms) => exec("sleep", [String(ms / 1000)]),
-      dialog: async () => waitingOnDialog(await findSession({ hc, readTextFile, home, settings: await settings }, terminal)),
+      // Windows has no sleep program, so win.py waits there.
+      hc, windows: Boolean(WIN()), pause: (ms) => (WIN() ? exec(pythonName(), ["-I", "-S", WIN(), "sleep", String(ms / 1000)]) : exec("sleep", [String(ms / 1000)])),
+      dialog: async () => waitingOnDialog(await findSession({ hc, readTextFile, home, settings: await settings, exec, win: WIN(), python: pythonName() }, terminal)),
     };
     this.run = serial();
     this.images = []; this.sent = []; this.note = null; this.ids = 0; this.focused = false;
@@ -222,7 +225,7 @@ export class Composer {
   // A message that went has done with its files, because Claude Code read them as it landed. One that was refused comes
   // back. `stuck` is in the terminal's prompt, so a copy here would send it twice.
   async after(item, images, r, cx) {
-    if (r.ok || r.reason === "stuck") for (const image of images) await forgetImage(exec, appHome(), image.path);
+    if (r.ok || r.reason === "stuck") for (const image of images) await forgetImage(exec, appHome(), image.path, WIN());
     if (r.ok) this.delivered?.(item.text, cx);
     if (!r.ok) {
       this.sent = this.sent.filter((x) => x !== item);
@@ -285,7 +288,7 @@ export class Composer {
   // `board` is a private pasteboard, for a test.
   pasteImage(cx, board) {
     cx.spawn(async (cx) => {
-      const path = await clipboardImage(exec, appHome(), fileName(), board);
+      const path = await clipboardImage(exec, appHome(), fileName(), board, WIN());
       if (path) this.addImage(path);
       this.say(path ? null : NO_IMAGE, cx);
     });
@@ -293,7 +296,7 @@ export class Composer {
 
   removeImage(item, cx) {
     this.images = this.images.filter((image) => image !== item);
-    cx.spawn(async (cx) => { await forgetImage(exec, appHome(), item.path); cx.notify(); });
+    cx.spawn(async (cx) => { await forgetImage(exec, appHome(), item.path, WIN()); cx.notify(); });
   }
 
   // The pane is closing, or its session has ended, so images still waiting will never go. `discarding` settles once
@@ -308,7 +311,7 @@ export class Composer {
     const { images, others } = splitDropped(paths);
     if (others.length) this.input.set_value(withPaths(this.input.value(), others));
     cx.spawn(async (cx) => {
-      for (const path of images) this.addImage(await droppedImage(exec, appHome(), path, fileName()));
+      for (const path of images) this.addImage(await droppedImage(exec, appHome(), path, fileName(), WIN()));
       cx.notify();
     });
   }

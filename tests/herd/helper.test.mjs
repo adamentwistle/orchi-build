@@ -4,8 +4,12 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const HELPER = new URL("../../mods/herd/herd.py", import.meta.url).pathname;
+// Windows has no python3: that name is the Microsoft Store stand-in.
+const PYTHON = process.platform === "win32" ? "python" : "python3";
+
+const HELPER = fileURLToPath(new URL("../../mods/herd/herd.py", import.meta.url));
 const LIVE = "11111111-1111-1111-1111-111111111111", OLD = "22222222-2222-2222-2222-222222222222", FAR = "33333333-3333-3333-3333-333333333333";
 const at = (s) => new Date(Date.UTC(2026, 10, 1, 1, 0, s)).toISOString();
 const ms = (s) => Date.UTC(2026, 10, 1, 1, 0, s);
@@ -13,7 +17,7 @@ const use = (s, id, name, input = {}) => JSON.stringify({ type: "assistant", tim
 const result = (s, id) => JSON.stringify({ type: "user", timestamp: at(s), message: { content: [{ type: "tool_result", tool_use_id: id, content: "ok" }] } });
 
 function run(root, session, since = 0, from = 0) {
-  const out = execFileSync("python3", ["-I", "-S", HELPER, "--since", String(since), "--session", JSON.stringify({ key: "t", dir: root, id: session, from })], { encoding: "utf8" });
+  const out = execFileSync(PYTHON, ["-I", "-S", HELPER, "--since", String(since), "--session", JSON.stringify({ key: "t", dir: root, id: session, from })], { encoding: "utf8" });
   return JSON.parse(out).sessions.t;
 }
 
@@ -90,7 +94,7 @@ test("a session cleared part way keeps the subagents of the transcript it follow
 
 test("a bad session id reads nothing", () => {
   const { root } = project();
-  const out = execFileSync("python3", ["-I", "-S", HELPER, "--session", JSON.stringify({ key: "t", dir: root, id: "../../etc" }), "--session", "not json"], { encoding: "utf8" });
+  const out = execFileSync(PYTHON, ["-I", "-S", HELPER, "--session", JSON.stringify({ key: "t", dir: root, id: "../../etc" }), "--session", "not json"], { encoding: "utf8" });
   assert.deepEqual(JSON.parse(out).sessions, {});
 });
 

@@ -27,9 +27,18 @@ export const isImagePath = (path) => IMAGE.test(String(path ?? "")) && !CONTROL.
 const imageDir = (home) => `${home}/${IMAGE_FOLDER}`;
 const inFolder = (home, path) => String(path).startsWith(`${imageDir(home)}/`) && !String(path).includes("/../");
 
-// The clipboard's image as a file, or null when it holds none. `home` is `appHome()`.
-export async function clipboardImage(exec, home, name, board = "") {
+// On Windows `win` is the path of win.py, which does what mkdir, cp, rm and osascript do here. On the Mac it's null.
+const py = (exec, win, ...args) => exec("python", ["-I", "-S", win, ...args]);
+
+// The clipboard's image as a file, or null when it holds none. `home` is `appHome()`. Windows has no private clipboard,
+// so `board` is the Mac's alone.
+export async function clipboardImage(exec, home, name, board = "", win = null) {
   const path = `${imageDir(home)}/${name}.png`;
+  if (win) {
+    await py(exec, win, "mkdir", imageDir(home));
+    const r = await py(exec, win, "clipboard", path);
+    return r.code === 0 && r.stdout.trim() === "ok" ? path : null;
+  }
   await exec("mkdir", ["-p", "-m", "700", imageDir(home)]);
   const r = await exec("osascript", ["-l", "JavaScript", "-e", READ_CLIPBOARD, path, board]);
   return r.code === 0 && r.stdout.trim() === "ok" ? path : null;
@@ -42,8 +51,13 @@ export function splitDropped(paths) {
 
 // `image()` draws only from the app's folder, so a dropped image is copied there. If the copy fails it goes by its own
 // path, with the chip in place of a picture.
-export async function droppedImage(exec, home, path, name) {
+export async function droppedImage(exec, home, path, name, win = null) {
   const copy = `${imageDir(home)}/${name}${path.slice(path.lastIndexOf(".")).toLowerCase()}`;
+  if (win) {
+    await py(exec, win, "mkdir", imageDir(home)).catch(() => null);
+    const r = await py(exec, win, "copy", path, copy).catch(() => null);
+    return r?.code === 0 ? copy : path;
+  }
   await exec("mkdir", ["-p", "-m", "700", imageDir(home)]).catch(() => null);
   const r = await exec("cp", ["--", path, copy]).catch(() => null);
   return r?.code === 0 ? copy : path;
@@ -53,8 +67,10 @@ export async function droppedImage(exec, home, path, name) {
 export const previewPath = (home, path) => (inFolder(home, path) ? path.slice(home.length + 1) : null);
 
 // Only a file this pane made is ever deleted. A dropped file is the person's own.
-export async function forgetImage(exec, home, path) {
-  if (inFolder(home, path)) await exec("rm", ["-f", path]).catch(() => null);
+export async function forgetImage(exec, home, path, win = null) {
+  if (!inFolder(home, path)) return;
+  if (win) await py(exec, win, "remove", path).catch(() => null);
+  else await exec("rm", ["-f", path]).catch(() => null);
 }
 
 // Images a pane was holding when it closed. The same rule: only files in the app's folder.

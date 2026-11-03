@@ -173,18 +173,29 @@ const HEADLESS_MS = (HEADLESS_S + 5) * 1000;
 // Whether Claude Code has accepted trust for exactly this folder, from the text of its .claude.json. `claude -p` skips the
 // trust question and runs the folder's own settings and hooks, so a headless start only goes where a session already could.
 // A parent folder's trust doesn't count, as in the terminal.
+// On Windows the session's folder has backslashes and .claude.json keys it with forward ones. Only a drive-letter path is
+// read that way: elsewhere a backslash is part of a folder's name.
 export function folderTrusted(claudeJson, folder) {
-  try { return JSON.parse(claudeJson)?.projects?.[folder]?.hasTrustDialogAccepted === true; } catch { return false; }
+  try {
+    const projects = JSON.parse(claudeJson)?.projects;
+    const keys = /^[A-Za-z]:\\/.test(String(folder)) ? [folder, String(folder).replace(/\\/g, "/")] : [folder];
+    return keys.some((f) => projects?.[f]?.hasTrustDialogAccepted === true);
+  } catch { return false; }
 }
 
 // Runs `claude -p` in a folder with one message, which costs no turn when it's a local command such as /usage.
 // Resolves to its stdout. Throws when the folder isn't trusted, so nothing runs there, or when it didn't finish in time.
-export async function runHeadless(exec, folder, text, trusted, { limitMs = HEADLESS_MS } = {}) {
+// On Windows `win` is the path of win.py, which runs claude with the line on its input, as zsh does here. There's no zsh
+// profile to pick: the profile comes from CLAUDE_CONFIG_DIR in the user's environment.
+export async function runHeadless(exec, folder, text, trusted, { limitMs = HEADLESS_MS, win = null } = {}) {
   if (trusted !== true) throw new Error("folder not trusted");
   let timer;
   const late = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("claude -p took too long")), limitMs); });
   try {
-    const r = await Promise.race([exec("zsh", ["-ic", SCRIPT, "zsh", userLine(text), ...HEADLESS], { cwd: folder }), late]);
+    const run = win
+      ? exec("python", ["-I", "-S", win, "headless", userLine(text), ...HEADLESS], { cwd: folder })
+      : exec("zsh", ["-ic", SCRIPT, "zsh", userLine(text), ...HEADLESS], { cwd: folder });
+    const r = await Promise.race([run, late]);
     if (r.code !== 0 && !/"subtype"\s*:\s*"init"/.test(String(r.stdout))) throw new Error(`claude -p exited ${r.code}`);
     return r.stdout;
   } finally {
@@ -202,13 +213,13 @@ export const cachedList = (folder) => cache.get(folder)?.list ?? null;
 export const resetCache = () => cache.clear();
 
 // `trusted(folder)` says whether the folder is trusted, and a folder that isn't gets the table's commands only.
-export function ensureList(folder, { exec, trusted, now = Date.now, limitMs }) {
+export function ensureList(folder, { exec, trusted, win = null, now = Date.now, limitMs }) {
   const hit = cache.get(folder);
   if (hit?.promise) return hit.promise;
   if (hit?.list) return Promise.resolve(hit.list);
   if (hit?.failedAt != null && now() - hit.failedAt < RETRY_MS) return Promise.resolve(null);
   const entry = { list: null, failedAt: null, promise: null };
-  entry.promise = Promise.resolve().then(() => trusted?.(folder)).then((ok) => runHeadless(exec, folder, "/usage", ok === true, { limitMs })).then((out) => {
+  entry.promise = Promise.resolve().then(() => trusted?.(folder)).then((ok) => runHeadless(exec, folder, "/usage", ok === true, { limitMs, win })).then((out) => {
     const parsed = parseStream(out);
     if (!parsed.names.length) throw new Error("no commands in the init message");
     entry.list = buildList(parsed);

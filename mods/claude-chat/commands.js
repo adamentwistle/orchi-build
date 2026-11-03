@@ -9,6 +9,7 @@ import { dialogNet, route } from "./route.js";
 import { cachedList, completing, completionRows, ensureList, fallbackList, filterList, folderTrusted, keysWanted, pick, rowNumber, startRow, step } from "./slash.js";
 import { buildStats, limitMeters, longestRanges, parseStatsCache, sharedDetail, usageHeight, withLongest } from "./usage-data.js";
 import { usagePanel } from "./usage-view.js";
+import { pythonName, winHelper } from "./platform.js";
 import { completionCard, exitCard } from "./slash-view.js";
 
 // The same width and sides as the composer's foot in main.js, so the cards line up with it.
@@ -93,7 +94,7 @@ export class Commands {
       const slash = this.slash = { typed: "", index: 0, moved: false, entered: false, list: null, rows: [], flat: [] };
       cx.timer.after(ENTER_MS, (cx) => { if (this.slash === slash) { slash.entered = true; cx.notify(); } });
       const folder = this.folder();
-      if (folder) cx.spawn(async (cx) => { await ensureList(folder, { exec, trusted: (f) => this.trusted(f) }); cx.notify(); });
+      if (folder) cx.spawn(async (cx) => { await ensureList(folder, { exec, trusted: (f) => this.trusted(f), win: winHelper(appHome(), "claude-chat") }); cx.notify(); });
     }
     if (this.slash.typed !== text) { this.slash.typed = text; this.slash.index = 0; this.slash.moved = false; }
     cx.notify();
@@ -192,7 +193,7 @@ export class Commands {
       this.fit(u); cx.notify();
       // The shorter ranges' longest session is a rescan of the transcripts, so it fills in when it's done.
       if (!cache) return;
-      const found = await longestRanges({ exec }, `${appHome()}/mods/claude-chat/longest.py`, `${session.dir}/projects`, cache.lastComputedDate);
+      const found = await longestRanges({ exec, python: pythonName() }, `${appHome()}/mods/claude-chat/longest.py`, `${session.dir}/projects`, cache.lastComputedDate);
       if (!live() || !u.stats) return;
       u.stats = withLongest(u.stats, found);
       this.fit(u); cx.notify();
@@ -202,7 +203,7 @@ export class Commands {
       u.detail = { status: "loading" };
       let next;
       try {
-        next = !folder ? { status: "error" } : (await this.trusted(folder)) ? { status: "ready", data: await sharedDetail(exec, folder, true) } : { status: "untrusted" };
+        next = !folder ? { status: "error" } : (await this.trusted(folder)) ? { status: "ready", data: await sharedDetail(exec, folder, true, winHelper(appHome(), "claude-chat")) } : { status: "untrusted" };
       } catch { next = { status: "error" }; }
       if (!live()) return;
       u.detail = next;

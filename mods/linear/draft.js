@@ -4,13 +4,18 @@
 export const SET_ASIDE = "ctrl+s";
 export const STASH_HELD = /›[ \t]*stashed[ \t]*$/m;
 
+// Whether Claude Code is what runs in the terminal, from `hc get`. On Windows `hc get` names the shell as the foreground
+// process, with Claude Code under it, so `io.windows` takes the status Claude Code reports instead.
+export const runsClaude = (info, windows = false) =>
+  Boolean(info?.foreground?.name?.startsWith("claude")) || (windows === true && info?.status?.app === "claude-code");
+
 // True when a half-typed line may have gone aside. Claude Code puts it back after the next submit. Ctrl+S does nothing on an
 // empty prompt, but it brings a held stash back, and a line typed over one replaces it, so it isn't pressed while one is held.
 // A shell left after Claude Code exits would freeze on it.
 async function setDraftAside(io, terminal) {
   try {
-    const { foreground } = JSON.parse((await io.hc(["get", "--json", terminal])).stdout);
-    if (!foreground?.name?.startsWith("claude") || STASH_HELD.test((await io.hc(["read", terminal])).stdout)) return false;
+    const info = JSON.parse((await io.hc(["get", "--json", terminal])).stdout);
+    if (!runsClaude(info, io.windows) || STASH_HELD.test((await io.hc(["read", terminal])).stdout)) return false;
     await io.hc(["keys", terminal, SET_ASIDE]);
     return true;
   } catch { return false; }

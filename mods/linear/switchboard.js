@@ -15,6 +15,9 @@ const WAKE = "SWITCHBOARD REQUESTS";
 export { switchboardDir };
 export const planningDir = (s, home) => `${switchboardDir(s, home)}/planning`;
 
+// mkdir -p, or win.py's on Windows, where `io.win` is its path.
+export const makeFolder = (io, dir) => (io.win ? io.exec("python", ["-I", "-S", io.win, "mkdir", dir]) : io.exec("mkdir", ["-p", dir]));
+
 // A model choice from the review screen as `claude` flags. Shared state isn't trusted to reach argv unchecked.
 export function claudeChoice(choice) {
   const model = String(choice?.model ?? "").toLowerCase(), effort = String(choice?.effort ?? "").toLowerCase();
@@ -80,7 +83,7 @@ export const runRulesFile = (s, home, name) => `${switchboardDir(s, home)}/run-r
 export async function writeRunRules(io, name, rules) {
   if (!NAME.test(name ?? "")) throw new Error("That plan's name can't be a file name");
   const path = runRulesFile(io.orchi, io.home(), name);
-  await io.exec("mkdir", ["-p", `${switchboardDir(io.orchi, io.home())}/run-rules`]);
+  await makeFolder(io, `${switchboardDir(io.orchi, io.home())}/run-rules`);
   const old = await io.readTextFile(path).catch(() => null);
   await io.writeTextFile(path, `${JSON.stringify(rules, null, 2)}\n`, old ?? null);
   return path;
@@ -94,7 +97,7 @@ export const requestFile = (s, home, ms, random) => `${switchboardDir(s, home)}/
 export async function sendRequest(io, line, choice) {
   if (!line) throw new Error("That request isn't one the switchboard takes");
   const holder = await ensureSwitchboard(io, choice), root = switchboardDir(io.orchi, io.home());
-  await io.exec("mkdir", ["-p", `${root}/requests`]);
+  await makeFolder(io, `${root}/requests`);
   await io.writeTextFile(requestFile(io.orchi, io.home(), io.now(), io.random()), `${line}\n`, null);
   if (holder.where === "app" && !holder.started) await sendAside(io, holder.terminal, WAKE);
   return holder;

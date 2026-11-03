@@ -34,6 +34,11 @@ export function visible(items, keyOf, dismissed) {
   return { shown, dismissed: items.length - shown.length };
 }
 
+// The projects Orchi lists: work ones on the Mac, every category on Windows. A file starting `_`, such as the
+// tracker's `_template.md`, isn't a project.
+export const trackerProjects = (projects, windows = false) =>
+  projects.filter((p) => (windows ? !p.file.startsWith("_") : p.category === "work"));
+
 // The tracker text `main.js` builds: per project a line `@@projects/<file>.md`, its frontmatter
 // lines, then the next prompt between `@@prompt` and `@@endprompt`.
 export function parseTracker(text) {

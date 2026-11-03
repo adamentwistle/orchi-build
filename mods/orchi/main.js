@@ -6,7 +6,7 @@ import { InputState, TextareaState } from "gpui-base";
 import { exec, hc, home, appHome, readTextFile, writeTextFile, terminals, spaces, theme, run, shared, setShared, focused, watchFolder } from "herdr";
 import { boardActivity, liveDecisions, parseProgress, parseItems, parseContext, parseModel, workerPhase } from "./parse.js";
 import { metersFrom } from "./usage.js";
-import { readyPlan, parseTracker, planTask, planLabel, plannable, visible } from "./plans.js";
+import { readyPlan, parseTracker, planTask, planLabel, plannable, trackerProjects, visible } from "./plans.js";
 import { localSpace, startClaude } from "./launch.js";
 import { appendEntry, finishedRun, foundOrchestrators, keptProblems, loadWorld, projectProblems, removeHold, sessionRows, stamp, terminalAgents, terminalName, trustOf } from "./sessions.js";
 import { ensureSwitchboard, planningDir, requestLine, sendRequest, writeRunRules } from "./switchboard.js";
@@ -16,6 +16,7 @@ import { completeProblem, killFailures, liveWorkers, stopTargets } from "./runs.
 import { DEFAULT_WORKER_LIMIT, overrideUntil, parseSettings, startHolds, usageHolds } from "./limits.js";
 import { orchiView } from "./view.js";
 import { legworkDir as settingsLegworkDir, readSettings as readOrchiSettings, switchboardDir } from "./settings.js";
+import { isWindows, winHelper } from "./platform.js";
 
 const REFRESH_MS = 15000;
 const LOAD_LIMIT_MS = 60000;
@@ -40,13 +41,20 @@ inp && fence{print}' projects/*.md`;
 // presses that follow find them read.
 let orchiSettings = null;
 const orchi = async () => (orchiSettings ??= await readOrchiSettings(readTextFile, home()));
+// On Windows there's no sh, ls, mkdir, sleep or pbcopy, so win.py stands in, and Orchi's scripts run under python.
+const WINDOWS = isWindows();
+const WIN = () => winHelper(appHome(), "orchi");
 const planningFile = (file) => `${planningDir(orchiSettings, home())}/${file}.md`;
-const expand = (path) => (path?.startsWith("~/") ? `${home()}${path.slice(1)}` : path);
+// A tracker's repo can be written C:\x\y on Windows. Paths here use forward slashes, as the planner's board does.
+const expand = (path) => {
+  const full = path?.startsWith("~/") ? `${home()}${path.slice(1)}` : path;
+  return WINDOWS && full ? full.replace(/\\/g, "/") : full;
+};
 const attempt = async (job, fallback = null) => { try { return (await job()) ?? fallback; } catch { return fallback; } };
 const readText = (path) => attempt(() => readTextFile(path), "");
 const hex = (length) => Array.from({ length }, () => Math.floor(Math.random() * 16).toString(16)).join("");
-const agents = () => terminalAgents(exec);
-const io = async () => ({ exec, hc, home, readTextFile, writeTextFile, terminals, spaces, agents, now: Date.now, random: () => hex(8), discarded: () => shared(DISCARDED) ?? [], orchi: await orchi() });
+const agents = () => terminalAgents(exec, WINDOWS);
+const io = async () => ({ exec, hc, home, readTextFile, writeTextFile, terminals, spaces, agents, now: Date.now, random: () => hex(8), discarded: () => shared(DISCARDED) ?? [], orchi: await orchi(), windows: WINDOWS, win: WIN() });
 
 // Orchi's own settings, such as the worker limit, from `~/.config/herdr-app/orchi.json`.
 const readSettings = async () => parseSettings(await readText(`${appHome()}/orchi.json`));
@@ -64,10 +72,11 @@ async function legworkDir() {
   return typeof dir === "string" && dir.trim() ? expand(dir.trim()) : null;
 }
 
+// The Mac lists work projects only. On Windows every category is listed, and win.py reads the tracker in awk's place.
 async function readTracker(dir) {
   if (!dir) return [];
-  const r = await exec("sh", ["-c", TRACKER, "sh", dir]);
-  return r.code === 0 ? parseTracker(r.stdout).filter((p) => p.category === "work") : [];
+  const r = WINDOWS ? await exec("python", ["-I", "-S", WIN(), "tracker", dir]) : await exec("sh", ["-c", TRACKER, "sh", dir]);
+  return r.code === 0 ? trackerProjects(parseTracker(r.stdout), WINDOWS) : [];
 }
 
 async function screenOf(o) {
@@ -126,7 +135,7 @@ async function load() {
 
   const plans = tracker.map((p) => ({ ...p, ...readyPlan(p, p.prompt) })).filter((p) => p.ready);
   const projects = tracker.filter(plannable).map(({ file, name, repo }) => ({ file, name, repo: expand(repo) }));
-  const trust = await trustOf(exec, home(), planFolders(plans, sessions), await orchi());
+  const trust = await trustOf(exec, home(), planFolders(plans, sessions), await orchi(), WINDOWS);
   return {
     usage, orchestrators, decisions, hidden, plans, projects, planners, holder, sessions, tracker, busy, held, requested, trust, paused: state.paused,
     terminalsRead: live.length > 0, dir, workerLimit: settings.workerLimit,
@@ -267,11 +276,11 @@ export default class Orchi extends View {
       if (holder.where === "terminal") { this.note = "The switchboard is in terminal Herdr, so it can't be shown from here."; return; }
       const line = d ? discussLine(d) : null;
       if (line && holder.started) {
-        await copyText(exec, line);
+        await copyText(exec, line, WIN());
         this.note = "Copied. Paste it once the switchboard is up.";
       }
       if (line && !holder.started) {
-        if (!await pasteInto({ exec, run, focused }, holder.terminal, line)) this.note = "Copied, but that terminal didn't take the keyboard, so nothing was pasted.";
+        if (!await pasteInto({ exec, run, focused, win: WIN() }, holder.terminal, line)) this.note = "Copied, but that terminal didn't take the keyboard, so nothing was pasted.";
         return;
       }
       run("agent.focus", { terminal: holder.terminal });
@@ -285,7 +294,7 @@ export default class Orchi extends View {
     this.sending = true; this.replyError = null;
     cx.spawn(async (cx) => {
       try {
-        await sendAnswer(exec, home(), d, text, await orchi());
+        await sendAnswer(exec, home(), d, text, await orchi(), WINDOWS);
         this.option = null;
         if (this.replyText) { this.replyText = ""; this.replyInput.set_value(""); }
         if (this.actionText) { this.actionText = ""; this.actionInput.set_value(""); }
@@ -301,12 +310,12 @@ export default class Orchi extends View {
 
   answerAction(d, cx) { this.send(d, actionAnswer(this.actionText), cx); }
 
-  copyCommand(d, cx) { this.act(async () => { await copyText(exec, d.run); this.note = "Copied."; }, cx); }
+  copyCommand(d, cx) { this.act(async () => { await copyText(exec, d.run, WIN()); this.note = "Copied."; }, cx); }
 
   // Never presses Enter. The permission check wants Adam's own action in that session.
   putInTerminal(d, cx) {
     this.act(async () => {
-      if (!await pasteInto({ exec, run, focused }, d.address, d.run)) this.note = "Copied, but that terminal didn't take the keyboard, so nothing was pasted.";
+      if (!await pasteInto({ exec, run, focused, win: WIN() }, d.address, d.run)) this.note = "Copied, but that terminal didn't take the keyboard, so nothing was pasted.";
     }, cx);
   }
 
@@ -337,7 +346,7 @@ export default class Orchi extends View {
       const workers = liveWorkers(world.live, world.agents, slugs);
       const problem = completeProblem({ board, status: now?.status ?? o.status, paused: world.state.paused.includes(o.project), workers }, Date.now());
       if (problem) throw new Error(problem);
-      await finishRun(exec, home(), o.repo, "Marked complete by Adam from the Orchi panel.", await orchi());
+      await finishRun(exec, home(), o.repo, "Marked complete by Adam from the Orchi panel.", await orchi(), WINDOWS);
     }, cx);
   }
 
@@ -346,7 +355,7 @@ export default class Orchi extends View {
   stopRun(o, cx) {
     this.stopping = null;
     this.act(async () => {
-      await finishRun(exec, home(), o.repo, "Stopped by Adam from the Orchi panel.", await orchi());
+      await finishRun(exec, home(), o.repo, "Stopped by Adam from the Orchi panel.", await orchi(), WINDOWS);
       const fanout = o.repo ? await readText(`${o.repo}/.legwork/fanout-state.md`) : "";
       const live = (() => { try { return terminals(); } catch { return []; } })();
       const targets = stopTargets(live, o.name, parseItems(fanout).map((i) => i.slug).filter(Boolean));
@@ -452,14 +461,14 @@ export default class Orchi extends View {
   startSession(s, options, cx) {
     this.startPlan(`start:${s.session}`, s.session, requestLine("start", s.session), options, async (world) => {
       const rows = sessionRows(world.sessions, Date.now(), shared(DISCARDED) ?? []);
-      const trust = await trustOf(exec, home(), s.board.plans.map((p) => p.repo), await orchi());
+      const trust = await trustOf(exec, home(), s.board.plans.map((p) => p.repo), await orchi(), WINDOWS);
       return keptProblems(s, this.projectOf, rows, this.ruleContext(world.busy, trust, world.held, world.requested));
     }, cx);
   }
 
   startQueued(p, options, cx) {
     this.startPlan(`run:${p.file}`, p.file, requestLine("run", p.file), options, async (world) => {
-      const trust = await trustOf(exec, home(), [expand(p.repo)].filter(Boolean), await orchi());
+      const trust = await trustOf(exec, home(), [expand(p.repo)].filter(Boolean), await orchi(), WINDOWS);
       return projectProblems(p, this.ruleContext(world.busy, trust, world.held, world.requested));
     }, cx);
   }
@@ -504,7 +513,7 @@ export default class Orchi extends View {
     this.planError = null;
     cx.spawn(async (cx) => {
       try {
-        const terminal = await startClaude({ exec, hc, home }, {
+        const terminal = await startClaude({ exec, hc, home, windows: WINDOWS, win: WIN() }, {
           ...PLANNER, task: planTask(project.name, planningFile(project.file), project.file), tab: `Plan ${project.name}`, folder, space, labels: [`orchi.plan=${project.file}`],
         });
         run("agent.focus", { terminal });

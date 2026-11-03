@@ -16,9 +16,12 @@ import { localSpace, startClaude } from "./launch.js";
 import { queueView } from "./queue-view.js";
 import { PR_SUGGESTION, restoreSession, sessionProblems } from "./review.js";
 import { emptyWorld, loadWorld, removeHold, sessionRows, terminalAgents, ticketSessions, trustOf, writeHold } from "./sessions.js";
-import { ensureSwitchboard, planningDir, switchboardDir } from "./switchboard.js";
+import { ensureSwitchboard, makeFolder, planningDir, switchboardDir } from "./switchboard.js";
 import { readSettings, legworkDir } from "./settings.js";
+import { isWindows, winHelper } from "./platform.js";
+import { legworkMode, listedProjects, projectRows } from "./legwork-rows.js";
 import { goPlan, newSession, plannerPlace } from "./go.js";
+import { briefingOf, goLine, pickupLine } from "./briefing.js";
 import { reviewView } from "./review-view.js";
 import { detailsView } from "./details-view.js";
 
@@ -37,8 +40,13 @@ const PULLS_SEEN = "linear.pulls-seen";
 const DISCARDED = "orchi.discarded";
 const FOCUS = "orchi.focus";
 
-// LINEAR_API_KEY from the shell agents start in, when linear.json has none.
+// On Windows there's no sh, mkdir or awk, so win.py stands in. With no Linear key there, the panel lists legwork projects.
+const WINDOWS = isWindows();
+const WIN = () => winHelper(appHome(), "linear");
+
+// LINEAR_API_KEY from the shell agents start in, when linear.json has none. Windows has no sh to ask, so only the file counts.
 async function envKey() {
+  if (WINDOWS) return null;
   const r = await exec("sh", ["-c", 'printf %s "$LINEAR_API_KEY"']).catch(() => null);
   return r?.code === 0 && r.stdout.trim() ? r.stdout.trim() : null;
 }
@@ -107,20 +115,21 @@ fm{print; next}
 inp && /^\`\`\`/{ if(fence){inp=0; fence=0; print "@@endprompt"} else {fence=1; print "@@prompt"} next}
 inp && fence{print}' projects/*.md`;
 
-// The work projects in a legwork tracker.
-async function legworkProjects(dir) {
-  const r = await exec("sh", ["-c", TRACKER, "sh", dir]);
+// The projects in a legwork tracker: the work ones for Linear tickets, or every one a legwork panel lists.
+async function legworkProjects(dir, every = false) {
+  const r = WINDOWS ? await exec("python", ["-I", "-S", WIN(), "tracker", dir]) : await exec("sh", ["-c", TRACKER, "sh", dir]);
   if (r.code !== 0) throw new Error(`Could not read legwork projects in ${dir}`);
-  return parseProjects(r.stdout).filter((p) => p.category === "work");
+  const projects = parseProjects(r.stdout);
+  return every ? listedProjects(projects) : projects.filter((p) => p.category === "work");
 }
 
 const assignments = () => shared(ASSIGNED) ?? {};
 const hex = (length) => Array.from({ length }, () => Math.floor(Math.random() * 16).toString(16)).join("");
-const agents = () => terminalAgents(exec);
+const agents = () => terminalAgents(exec, WINDOWS);
 // Orchi's settings, read once. They say where the switchboard's files are.
 let orchiSettings = null;
 const orchi = () => (orchiSettings ??= readSettings(readTextFile, home()));
-const io = async () => ({ exec, hc, home, readTextFile, writeTextFile, terminals, spaces, agents, now: Date.now, random: () => hex(8), discarded: () => shared(DISCARDED) ?? [], orchi: await orchi() });
+const io = async () => ({ exec, hc, home, readTextFile, writeTextFile, terminals, spaces, agents, now: Date.now, random: () => hex(8), discarded: () => shared(DISCARDED) ?? [], orchi: await orchi(), windows: WINDOWS, win: WIN() });
 
 // A stored value read back, or `fallback` when it's missing or not JSON.
 function stored(key, fallback) {
@@ -135,6 +144,7 @@ export default class Linear extends View {
     const closed = stored("groups.closed", []);
     this.closed = new Set(Array.isArray(closed) ? closed : []);
     this.descriptions = new Map(); this.cut = false; this.remotes = new Map(); this.worldSince = 0; this.worldAgain = false;
+    this.openProjects = new Set(); this.briefings = new Map(); this.projectNote = null;
     this.search = InputState.new({ placeholder: "Filter by id, title or project" });
     this.search.on("change", (_e, cx) => { this.text = this.search.value(); cx.notify(); });
     this.picker = InputState.new({ placeholder: "Search projects" });
@@ -178,7 +188,7 @@ export default class Linear extends View {
     cx.spawn(async (cx) => {
       try {
         const world = await loadWorld(await io());
-        const trust = this.ticked.size ? await trustOf(exec, home(), this.sessionFolders(), await orchi()) : {};
+        const trust = this.ticked.size ? await trustOf(exec, home(), this.sessionFolders(), await orchi(), WINDOWS) : {};
         if (generation !== this.sessionsGeneration) return;
         this.world = world; this.trust = { ...this.trust, ...trust };
         await this.readRemotes(world);
@@ -224,12 +234,68 @@ export default class Linear extends View {
 
   checkTrust(cx) {
     cx.spawn(async (cx) => {
-      this.trust = { ...this.trust, ...await trustOf(exec, home(), this.sessionFolders(), await orchi()) };
+      this.trust = { ...this.trust, ...await trustOf(exec, home(), this.sessionFolders(), await orchi(), WINDOWS) };
       cx.notify();
     });
   }
 
   review(cx) { this.screen = "review"; this.checkTrust(cx); cx.notify(); }
+
+  // ---- a Legwork card: its briefing, and Pickup, Go and Send to Orchi ----
+
+  // Cards start closed. Opening one reads its project file, once per change to the file's `updated` line.
+  toggleProject(issue, cx) {
+    const file = issue.identifier;
+    if (this.openProjects.has(file)) this.openProjects.delete(file);
+    else { this.openProjects.add(file); this.loadBriefing(issue, cx); }
+    cx.notify();
+  }
+
+  loadBriefing(issue, cx) {
+    const file = issue.identifier, have = this.briefings.get(file), dir = this.config?.legwork?.dir;
+    if (!dir || (have && have.updated === issue.updatedAt)) return;
+    this.briefings.set(file, { updated: issue.updatedAt, brief: null, loading: true });
+    cx.spawn(async (cx) => {
+      const text = await readTextFile(`${dir}/projects/${file}.md`).catch(() => null);
+      this.briefings.set(file, { updated: issue.updatedAt, brief: text ? briefingOf(text) : null, loading: false });
+      cx.notify();
+    });
+  }
+
+  briefing(file) { return this.briefings.get(file) ?? null; }
+
+  // Pickup and Go open a tab in the project's own space, a new one named after it when there's none, show it, and start
+  // Claude Code there with /pickup or /go as its first message.
+  startProject(issue, line, cx) {
+    const project = this.projects.find((p) => p.file === issue.identifier);
+    const folder = project?.repo ? projectFolder(project, home()) : null;
+    if (!folder) { this.projectNote = { file: issue.identifier, text: "This project has no repo folder to open." }; cx.notify(); return; }
+    this.projectNote = { file: issue.identifier, text: "Opening…" };
+    cx.notify();
+    cx.spawn(async (cx) => {
+      try {
+        const place = plannerPlace([folder], this.config?.legwork?.dir, spaces(), () => `sp${hex(32)}`);
+        const known = spaces().some((s) => s.id === place.space);
+        await startClaude({ exec, hc, home, windows: WINDOWS, win: WIN() }, {
+          model: null, effort: null, task: line, tab: issue.title, folder, space: place.space,
+          spaceName: known ? null : issue.title, focus: true,
+        });
+        this.projectNote = null;
+      } catch (e) {
+        this.projectNote = { file: issue.identifier, text: String(e?.message ?? e) };
+      }
+      cx.notify();
+    });
+  }
+
+  pickupProject(issue, cx) { this.startProject(issue, pickupLine(issue.identifier), cx); }
+  goProject(issue, cx) { this.startProject(issue, goLine(issue.identifier), cx); }
+
+  // The planning session: the project joins any others ticked, and the review screen opens, as Review does.
+  sendToOrchi(issue, cx) {
+    if (!this.ticked.has(issue.id)) this.ticked = toggleTick(this.ticked, issue.id);
+    this.review(cx);
+  }
 
   // The rules for Go, on the data a frame or a press passes in.
   problems(tickets, assigned, rows, world, trust) {
@@ -252,22 +318,22 @@ export default class Linear extends View {
 
   async startSession() {
     const tickets = this.tickedIssues(), assigned = assignments(), choices = this.session(), now = new Date();
-    const world = await loadWorld(await io()), trust = await trustOf(exec, home(), this.sessionFolders(), await orchi());
+    const world = await loadWorld(await io()), trust = await trustOf(exec, home(), this.sessionFolders(), await orchi(), WINDOWS);
     const rows = sessionRows(world.sessions, now.getTime(), shared(DISCARDED) ?? []);
     const [problem] = this.problems(tickets, assigned, rows, world, trust);
     if (problem) throw new Error(problem);
     const session = newSession(now, hex(4));
-    const plan = goPlan({ session, tickets, projectOf: (issue) => this.linked(issue, assigned), choices, created: now, home: home() });
+    const plan = goPlan({ session, tickets, projectOf: (issue) => this.linked(issue, assigned), choices, created: now, home: home(), source: this.legwork ? "legwork" : undefined });
     if (!plan) throw new Error("A ticket or project has a name the panel can't use");
     const dir = planningDir(await orchi(), home());
-    await exec("mkdir", ["-p", dir]);
+    await makeFolder(await io(), dir);
     await writeTextFile(`${dir}/${session}.json`, `${JSON.stringify(plan.brief, null, 2)}\n`, null);
     // The hold goes in before anything starts, so a second Go sees these repos as taken while this planner plans.
     await writeHold(await io(), session, plan.repos);
     try {
       await ensureSwitchboard(await io(), choices.switchboard);
       const place = plannerPlace(plan.repos, this.config?.legwork?.dir, spaces(), () => `sp${hex(32)}`);
-      await startClaude({ exec, hc, home }, { model: plan.model, effort: plan.effort, task: plan.task, tab: plan.tab, labels: plan.labels, ...place });
+      await startClaude({ exec, hc, home, windows: WINDOWS, win: WIN() }, { model: plan.model, effort: plan.effort, task: plan.task, tab: plan.tab, labels: plan.labels, ...place });
     } catch (e) {
       await removeHold(await io(), session);
       throw e;
@@ -295,17 +361,25 @@ export default class Linear extends View {
         const config = await loadConfig();
         this.config = config;
         if (config.error) throw new Error(config.error);
-        if (!config.apiKey) throw new Error(NO_KEY);
+        this.legwork = legworkMode(config, WINDOWS);
+        if (!config.apiKey && !this.legwork) throw new Error(NO_KEY);
         const sleep = (ms) => cx.sleep(ms);
-        const [{ issues: listed, complete }, states] = await Promise.all([fetchIssues(config.apiKey, config.teams, sleep), fetchStates(config.apiKey, sleep).catch(() => this.states)]);
-        // Descriptions only for tickets that changed since they were read. A failure leaves the ones held.
-        const wanted = descriptionsToFetch(listed, this.descriptions);
-        if (wanted.length) {
-          try { for (const [id, entry] of await fetchDescriptions(config.apiKey, wanted, sleep)) this.descriptions.set(id, entry); } catch { /* shown next time */ }
+        let issues, states, projects, complete = true;
+        if (this.legwork) {
+          projects = await legworkProjects(config.legwork.dir, true);
+          issues = projectRows(projects); states = {};
+        } else {
+          let listed;
+          [{ issues: listed, complete }, states] = await Promise.all([fetchIssues(config.apiKey, config.teams, sleep), fetchStates(config.apiKey, sleep).catch(() => this.states)]);
+          // Descriptions only for tickets that changed since they were read. A failure leaves the ones held.
+          const wanted = descriptionsToFetch(listed, this.descriptions);
+          if (wanted.length) {
+            try { for (const [id, entry] of await fetchDescriptions(config.apiKey, wanted, sleep)) this.descriptions.set(id, entry); } catch { /* shown next time */ }
+          }
+          this.descriptions = keptDescriptions(this.descriptions, listed);
+          issues = withDescriptions(listed, this.descriptions);
+          projects = config.legwork ? await legworkProjects(config.legwork.dir) : [];
         }
-        this.descriptions = keptDescriptions(this.descriptions, listed);
-        const issues = withDescriptions(listed, this.descriptions);
-        const projects = config.legwork ? await legworkProjects(config.legwork.dir) : [];
         if (generation === this.generation) {
           this.issues = issues; this.projects = projects; this.states = states; this.error = null; this.cut = !complete;
           setShared(STAGED, settle(this.staged(), issues, complete));
@@ -330,9 +404,21 @@ export default class Linear extends View {
     cx.notify();
   }
 
-  // The legwork project a ticket belongs to; your pick in the details beats any link.
+  // The legwork project a ticket belongs to; your pick in the details beats any link. A legwork row is its project.
   linked(issue, assigned = assignments()) {
+    if (issue.legwork) return this.projects.find((p) => p.file === issue.identifier) ?? null;
     return findProject(this.projects, issue, this.config?.legwork?.projects, assigned);
+  }
+
+  // The card a row sits in: its legwork project, or for a legwork row its category.
+  groupOf(issue, assigned) { return issue.legwork ? issue.title : this.linked(issue, assigned)?.name ?? issue.project; }
+
+  title() { return this.legwork ? "Legwork" : "Linear"; }
+
+  // A press on a row opens a ticket's details. A legwork row has no ticket to show, so the press ticks it.
+  open(issue, cx) {
+    if (issue.legwork) { this.tick(issue.id, cx); return; }
+    this.selected = issue.id; cx.notify();
   }
 
   // Picking what the links already say clears the pick, so no change is asked of the agent.
@@ -383,7 +469,7 @@ export default class Linear extends View {
     this.starting = true; this.updateError = null;
     cx.spawn(async (cx) => {
       const folder = this.config?.legwork?.dir ?? home();
-      try { started(await startClaude({ exec, hc, home }, { ...runner, task, tab, folder, space: localSpace(spaces(), folder) })); }
+      try { started(await startClaude({ exec, hc, home, windows: WINDOWS, win: WIN() }, { ...runner, task, tab, folder, space: localSpace(spaces(), folder) })); }
       catch (e) { this.updating = null; this.updateError = String(e.message ?? e); }
       finally { this.starting = false; cx.notify(); }
     });
@@ -437,6 +523,7 @@ export default class Linear extends View {
   emptyText() {
     if (this.error) return this.error;
     if (this.loading) return "Loading…";
+    if (this.legwork) return this.issues.length ? "No projects match these filters" : "No projects in the legwork tracker";
     if (this.issues.length) return "No issues match these filters";
     return this.config?.teams?.length ? "No open issues in this team" : "No open issues assigned to you";
   }

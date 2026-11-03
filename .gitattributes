@@ -1,0 +1,6 @@
+# Keep LF on every platform. The tests compare screens and transcripts line by line, and the mods are copied
+# into the app as they are, so a Windows checkout with core.autocrlf would otherwise turn them to CRLF.
+* text=auto eol=lf
+*.mp3 binary
+*.png binary
+*.gif binary

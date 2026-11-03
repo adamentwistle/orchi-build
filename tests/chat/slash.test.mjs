@@ -379,3 +379,10 @@ test("what wants the keys follows what's open", () => {
     [{ usage: { closing: true } }, null], [{ slash: rows, exit: true }, "list"],
   ]) assert.equal(keysWanted(open), want, JSON.stringify(open));
 });
+
+test("a backslash in a macOS folder name is not a Windows separator", () => {
+  const json = JSON.stringify({ projects: { "/tmp/demo/child": { hasTrustDialogAccepted: true }, "C:/w/atlas": { hasTrustDialogAccepted: true } } });
+  assert.equal(folderTrusted(json, "/tmp/demo\\child"), false);
+  assert.equal(folderTrusted(json, "/tmp/demo/child"), true);
+  assert.equal(folderTrusted(json, "C:\\w\\atlas"), true);
+});

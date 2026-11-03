@@ -2,6 +2,7 @@
 // `node --test` can load this file: hc, exec and readTextFile come in as arguments. A miss returns null, and the pane
 // keeps what it has.
 import { configDirs } from "./settings.js";
+import { normalPath, samePath } from "./platform.js";
 
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -37,18 +38,34 @@ export function newestSession(sessions) {
 }
 
 // `settings` is Orchi's settings, read once by the caller. It says which profile folder to look in first.
-export async function findSession({ hc, readTextFile, home, settings }, terminal) {
+// On Windows `hc get` names the shell as the foreground process, with Claude Code under it, so `win` (the path of win.py)
+// looks through every process under the shell. On the Mac `win` is null.
+export async function findSession({ hc, readTextFile, home, settings, exec, win, python = "python" }, terminal) {
   const got = await hc(["get", terminal, "--json"]).catch(() => null);
   const pid = got?.code === 0 ? foregroundPid(got.stdout) : null;
   if (!pid) return null;
   const dirs = configDirs(settings, home());
+  if (win) return windowsSession({ exec, python }, win, pid, dirs);
   const texts = await Promise.all(dirs.map((dir) => readTextFile(sessionFile(dir, pid)).catch(() => null)));
   return newestSession(texts.map((text, i) => text && parseSession(text, dirs[i])));
 }
 
+export async function windowsSession({ exec, python = "python" }, win, pid, dirs) {
+  const r = await exec(python, ["-I", "-S", win, "session", String(pid), ...dirs]).catch(() => null);
+  if (r?.code !== 0) return null;
+  try {
+    const found = JSON.parse(r.stdout);
+    return found && typeof found.text === "string" && dirs.includes(found.dir) ? parseSession(found.text, found.dir) : null;
+  } catch { return null; }
+}
+
 // `/resume` and a `cd` can leave the transcript under another project's folder, so look for it by id.
-export async function locateTranscript({ exec }, session) {
+export async function locateTranscript({ exec, win, python = "python" }, session) {
   if (!SESSION_ID.test(session.sessionId)) return null;
+  if (win) {
+    const r = await exec(python, ["-I", "-S", win, "locate", session.dir, session.sessionId]).catch(() => null);
+    return r?.code === 0 ? r.stdout.split("\n").map((l) => l.trim()).find(Boolean) ?? null : null;
+  }
   const r = await exec("sh", ["-c", 'ls -t "$1"/projects/*/"$2".jsonl 2>/dev/null', "sh", session.dir, session.sessionId]).catch(() => null);
   return r?.code === 0 ? r.stdout.split("\n").find(Boolean) ?? null : null;
 }
@@ -64,13 +81,18 @@ export function latest() {
 export const sessionMoved = (before, after) => Boolean(before && after) && before.sessionId !== after.sessionId;
 
 // Whether a batch of changed paths touches this session's transcript. Other sessions write to the same folder.
-export const wakesTranscript = (paths, transcript) => paths.includes(transcript);
+// Windows can report a changed path with backslashes and a lower-case drive letter.
+// The transcript's name is the session's id, which no other file shares, so its name alone is enough when a full path
+// comes back in a form that doesn't compare.
+const nameOf = (path) => normalPath(path).split("/").pop();
+export const wakesTranscript = (paths, transcript) => paths.some((p) => samePath(p, transcript) || (Boolean(transcript) && nameOf(p) === nameOf(transcript)));
 
-export const wakesSession = (paths, session) => paths.some((p) => p === sessionFile(session.dir, session.pid));
+export const wakesSession = (paths, session) => paths.some((p) => samePath(p, sessionFile(session.dir, session.pid)));
 
 // Runs the helper. `python3 -I -S` keeps it away from anything in the folder or site packages, and starts faster.
-export async function tail({ exec }, helper, path, ...args) {
-  const r = await exec("python3", ["-I", "-S", helper, path, ...args.map(String)]).catch(() => null);
+// Windows has no python3, so main.js passes `python` there.
+export async function tail({ exec, python = "python3" }, helper, path, ...args) {
+  const r = await exec(python, ["-I", "-S", helper, path, ...args.map(String)]).catch(() => null);
   if (r?.code !== 0) return null;
   try { return JSON.parse(r.stdout); } catch { return null; }
 }

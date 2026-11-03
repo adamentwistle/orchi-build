@@ -1,12 +1,18 @@
 // The sessions Go starts: briefs and boards under the switchboard's planning folder, their phases, and the rules that
 // stop a start. No Herdr imports, so `node --test` can load this file. `mods/linear` and `mods/orchi` carry the same copy.
 import { parseEntries, field, openItems, answeredItems, latestKind, parseState, parseProgress, parseAgentList, parseItems } from "./parse.js";
-import { NAME, parseLock, holderOf, planningDir, switchboardDir } from "./switchboard.js";
+import { NAME, parseLock, holderOf, makeFolder, planningDir, switchboardDir } from "./switchboard.js";
 import { claudeDir } from "./settings.js";
 
 
+// A Linear ticket, such as ENG-83.
 export const ISSUE_ID = /^[A-Z][A-Z0-9]*-\d+$/;
-export const ABSOLUTE = /^\/[^\u0000-\u001f\u007f-\u009f]*$/;
+// A legwork project's file name, which stands in for a ticket on Windows, where the panel lists projects. Only a brief
+// that says `"source": "legwork"` holds these.
+export const PROJECT_ID = /^[a-z0-9][a-z0-9-]*$/;
+export const ticketId = (id, legwork = false) => ISSUE_ID.test(id ?? "") || (legwork && PROJECT_ID.test(id ?? ""));
+// A full path: /... on the Mac, C:/... or C:\... on Windows.
+export const ABSOLUTE = /^(?:\/|[A-Za-z]:[\\/])[^\u0000-\u001f\u007f-\u009f]*$/;
 const HUMAN = /^(Human action, not a Claude session\.|DECISION NEEDED)/;
 const FINISHED_MS = 24 * 3600 * 1000;
 const READY_GRACE_MS = 10 * 60 * 1000;
@@ -24,7 +30,8 @@ export function parseBrief(text, session) {
   let brief;
   try { brief = JSON.parse(text); } catch { return null; }
   if (brief?.session !== session || !Array.isArray(brief.tickets)) return null;
-  const tickets = brief.tickets.filter((t) => ISSUE_ID.test(t?.id ?? "") && NAME.test(t?.project ?? "") && ABSOLUTE.test(t?.repo ?? ""));
+  const legwork = brief.source === "legwork";
+  const tickets = brief.tickets.filter((t) => ticketId(t?.id, legwork) && NAME.test(t?.project ?? "") && ABSOLUTE.test(t?.repo ?? ""));
   return { session, created: String(brief.created ?? ""), tickets, after: brief.choices?.after === "wait" ? "wait" : "start", choices: brief.choices ?? null };
 }
 
@@ -32,7 +39,7 @@ export function parseBrief(text, session) {
 function planEntry(entry) {
   const project = /^(?:.*\/)?([\w-]+?)(?:\.md)?$/.exec(field(entry.lines, "Project") ?? "")?.[1], repo = field(entry.lines, "Repo");
   if (!NAME.test(project ?? "") || !ABSOLUTE.test(repo ?? "")) return null;
-  const tickets = (field(entry.lines, "Tickets") ?? "").split(",").map((id) => id.trim()).filter((id) => ISSUE_ID.test(id));
+  const tickets = (field(entry.lines, "Tickets") ?? "").split(",").map((id) => id.trim()).filter((id) => ticketId(id, true));
   return { project, repo, tickets };
 }
 
@@ -125,10 +132,13 @@ export function planReady(s, now) {
 
 export const keptPlan = (s) => s.phase === "Planned" && Boolean(s.board.kept);
 
+// On Windows `io.win` is the path of win.py, which lists the folder where the Mac runs ls.
+const listFolder = (io, dir) => (io.win ? io.exec("python", ["-I", "-S", io.win, "list", dir]) : io.exec("ls", ["-1", dir]));
+
 async function readSessions(io, state, live) {
   const dir = planningDir(io.orchi, io.home());
   const text = (path) => io.readTextFile(path).then((t) => t ?? "").catch(() => "");
-  const listed = await io.exec("ls", ["-1", dir]).catch(() => null);
+  const listed = await listFolder(io, dir).catch(() => null);
   const names = (listed?.code === 0 ? listed.stdout.split("\n") : []).map((n) => /^([\w-]+)\.json$/.exec(n)?.[1]).filter(Boolean);
   const sessions = await Promise.all(names.map(async (session) => {
     const brief = parseBrief(await text(`${dir}/${session}.json`), session);
@@ -175,7 +185,9 @@ async function busyRepos(io, found, state) {
   return repos;
 }
 
-export async function terminalAgents(exec) {
+// Agents in terminal Herdr. Windows has only the app here, and `herdr` there is the old terminal Herdr, so it's never asked.
+export async function terminalAgents(exec, windows = false) {
+  if (windows) return [];
   const r = await exec("herdr", ["agent", "list"]).catch(() => null);
   return r?.code === 0 ? parseAgentList(r.stdout) : [];
 }
@@ -195,12 +207,14 @@ export function parseHold(text, session) {
 
 export async function writeHold(io, session, repos) {
   if (!NAME.test(session ?? "")) throw new Error("That session's name can't be a file name");
-  await io.exec("mkdir", ["-p", `${switchboardDir(io.orchi, io.home())}/holds`]);
+  await makeFolder(io, `${switchboardDir(io.orchi, io.home())}/holds`);
   await io.writeTextFile(holdFile(io.orchi, io.home(), session), `${JSON.stringify({ session, repos: repos.filter((r) => ABSOLUTE.test(r ?? "")), at: io.now() })}\n`, null);
 }
 
 export async function removeHold(io, session) {
-  if (NAME.test(session ?? "")) await io.exec("rm", ["-f", holdFile(io.orchi, io.home(), session)]).catch(() => null);
+  if (!NAME.test(session ?? "")) return;
+  const file = holdFile(io.orchi, io.home(), session);
+  await (io.win ? io.exec("python", ["-I", "-S", io.win, "remove", file]) : io.exec("rm", ["-f", file])).catch(() => null);
 }
 
 // A hold lasts until its session has finished, meaning every run wrote its DONE, or it's discarded. A session that never
@@ -229,7 +243,7 @@ export function waitingStarts(lines) {
 }
 
 async function listed(io, dir, pattern) {
-  const r = await io.exec("ls", ["-1", dir]).catch(() => null);
+  const r = await listFolder(io, dir).catch(() => null);
   return (r?.code === 0 ? r.stdout.split("\n") : []).map((n) => pattern.exec(n)?.[1]).filter(Boolean);
 }
 
@@ -276,13 +290,16 @@ export const trustFile = (s, home) => (typeof s?.claude_dir === "string" && s.cl
 
 // The one flag for this folder. The file holds account details, so it's read in a process that prints only that
 // flag, and the panel never holds any of it. True or false, or null when it couldn't be read. `s` is Orchi's settings.
-export async function folderTrust(exec, home, folder, s) {
-  const r = await exec("python3", ["-c", TRUST, trustFile(s, home), folder]).catch(() => null);
+// On Windows Python is `python`, and .claude.json keys a folder with forward slashes.
+export async function folderTrust(exec, home, folder, s, windows = false) {
+  const call = windows ? ["python", ["-c", TRUST, trustFile(s, home), String(folder).replace(/\\/g, "/")]]
+    : ["python3", ["-c", TRUST, trustFile(s, home), folder]];
+  const r = await exec(...call).catch(() => null);
   return r?.code === 0 ? r.stdout.trim() === "True" : null;
 }
 
-export async function trustOf(exec, home, folders, s) {
-  return Object.fromEntries(await Promise.all([...new Set(folders)].map(async (folder) => [folder, await folderTrust(exec, home, folder, s)])));
+export async function trustOf(exec, home, folders, s, windows = false) {
+  return Object.fromEntries(await Promise.all([...new Set(folders)].map(async (folder) => [folder, await folderTrust(exec, home, folder, s, windows)])));
 }
 
 // Why this project can't take a run now. `trust` maps a folder to `folderTrust`'s answer, and a folder not yet asked

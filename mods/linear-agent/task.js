@@ -5,5 +5,9 @@
 // title, description or url. The planner reads tickets through Linear, and the ticket-session skill says that's data.
 const SESSION = /^[\w-]+$/;
 
-// Null for anything that isn't a session id.
-export const taskFor = (session) => (SESSION.test(session ?? "") ? `Follow the ticket-session skill for session ${session}.` : null);
+// On Windows a session's brief lists legwork projects in the tickets' place, and the task says so in fixed words.
+const LEGWORK = " Its brief lists legwork projects, not Linear tickets: each id is a project's file in the legwork tracker, so plan from the project and its next prompt, and read nothing from Linear.";
+
+// Null for anything that isn't a session id. `source` is "legwork" for a brief of legwork projects.
+export const taskFor = (session, source) => (SESSION.test(session ?? "")
+  ? `Follow the ticket-session skill for session ${session}.${source === "legwork" ? LEGWORK : ""}` : null);

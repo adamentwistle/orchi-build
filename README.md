@@ -17,6 +17,7 @@ agents and answers for you when they need a decision.
 | `bin/` | The orchestration scripts: the switchboard, the herdr wrapper, hooks |
 | `skills/`, `commands/` | The Claude Code skills and commands for planning and orchestration |
 | `launchd/` | The switchboard's health watcher job |
+| `scripts/install.ps1` | The Windows install, parked: see `docs/windows.md` |
 | `docs/` | How each piece works, and setup |
 | `tests/`, `bin/tests/` | The checks |
 
@@ -39,6 +40,9 @@ scripts/herdr-dev             # run a private Herdr for testing
 node --test tests/            # the panels' checks
 python3 -m pytest bin/tests   # the scripts' checks
 ```
+
+Windows support is parked: the mods have Windows paths, `scripts/install.ps1` installs them, and `tests/windows` checks
+them on any system. See `docs/windows.md`.
 
 See `docs/setup.md` for the switchboard.
 

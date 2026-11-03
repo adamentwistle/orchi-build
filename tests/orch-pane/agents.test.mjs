@@ -4,8 +4,12 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const HELPER = new URL("../../mods/orch-pane/agents.py", import.meta.url).pathname;
+// Windows has no python3: that name is the Microsoft Store stand-in.
+const PYTHON = process.platform === "win32" ? "python" : "python3";
+
+const HELPER = fileURLToPath(new URL("../../mods/orch-pane/agents.py", import.meta.url));
 const LIVE = "11111111-1111-1111-1111-111111111111", OLD = "22222222-2222-2222-2222-222222222222", OTHER = "33333333-3333-3333-3333-333333333333";
 const STAMP = "2026-10-31T14:59:30.000Z";
 
@@ -19,7 +23,7 @@ function agent(root, session, id, meta) {
 const title = (root, session, name) => writeFileSync(join(root, "projects", "-repo", session, "custom-title.json"), JSON.stringify({ customTitle: name }));
 
 function read(...args) {
-  return JSON.parse(execFileSync("python3", ["-I", "-S", HELPER, ...args], { encoding: "utf8" })).agents;
+  return JSON.parse(execFileSync(PYTHON, ["-I", "-S", HELPER, ...args], { encoding: "utf8" })).agents;
 }
 
 function tree() {

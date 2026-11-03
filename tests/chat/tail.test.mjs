@@ -4,9 +4,13 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, appendFileSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const TAIL = new URL("../../mods/claude-chat/tail.py", import.meta.url).pathname;
-const run = (...args) => JSON.parse(execFileSync("python3", ["-I", "-S", TAIL, ...args.map(String)], { maxBuffer: 1 << 24 }));
+// Windows has no python3: that name is the Microsoft Store stand-in.
+const PYTHON = process.platform === "win32" ? "python" : "python3";
+
+const TAIL = fileURLToPath(new URL("../../mods/claude-chat/tail.py", import.meta.url));
+const run = (...args) => JSON.parse(execFileSync(PYTHON, ["-I", "-S", TAIL, ...args.map(String)], { maxBuffer: 1 << 24 }));
 const at = "2026-10-31T12:00:00.000Z";
 
 function file(lines, name = "t.jsonl") {

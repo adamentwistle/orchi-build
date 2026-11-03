@@ -19,8 +19,12 @@ import { ThreadMotion, isShowing, listHeight, panelHold } from "./reveal.js";
 import { entry, glideBox, swapCover } from "./covers.js";
 import { ModelControl } from "./model-control.js";
 import { testScript, testTranscript, testing } from "./test-hook.js";
+import { pythonName, winHelper } from "./platform.js";
 
 const HELPER = () => `${appHome()}/mods/claude-chat/tail.py`;
+const WIN = () => winHelper(appHome(), "claude-chat");
+const POLL_MS = 3000;
+const PY = () => ({ exec, python: pythonName() });
 const RENDER_RETRY_MS = 1000;
 const SESSION_MS = 5000;
 const COPIED_MS = 1500;
@@ -117,13 +121,21 @@ export default class Chat extends View {
     this.editors = new Map();
   }
 
+  // On Windows the folder watcher's paths haven't been seen to match the transcript's, so the thread is also read every
+  // few seconds there. A read with nothing new costs one short helper run.
+  pollTranscript(cx) {
+    if (!WIN() || this.polling) return;
+    this.polling = true;
+    cx.timer.every(POLL_MS, (cx) => { if (this.path && this.loaded) this.read(cx); });
+  }
+
   // The session file says which transcript is live. `/clear` and `/resume` change it.
   refreshSession(cx) {
     if (!this.terminal) return;
     const newest = this.sessionRead();
     cx.spawn(async (cx) => {
       const forced = await testTranscript(appHome(), readTextFile);
-      const session = await findSession({ hc, readTextFile, home, settings: await this.settings }, this.terminal);
+      const session = await findSession({ hc, readTextFile, home, settings: await this.settings, exec, win: WIN(), python: pythonName() }, this.terminal);
       if (!newest()) return;
       if (!session) { if (!this.session && !forced) cx.notify(); return; }
       const moved = sessionMoved(this.session, session);
@@ -138,6 +150,7 @@ export default class Chat extends View {
 
   startTranscript(path, cx) {
     this.path = path;
+    this.pollTranscript(cx);
     this.watch(folderOf(path), cx);
     this.read(cx);
   }
@@ -174,7 +187,7 @@ export default class Chat extends View {
         current,
         once: async () => {
           const first = !this.loaded;
-          const reply = await tail({ exec }, HELPER(), this.path, ...(first ? ["--last", PAGE] : ["--from", this.thread.end]));
+          const reply = await tail(PY(), HELPER(), this.path, ...(first ? ["--last", PAGE] : ["--from", this.thread.end]));
           if (!current()) return;
           if (reply) { this.misses = 0; this.land(reply, first, cx); }
           else if (first) this.problem = LOST;
@@ -218,7 +231,7 @@ export default class Chat extends View {
     if (!this.session) return;
     const generation = this.generation;
     cx.spawn(async (cx) => {
-      const found = await locateTranscript({ exec }, this.session);
+      const found = await locateTranscript({ exec, win: WIN(), python: pythonName() }, this.session);
       if (generation !== this.generation) return;
       if (found && found !== this.path) this.startTranscript(found, cx);
       this.loaded = false;
@@ -232,7 +245,7 @@ export default class Chat extends View {
     this.older = true;
     const generation = this.generation;
     cx.spawn(async (cx) => {
-      const reply = await tail({ exec }, HELPER(), this.path, "--last", PAGE, "--before", this.thread.start);
+      const reply = await tail(PY(), HELPER(), this.path, "--last", PAGE, "--before", this.thread.start);
       if (generation !== this.generation) return;
       this.older = false;
       if (!reply) return;
@@ -405,7 +418,7 @@ export default class Chat extends View {
     if (line == null || this.results[tool]) { this.setOpen(tool, true, cx); return; }
     const generation = this.generation;
     cx.spawn(async (cx) => {
-      const result = await tail({ exec }, HELPER(), this.path, "--result", line, "--tool", tool);
+      const result = await tail(PY(), HELPER(), this.path, "--result", line, "--tool", tool);
       if (generation !== this.generation) return;
       this.results = { ...this.results, [tool]: result ?? { missing: true } };
       this.setOpen(tool, true, cx);
@@ -421,7 +434,7 @@ export default class Chat extends View {
     const generation = this.generation;
     cx.spawn(async (cx) => {
       // A row's id starts with the byte offset of its transcript line.
-      const full = await tail({ exec }, HELPER(), this.path, "--code", id.split(".")[0], "--id", id);
+      const full = await tail(PY(), HELPER(), this.path, "--code", id.split(".")[0], "--id", id);
       if (generation !== this.generation) return;
       const whole = typeof full?.code === "string";
       this.copy(id, whole ? full.code : row.code, !whole || Boolean(full.clipped), cx);

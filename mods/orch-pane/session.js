@@ -23,10 +23,20 @@ export async function terminalFacts({ hc }, terminal) {
 }
 
 // `orchi` is Orchi's settings, which name the profile folder sessions run under.
-export async function findSession({ readTextFile, home, orchi }, facts) {
+// On Windows `hc get` names the shell as the foreground process, with Claude Code under it, so `win` (the path of win.py)
+// looks through every process under the shell. On the Mac `win` is null.
+export async function findSession({ readTextFile, home, orchi, exec, win, python = "python" }, facts) {
   const pid = facts?.foreground?.pid;
   if (!Number.isInteger(pid) || pid <= 0) return null;
   const dirs = configDirs(orchi, home());
+  if (win) {
+    const r = await exec(python, ["-I", "-S", win, "session", String(pid), ...dirs]).catch(() => null);
+    if (r?.code !== 0) return null;
+    try {
+      const found = JSON.parse(r.stdout);
+      return found && typeof found.text === "string" && dirs.includes(found.dir) ? parseSession(found.text, found.dir) : null;
+    } catch { return null; }
+  }
   const texts = await Promise.all(dirs.map((dir) => readTextFile(`${dir}/sessions/${pid}.json`).catch(() => null)));
   return newestSession(texts.map((text, i) => text && parseSession(text, dirs[i])));
 }
