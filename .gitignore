@@ -6,3 +6,5 @@ mods/*/gpui-kit.d.ts
 mods/*/jsconfig.json
 .claude/settings.local.json
 .claude/worktrees/
+dist/
+*.egg-info/

@@ -35,6 +35,7 @@ Orchi reads `~/.config/orchi/settings.json`. Every value has a default.
 
 ```bash
 scripts/install.sh            # put the themes, mods, layout, keys and sounds into Herdr
+uv tool install .             # install the `orchi` command from this checkout
 scripts/herdr-dev             # run a private Herdr for testing
 node --test tests/            # the panels' checks
 python3 -m pytest bin/tests   # the scripts' checks

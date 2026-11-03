@@ -1,0 +1,65 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "orchi"
+description = "Herdr's look and panels, and the orchestration layer around it."
+readme = "README.md"
+license = "MIT AND Apache-2.0"
+license-files = ["LICENSE", "NOTICE.md", "LICENSES/*"]
+requires-python = ">=3.10"
+dependencies = []
+dynamic = ["version"]
+
+[project.scripts]
+orchi = "orchi.cli:main"
+
+[tool.hatch.version]
+path = "src/orchi/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+# An editable install only maps src; the content folders are found beside the checkout by data_dir().
+dev-mode-dirs = ["src"]
+# The content stays in its top-level folders, because mods and scripts read each other by relative
+# path. The wheel carries a copy of each under orchi/data/<name>. Unlike force-include, include with
+# sources still honours the exclusions below and the .gitignore.
+include = [
+  "/src/orchi",
+  "/mods",
+  "/themes",
+  "/sounds",
+  "/skills",
+  "/commands",
+  "/scripts",
+  "/bin",
+  "/config",
+  "/layouts",
+  "/keys",
+  "/browser",
+  "/launchd",
+]
+exclude = [
+  "**/tests",
+  "**/__pycache__",
+  "**/.pytest_cache",
+  "**/.DS_Store",
+  "**/gpui-kit.d.ts",
+  "**/jsconfig.json",
+  "*.pyc",
+]
+
+[tool.hatch.build.targets.wheel.sources]
+"src" = ""
+"mods" = "orchi/data/mods"
+"themes" = "orchi/data/themes"
+"sounds" = "orchi/data/sounds"
+"skills" = "orchi/data/skills"
+"commands" = "orchi/data/commands"
+"scripts" = "orchi/data/scripts"
+"bin" = "orchi/data/bin"
+"config" = "orchi/data/config"
+"layouts" = "orchi/data/layouts"
+"keys" = "orchi/data/keys"
+"browser" = "orchi/data/browser"
+"launchd" = "orchi/data/launchd"
