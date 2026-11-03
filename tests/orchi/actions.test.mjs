@@ -24,21 +24,23 @@ test("an empty or multi-line reply doesn't send", () => {
   for (const text of ["a\nb", "a\rb", "a\u0003b", "a\u001b[2Jb", "a\u2028b"]) assert.match(answerProblem(text), /one plain line/);
 });
 
-test("Send goes through env to the app with the launcher first on PATH", () => {
-  assert.deepEqual(answerArgv("/h", decision, "A"), ["ORCHI_HERDR=app", PATH, SCRIPT, "/r/atlas", "t3", "atlas-2", "A"]);
+test("Send goes through env with the launcher first on PATH", () => {
+  assert.deepEqual(answerArgv("/h", decision, "A"), [PATH, SCRIPT, "/r/atlas", "t3", "atlas-2", "A"]);
 });
 
 test("the script comes from Orchi's checkout as the settings name it", () => {
-  assert.equal(answerArgv("/h", decision, "A", { orchi_dir: "~/src/orchi" })[2], "/h/src/orchi/bin/switchboard-answer");
+  assert.equal(answerArgv("/h", decision, "A", { orchi_dir: "~/src/orchi" })[1], "/h/src/orchi/bin/switchboard-answer");
 });
 
-test("an orchestrator still in terminal Herdr is answered there", () => {
-  assert.deepEqual(answerArgv("/h", { ...decision, pane: "wGZ:p1", where: "terminal" }, "A"), ["ORCHI_HERDR=terminal", PATH, SCRIPT, "/r/atlas", "wGZ:p1", "atlas-2", "A"]);
+test("nothing in an answer picks a Herdr, because the app is the only one", () => {
+  for (const d of [decision, { ...decision, pane: "wGZ:p1", where: "terminal" }]) {
+    assert.ok(!answerArgv("/h", d, "A").some((a) => a.startsWith("ORCHI_HERDR")));
+  }
 });
 
 test("a planner board goes by --board", () => {
   const d = { id: "plan-1", orch: "plan-s1", board: "/h/planning/s1.md", pane: "t9", planner: true, where: "app" };
-  assert.deepEqual(answerArgv("/h", d, "A"), ["ORCHI_HERDR=app", PATH, SCRIPT, "--board", "/h/planning/s1.md", "t9", "plan-1", "A"]);
+  assert.deepEqual(answerArgv("/h", d, "A"), [PATH, SCRIPT, "--board", "/h/planning/s1.md", "t9", "plan-1", "A"]);
 });
 
 test("a hostile reply stays one argument", () => {

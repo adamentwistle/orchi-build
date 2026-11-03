@@ -73,7 +73,7 @@ export function requestLine(verb, name) {
   return VERBS.includes(verb) && NAME.test(name ?? "") ? `${verb} ${name}` : null;
 }
 
-// What Adam chose at Start. The switchboard reads it for this request, and the orchestrator after every cycle, so it
+// What the user chose at Start. The switchboard reads it for this request, and the orchestrator after every cycle, so it
 // stays until the next Start replaces it. `name` is the session or project on the request line.
 export const runRulesFile = (s, home, name) => `${switchboardDir(s, home)}/run-rules/${name}.json`;
 

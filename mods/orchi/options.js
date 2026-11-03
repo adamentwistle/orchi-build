@@ -1,5 +1,5 @@
 // What Start asks before a plan runs: the same choices Go asks when a plan is made. A plan made in chat has never been
-// asked, and a plan made earlier may not be what Adam wants now. No Herdr imports, so `node --test` can load this file.
+// asked, and a plan made earlier may not be what the user wants now. No Herdr imports, so `node --test` can load this file.
 export const MODELS = ["Fable", "Opus", "Sonnet", "Haiku"];
 export const EFFORTS = ["Low", "Medium", "High", "Xhigh", "Max"];
 export const PR_HINT = "Leave them open for me to merge";
@@ -28,5 +28,5 @@ export function pickModel(choice, model) {
 
 export const pickEffort = (choice, effort) => (choice.model === "Auto" ? choice : { ...choice, effort });
 
-// What goes in the run rules file. The switchboard reads these names, and `prs` and `extra` are Adam's own words.
+// What goes in the run rules file. The switchboard reads these names, and `prs` and `extra` are the user's own words.
 export const runRules = ({ orchestrator, workers, prs, extra }) => ({ orchestrator, workers, prs: words(prs), extra: words(extra) });

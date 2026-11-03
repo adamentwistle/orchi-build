@@ -1,4 +1,4 @@
-// The Orchi panel: every orchestrator, every decision waiting on Adam, and the usage meters.
+// The Orchi panel: every orchestrator, every decision waiting on the user, and the usage meters.
 // This file reads data and owns view state. Drawing lives in view.js. What a press sends is in actions.js and
 // switchboard.js. It reads shared state once per render, into `frame`. Dismissing is kept in this panel.
 import { View } from "gpui-kit";
@@ -84,7 +84,7 @@ async function load() {
   const running = found.filter((o) => !finishedRun(o.status, boards.get(repoOf(o.project, o.cwd)) ?? ""));
   // The switchboard's watch list counts too: a pane loses its name when Claude Code restarts in it.
   const owners = new Map(state.watching.map((w) => [w.repo, { name: `orch-${w.project}`, pane: w.pane, where: live.some((t) => t.address === w.pane) ? "app" : "terminal" }]));
-  // A finished run can leave an action for Adam, such as merging, and its session can still take the reply.
+  // A finished run can leave an action for the user, such as merging, and its session can still take the reply.
   for (const o of found) owners.set(repoOf(o.project, o.cwd), { name: o.name, address: o.address ?? null, pane: o.pane ?? o.address, where: o.where, finished: !running.includes(o) });
   // A planner's questions are on its own board, and a board with no planner running is ignored.
   const planners = live.filter((t) => t.state === "live" && planLabel(t));
@@ -292,7 +292,7 @@ export default class Orchi extends View {
 
   copyCommand(d, cx) { this.act(async () => { await copyText(exec, d.run); this.note = "Copied."; }, cx); }
 
-  // Never presses Enter. The permission check wants Adam's own action in that session.
+  // Never presses Enter. The permission check wants the user's own action in that session.
   putInTerminal(d, cx) {
     this.act(async () => {
       if (!await pasteInto({ exec, run, focused }, d.address, d.run)) this.note = "Copied, but that terminal didn't take the keyboard, so nothing was pasted.";
@@ -326,7 +326,7 @@ export default class Orchi extends View {
       const workers = liveWorkers(world.live, world.agents, slugs);
       const problem = completeProblem({ board, status: now?.status ?? o.status, paused: world.state.paused.includes(o.project), workers }, Date.now());
       if (problem) throw new Error(problem);
-      await finishRun(exec, home(), o.repo, "Marked complete by Adam from the Orchi panel.", await orchi());
+      await finishRun(exec, home(), o.repo, "Marked complete from the Orchi panel.", await orchi());
     }, cx);
   }
 
@@ -335,7 +335,7 @@ export default class Orchi extends View {
   stopRun(o, cx) {
     this.stopping = null;
     this.act(async () => {
-      await finishRun(exec, home(), o.repo, "Stopped by Adam from the Orchi panel.", await orchi());
+      await finishRun(exec, home(), o.repo, "Stopped from the Orchi panel.", await orchi());
       const fanout = o.repo ? await readText(`${o.repo}/.legwork/fanout-state.md`) : "";
       const live = (() => { try { return terminals(); } catch { return []; } })();
       const targets = stopTargets(live, o.name, parseItems(fanout).map((i) => i.slug).filter(Boolean));

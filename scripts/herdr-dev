@@ -1,5 +1,5 @@
 #!/bin/zsh
-# A private Herdr for testing: its own window, app home and core, apart from Adam's.
+# A private Herdr for testing: its own window, app home and core, apart from yours.
 #   herdr-dev up <slug> [repo]     make it, install mods from repo (default: cwd), open the window, give focus back
 #   herdr-dev install <slug> [repo]  copy mods into it again
 #   herdr-dev run <slug> <cmd...>  run a command against it: herdr-app ..., hc ...
@@ -9,7 +9,7 @@
 #   herdr-dev restart <slug>       quit and reopen the window, core and sessions stay
 #   herdr-dev down <slug>          end its sessions, window and core
 # An install that would lose files stops (see scripts/install.sh); HERDR_INSTALL_FORCE=1 herdr-dev up ... goes on.
-# It never touches ~/.config/herdr-app or the default core. Adam's bundle gets focus back after any open.
+# It never touches ~/.config/herdr-app or the default core. Your own app gets focus back after any open.
 set -u
 cmd=$1; slug=$2; shift 2
 home=$HOME/.config/hd/$slug

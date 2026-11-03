@@ -286,7 +286,7 @@ export async function trustOf(exec, home, folders, s) {
 }
 
 // Why this project can't take a run now. `trust` maps a folder to `folderTrust`'s answer, and a folder not yet asked
-// about stops a start until it has been. Nothing answers the trust question for Adam. `held` maps a repo to the session
+// about stops a start until it has been. Nothing answers the trust question for the user. `held` maps a repo to the session
 // holding it, and `own` is the session asking, whose own hold doesn't count. `requested` holds starts still waiting on
 // the switchboard.
 export function projectProblems(project, { folderOf, busy = new Set(), trust = null, held = new Map(), own = null, requested = null }) {

@@ -5,11 +5,11 @@ import { QUIET_MS, completeOffered, completeProblem, killFailures, liveWorkers, 
 const NOW = new Date(2026, 10, 3, 12, 0).getTime();
 const card = (over = {}) => ({ status: "idle", waiting: false, paused: false, pending: undefined, started: "2026-11-03 09:00", activity: { lastAt: "2026-11-03 11:00" }, ...over });
 
-test("Mark complete is offered only on a quiet run with nothing open for Adam", () => {
+test("Mark complete is offered only on a quiet run with nothing open for the user", () => {
   assert.equal(completeOffered(card(), NOW), true);
   assert.equal(completeOffered(card({ status: "working" }), NOW), false);
   assert.equal(completeOffered(card({ status: "blocked" }), NOW), false);
-  // Idle waiting for Adam's answer is the case the review found: one press ended a live run.
+  // Idle waiting for the user's answer is the case the review found: one press ended a live run.
   assert.equal(completeOffered(card({ waiting: true }), NOW), false);
   assert.equal(completeOffered(card({ paused: true }), NOW), false);
   assert.equal(completeOffered(card({ pending: "pausing" }), NOW), false);

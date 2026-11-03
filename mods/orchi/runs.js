@@ -1,7 +1,7 @@
 // The rules behind Mark complete and Stop on an orchestrator's card. No Herdr imports, so `node --test` can load this file.
 import { openItems, parseEntries } from "./parse.js";
 
-// How long a run's board has to be still before Mark complete is offered. An orchestrator waiting on Adam is idle too,
+// How long a run's board has to be still before Mark complete is offered. An orchestrator waiting on the user is idle too,
 // so idle alone doesn't mean the run has gone quiet.
 export const QUIET_MS = 15 * 60 * 1000;
 
@@ -22,7 +22,7 @@ export function liveWorkers(live, agents, slugs) {
 
 const workersLine = (names) => (names.length === 1 ? `${names[0]} is still running` : `${names.length} workers are still running (${names.join(", ")})`);
 
-// Whether the card offers Mark complete: not in a turn, no worker live, nothing open for Adam, not paused or pausing,
+// Whether the card offers Mark complete: not in a turn, no worker live, nothing open for the user, not paused or pausing,
 // and nothing on its board for QUIET_MS. A run that has written nothing since it started counts from its start.
 export function completeOffered(o, now) {
   if (busy(o.status) || o.liveWorkers?.length || o.waiting || o.paused || o.pending) return false;

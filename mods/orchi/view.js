@@ -168,7 +168,7 @@ function latestUpdate(view, o, t) {
         .child(div().flex_none().text_color(t.dim).child(ago(u.time) ?? ""))))));
 }
 
-// Complete suits a run that has gone quiet, so it's offered only then: no worker live, nothing open for Adam, not paused,
+// Complete suits a run that has gone quiet, so it's offered only then: no worker live, nothing open for the user, not paused,
 // and nothing on its board for a while. It asks first, as Stop does. Stop ends terminals, and it can only reach this app's.
 function runActions(view, o, pending, t) {
   if (view.completing === o.name) {
@@ -424,7 +424,7 @@ function queuedRow(view, p, t) {
   return planRow(view, {
     id: `plan-${p.file}`, title: p.name, problems,
     sheet: view.startFor?.key === `run:${p.file}` ? startSheet(view, t) : null,
-    meta: ["Queued in legwork", p.needsAdam ? "Needs you first" : null, age ? `${age} ago` : null].filter(Boolean).join(" · "),
+    meta: ["Queued in legwork", p.needsYou ? "Needs you first" : null, age ? `${age} ago` : null].filter(Boolean).join(" · "),
     buttons: [
       ghost(`read-${p.file}`, "Read the plan", () => view.readPlan(p), t),
       startButton(`start-plan-${p.file}`, view.isStarting(`run:${p.file}`), problems, (_e, cx) => { view.askStartQueued(p); cx.notify(); }, t),

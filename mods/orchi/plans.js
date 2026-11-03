@@ -10,7 +10,7 @@ export function readyPlan(frontmatter, prompt) {
   const shaped = first.includes("switchboard-protocol") || /(^|\n)\s*\/fanout\b/.test(text);
   return {
     ready: frontmatter.status === "queued" && shaped,
-    needsAdam: Boolean(frontmatter.blocked_on) || HUMAN.test(first) || /\bAdam runs\b/.test(text),
+    needsYou: Boolean(frontmatter.blocked_on) || HUMAN.test(first) || /(^|\n|\(\d+\))[ \t]*(?:\d+[.)]|[-*])?[ \t]*the user runs\b/i.test(text),
   };
 }
 
@@ -18,7 +18,7 @@ export function readyPlan(frontmatter, prompt) {
 // so Orchi can show them.
 export const planTask = (name, path, file) => `run planning session for ${PLAIN_NAME.test(name) ? name : file}
 
-Put your questions to Adam in this terminal as usual. Also write each one to ${path} as a DECISION entry in the switchboard-protocol format, with ids plan-1, plan-2 and so on, so the Orchi panel shows it. Start that file fresh. When he answers, add a line ANSWERED <id>.`;
+Put your questions to the user in this terminal as usual. Also write each one to ${path} as a DECISION entry in the switchboard-protocol format, with ids plan-1, plan-2 and so on, so the Orchi panel shows it. Start that file fresh. When they answer, add a line ANSWERED <id>.`;
 
 export const plannable = (project) => PLAN_FILE.test(project.file);
 

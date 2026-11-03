@@ -31,7 +31,7 @@ Meanwhile: waiting
 
 ## atlas-5 DECIDED 2026-10-30 09:40
 Replaces atlas-4
-Adam said B.
+User: "B"
 
 ## atlas-6 ACTION 2026-10-30 09:50
 Why: the permission check refused the merge

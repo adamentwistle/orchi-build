@@ -4,6 +4,8 @@ The skills are prose, so these check only what another program depends on: a ski
 is linked the way the others are, and the fixed line formats appear exactly as the
 panel in mods/orchi parses them.
 """
+import importlib.machinery
+import importlib.util
 import re
 from pathlib import Path
 
@@ -81,3 +83,107 @@ def test_run_rules_folder_matches_the_panel():
     # runRulesFile in mods/orchi/switchboard.js
     for name in ("switchboard", "switchboard-protocol"):
         assert "<claude_dir>/switchboard/run-rules/" in skill(name)
+
+
+ADAPTER = ROOT / "bin" / "herdr-adapter"
+
+
+def orchi_texts():
+    for path in sorted(SKILLS.iterdir()):
+        if path.is_dir():
+            yield f"skills/{path.name}", (path / "SKILL.md").read_text()
+    for path in sorted((ROOT / "commands").glob("*.md")):
+        yield f"commands/{path.name}", path.read_text()
+
+
+def _adapter():
+    loader = importlib.machinery.SourceFileLoader("herdr_adapter", str(ADAPTER))
+    module = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+    loader.exec_module(module)
+    return module
+
+
+_ADAPTER = _adapter()
+MAPPED = set(_ADAPTER.HANDLERS)
+ABOUT_HERDR = set(_ADAPTER.ABOUT_HERDR)  # the adapter hands these to the real herdr
+
+
+CALL = re.compile(r"(?<![\w.<>-])herdr(?![\w-])((?:\s+[^\s`;|&)#]+){1,2})")
+
+
+def unmapped(text):
+    """The herdr calls in text's code spans and code blocks that bin/herdr-adapter has no mapping for."""
+    blocks = re.findall(r"```.*?```", text, re.S)
+    spans = re.findall(r"`([^`]+)`", re.sub(r"```.*?```", "", text, flags=re.S))
+    found = []
+    for code in blocks + spans:
+        for args in CALL.findall(code):
+            words = tuple(args.split())
+            if words[0] not in ABOUT_HERDR and words[:2] not in MAPPED:
+                found.append(words)
+    return found
+
+
+def test_every_herdr_call_in_a_skill_is_one_the_app_maps():
+    # The app is the only Herdr (docs/adr/0002), and bin/herdr-adapter fails any call it has no mapping for.
+    assert ("agent", "prompt") in MAPPED
+    found = [(name, call) for name, text in orchi_texts() for call in unmapped(text)]
+    assert found == []
+    # agent start maps only Claude Code.
+    assert [(name, kind) for name, text in orchi_texts() for kind in other_kinds(text)] == []
+
+
+def other_kinds(text):
+    """The kinds other than claude that text starts an agent with."""
+    return [k for k in re.findall(r"herdr agent start [^`]*?--kind[= ]\"?(\w+)", text) if k != "claude"]
+
+
+TERMINAL_HERDR = re.compile(r"terminal Herdr|\bw[0-9A-Za-z]+:p\d|<app\|terminal>|herdr --machine")
+
+
+def test_any_call_the_adapter_refuses_is_caught():
+    for text in ("Run `herdr status` first.", "`herdr foo bar`", "`herdr agent`", "```\nherdr --machine x agent list\n```",
+                 "`herdr -v agent list`", "`herdr pane split --current`", "`<orchi_dir>/bin/herdr pane split --current`"):
+        assert unmapped(text), text
+    for text in ("`herdr agent list`", "`herdr --help`", "the Herdr app needs a herdr call", "the `herdr` skill",
+                 "`herdr-browser open x`", "`<orchi_dir>/bin/herdr agent read t7`", "```\nherdr pane read t7 --lines 5\n```"):
+        assert unmapped(text) == [], text
+
+
+def test_no_skill_sends_anyone_to_terminal_herdr():
+    for name, text in orchi_texts():
+        assert not TERMINAL_HERDR.search(text), name
+
+
+def test_terminal_ids_and_other_kinds_are_caught():
+    for text in ("pane `wGZ:p1`", "a pane like `w1:p1`", "`w12:p3`"):
+        assert TERMINAL_HERDR.search(text), text
+    assert TERMINAL_HERDR.search("pane t7 in the app") is None
+    assert other_kinds("```\nherdr agent start x --pane t3 \\\n  --kind codex\n```") == ["codex"]
+    assert other_kinds("`herdr agent start x --kind claude --pane t3`") == []
+    assert other_kinds("`herdr agent start x --kind=codex --pane t3`") == ["codex"]
+    assert other_kinds("`herdr agent start x --pane t3\n  --kind codex`") == ["codex"]
+    assert unmapped("`herdr pane split --cwd x\n  --no-focus`") == [("pane", "split")]
+    assert unmapped("`herdr\n  pane split`") == [("pane", "split")]
+
+
+def test_the_switchboard_takes_the_lock_with_its_terminal_alone():
+    # switchboard-lock take TERMINAL; `terminal` after it exits 2.
+    body = skill("switchboard")
+    assert "`<orchi_dir>/bin/switchboard-lock take <your pane_id>`" in body
+
+
+def test_the_protocol_reads_and_writes_tickets_with_orchi_tickets():
+    linear = skill("switchboard-protocol").split("\n## Tickets\n")[1].split("\n## ")[0]
+    assert "`orchi tickets`" in linear
+    assert "`sources`" in linear
+    assert not re.search(r"Linear MCP|mcp__|linear\.app/", linear)
+
+
+def test_planning_names_grilling_and_domain_modeling_by_their_plugin():
+    # Decision 5: they come from the mattpocock-skills plugin, never copied.
+    for name in ("roadmap-planning", "switchboard-protocol"):
+        assert "mattpocock-skills:grilling" in skill(name), name
+    assert "mattpocock-skills:domain-modeling" in skill("roadmap-planning")
+    for name, text in orchi_texts():
+        assert "/grill-with-docs" not in text, name

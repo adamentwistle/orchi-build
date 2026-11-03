@@ -17,7 +17,7 @@ export function answerText(option, reply) {
   return option && text ? `${option}: ${text}` : option ?? text;
 }
 
-// Words in an action's field are Adam's reply, sent as typed. With none, the press says the step is done.
+// Words in an action's field are the user's reply, sent as typed. With none, the press says the step is done.
 export const actionAnswer = (reply) => reply.trim() || "completed: done";
 
 // The main button on a decision's card.
@@ -37,10 +37,9 @@ export function answerProblem(text) {
 // reaches a command isn't the shape it should be. `s` is Orchi's settings, which say where its scripts are.
 export function answerArgv(home, d, text, s) {
   if (answerProblem(text) || !ID.test(d.id ?? "") || !PANE.test(d.pane ?? "") || !ABSOLUTE.test(d.board ?? "")) return null;
-  const where = d.planner || d.where === "app" ? "app" : "terminal";
   const path = [appBin(home), `${home}/.local/bin`, "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"].join(":");
   const script = `${orchiDir(s, home)}/bin/switchboard-answer`;
-  return [`ORCHI_HERDR=${where}`, `PATH=${path}`, script, ...(d.planner ? ["--board", d.board] : [d.board]), d.pane, d.id, text];
+  return [`PATH=${path}`, script, ...(d.planner ? ["--board", d.board] : [d.board]), d.pane, d.id, text];
 }
 
 const firstLine = (text) => String(text ?? "").trim().split("\n")[0];
@@ -52,7 +51,7 @@ export async function sendAnswer(exec, home, d, text, s) {
   if (r.code !== 0) throw new Error(firstLine(r.stderr) || firstLine(r.stdout) || "The reply didn't send");
 }
 
-// Ends a run on Adam's word: closes what's open on its board and writes its `DONE`, which a run that went quiet never did.
+// Ends a run on the user's word: closes what's open on its board and writes its `DONE`, which a run that went quiet never did.
 export async function finishRun(exec, home, repo, why, s) {
   if (!ABSOLUTE.test(repo ?? "")) throw new Error("That run has no repo to write to");
   const path = [`${home}/.local/bin`, "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"].join(":");

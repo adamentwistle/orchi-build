@@ -14,3 +14,6 @@
 - **Ownership record**: a line in the state folder naming a file, link or folder Orchi created, so uninstall removes
   only those.
 - **Backup**: a copy of something a step is about to change, taken before the change, kept per run in the state folder.
+- **The user**: whoever installed Orchi. The skills, commands and panels never name a person. A panel speaks to the
+  user as "you"; a skill speaks to the agent reading it as "you" and calls the person "the user"; a command, which the
+  user types, speaks as "me". A path, owner or team in them is the setting that holds it, such as `<legwork_dir>`.

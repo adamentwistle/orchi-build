@@ -25,7 +25,7 @@ Steps:
    with the pr-drafter skill (TL;DR first, ticket IDs linked, every
    Verification line marked OBSERVED, STALE or NOT RUN, voice-sweep run on
    the file) and open it with `gh pr create`. The body and commit messages
-   go out without Adam seeing them first. Reviewers: request none at open (no `--reviewer`);
+   go out without me seeing them first. Reviewers: request none at open (no `--reviewer`);
    /pr-review requests the ones the repo's AGENTS.md names once it is clean
    on the current head. Never request the PR's author. If one exists,
    update the body only if the change set moved beyond what it describes.

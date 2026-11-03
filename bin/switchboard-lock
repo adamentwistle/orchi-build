@@ -12,7 +12,8 @@ switchboard skill, switchboard-health and the Orchi panel. It is JSON:
   {"terminal": "t7", "herdr": "app", "started": "2026-10-30 22:40"}
 
 The panel reads "herdr": "app", so it is always written. The word `app` after
-TERMINAL is accepted and ignored, for the switchboard skill, which still passes it.
+TERMINAL is accepted and ignored, for older copies of the switchboard skill,
+which passed it.
 
 take     record TERMINAL (a Herdr app terminal address) as the switchboard. A
          live owner stops it with exit 1 and one line saying where the

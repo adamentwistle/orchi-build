@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readyPlan, planTask, planLabel, visible } from "../../mods/orchi/plans.js";
 
 test("a queued project on the switchboard protocol is ready", () => {
-  assert.deepEqual(readyPlan({ status: "queued" }, "Follow the switchboard-protocol skill.\nRead x"), { ready: true, needsAdam: false });
+  assert.deepEqual(readyPlan({ status: "queued" }, "Follow the switchboard-protocol skill.\nRead x"), { ready: true, needsYou: false });
 });
 
 test("a queued /fanout prompt is ready", () => {
@@ -15,11 +15,18 @@ test("other statuses and ordinary prompts are not", () => {
   assert.equal(readyPlan({ status: "queued" }, "Read the README and fix it").ready, false);
 });
 
-test("a prompt that needs Adam is marked", () => {
-  assert.equal(readyPlan({ status: "queued" }, "Human action, not a Claude session.\n/fanout atlas").needsAdam, true);
-  assert.equal(readyPlan({ status: "queued" }, "DECISION NEEDED\n/fanout atlas").needsAdam, true);
-  assert.equal(readyPlan({ status: "queued" }, "/fanout atlas\n(2) Adam runs `atlas rec`").needsAdam, true);
-  assert.equal(readyPlan({ status: "queued", blocked_on: "keys" }, "/fanout atlas").needsAdam, true);
+test("a prompt that needs the user is marked", () => {
+  assert.equal(readyPlan({ status: "queued" }, "Human action, not a Claude session.\n/fanout atlas").needsYou, true);
+  assert.equal(readyPlan({ status: "queued" }, "DECISION NEEDED\n/fanout atlas").needsYou, true);
+  assert.equal(readyPlan({ status: "queued" }, "/fanout atlas\n(2) The user runs `atlas rec`").needsYou, true);
+  assert.equal(readyPlan({ status: "queued", blocked_on: "keys" }, "/fanout atlas").needsYou, true);
+});
+
+test("only a step the user runs marks it, not a mention of the user running something", () => {
+  assert.equal(readyPlan({ status: "queued" }, "/fanout atlas\nThe user runs the push.").needsYou, true);
+  assert.equal(readyPlan({ status: "queued" }, "/fanout atlas\n2. The user runs the push.").needsYou, true);
+  assert.equal(readyPlan({ status: "queued" }, "/fanout atlas\n- The user runs the push.").needsYou, true);
+  assert.equal(readyPlan({ status: "queued" }, "/fanout atlas --merge, and stop when the user runs /wrap").needsYou, false);
 });
 
 import { parseTracker } from "../../mods/orchi/plans.js";
@@ -51,7 +58,7 @@ test("a blank or none blocked_on counts as not blocked", () => {
   assert.equal(p.blocked_on, null);
 });
 
-test("planTask opens with the words Adam asked for and names the planning file", () => {
+test("planTask opens with the words the user asked for and names the planning file", () => {
   const task = planTask("Birch", "/h/.claude/switchboard/planning/birch.md", "birch");
   assert.ok(task.startsWith("run planning session for Birch\n"));
   assert.ok(task.includes("/h/.claude/switchboard/planning/birch.md"));
