@@ -1,0 +1,496 @@
+#!/usr/bin/env python3
+"""Keep the usage cache (~/.cache/orchi/usage.json) fresh. docs/usage-watch.md is the spec.
+
+Reads Claude Code's own login from the keychain with one named lookup, asks Anthropic's usage endpoint how full each
+limit is, and writes the answer for Herd, the Orchi panel, the chat pane, usage-guard and switchboard-wait.
+
+  usage-watch                    one pass, skipped before the next try (the launch agent runs this)
+  usage-watch --now              one pass now, unless a Retry-After still holds; prints the status
+  usage-watch --status [--json]  what the last pass found; never touches the keychain or the network
+
+The login is held in memory for one pass and goes only in the request's Authorization header. Nothing here prints,
+logs or writes it.
+"""
+import argparse
+import calendar
+import contextlib
+import email.utils
+import fcntl
+import hashlib
+import http.client
+import json
+import math
+import os
+import pwd
+import re
+import ssl
+import stat
+import subprocess
+import sys
+import tempfile
+import time
+import unicodedata
+from datetime import datetime, timedelta, timezone
+
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+import orchi_settings  # noqa: E402
+
+VERSION = "1"
+LABEL = "orchi.usage-watch"
+SECURITY = "/usr/bin/security"
+LAUNCHCTL = "/bin/launchctl"
+SERVICE = "Claude Code-credentials"
+HOST = "api.anthropic.com"
+PATH = "/api/oauth/usage"
+BETA = "oauth-2025-04-20"
+TIMEOUT = 10
+FIRST_READ_TIMEOUT = 120
+LARGEST_ANSWER = 1 << 20
+LARGEST_STATE = 1 << 16
+INTERVAL = 300
+EARLY = 30
+HOUR = 3600
+LOCKED = 36  # security's exit for a locked keychain; a read that times out counts the same
+ACCOUNT_OK = re.compile(r"^[a-zA-Z0-9._-]+\Z")
+LOGIN_OK = re.compile(r"^[A-Za-z0-9._~+/=-]+\Z")
+HEX = re.compile(r"^(?:[0-9a-fA-F]{2})+\Z")
+RESET_OK = re.compile(r"^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:?\d{2})\Z", re.ASCII)
+BROKEN = {"endpoint-changed": "endpoint changed", "no-login": "no login", "keychain-denied": "keychain denied"}
+STALE = {"login-expired": "login expired", "offline": "offline", "rate-limited": "rate limited",
+         "keychain-locked": "keychain locked"}
+STATUSES = ("ok",) + tuple(STALE) + tuple(BROKEN)
+UNSET = object()
+
+
+def cache_dir():
+    return os.path.join(os.path.expanduser("~"), ".cache", "orchi")
+
+
+def iso(t):
+    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def epoch(text):
+    try:
+        return calendar.timegm(time.strptime(text, "%Y-%m-%dT%H:%M:%SZ"))
+    except (TypeError, ValueError):
+        return None
+
+
+# The login
+
+
+def service_names(profile):
+    """The keychain names Claude Code uses for this profile, in the order to try them. No other name is ever read."""
+    if not profile:
+        return [SERVICE]
+    path = unicodedata.normalize("NFC", profile)
+    names = [f"{SERVICE}-{hashlib.sha256(path.encode()).hexdigest()[:8]}"]
+    if path == os.path.join(os.path.expanduser("~"), ".claude"):
+        names.append(SERVICE)
+    return names
+
+
+def account():
+    """The keychain account Claude Code uses: USER, else the login name, else its stand-in for an odd name."""
+    name = os.environ.get("USER")
+    if not name:
+        try:
+            name = pwd.getpwuid(os.getuid()).pw_name
+        except KeyError:
+            name = ""
+    return name if ACCOUNT_OK.match(name) else "claude-code-user"
+
+
+def read_keychain(service, account, timeout):
+    """One named lookup of one entry's value: (exit code, value). Its error output is thrown away."""
+    try:
+        r = subprocess.run([SECURITY, "find-generic-password", "-a", account, "-s", service, "-w"],
+                           stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                           timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return LOCKED, ""
+    except (OSError, subprocess.SubprocessError):
+        return 1, ""
+    return r.returncode, (r.stdout or b"").decode("utf-8", "replace").strip()
+
+
+def _token(value):
+    if HEX.match(value):
+        with contextlib.suppress(ValueError):
+            value = bytes.fromhex(value).decode()
+    try:
+        token = json.loads(value)["claudeAiOauth"]["accessToken"]
+    except (ValueError, TypeError, KeyError, RecursionError):
+        return None
+    return token if isinstance(token, str) and LOGIN_OK.match(token) else None
+
+
+def read_login(read, profile, timeout):
+    """("ok", login), or (status, None) when there is none to use."""
+    who = account()
+    for name in service_names(profile):
+        code, value = read(name, who, timeout)
+        if code == 44:
+            continue
+        if code == LOCKED:
+            return "keychain-locked", None
+        if code != 0:
+            return "keychain-denied", None
+        token = _token(value)
+        return ("ok", token) if token else ("no-login", None)
+    return "no-login", None
+
+
+# The endpoint
+
+
+def fetch_usage(token, timeout):
+    """One GET of the usage endpoint: (status code, headers, body), or (None, {}, b"") with no answer."""
+    conn = http.client.HTTPSConnection(HOST, timeout=timeout, context=ssl.create_default_context())
+    try:
+        conn.request("GET", PATH, headers={"Authorization": f"Bearer {token}", "anthropic-beta": BETA,
+                                           "User-Agent": f"orchi-usage-watch/{VERSION}"})
+        resp = conn.getresponse()
+        return resp.status, {k.lower(): v for k, v in resp.getheaders()}, resp.read(LARGEST_ANSWER)
+    except Exception:
+        return None, {}, b""
+    finally:
+        conn.close()
+
+
+def _number(v):
+    """A percentage from 0 to 100, or None."""
+    if not isinstance(v, (int, float)) or isinstance(v, bool):
+        return None
+    try:
+        return v if 0 <= float(v) <= 100 else None
+    except OverflowError:
+        return None
+
+
+def _text(v):
+    """An ISO 8601 date and time, rewritten in UTC to the second as YYYY-MM-DDTHH:MM:SS+00:00, or None."""
+    m = RESET_OK.match(v) if isinstance(v, str) and len(v) <= 40 else None
+    if not m:
+        return None
+    y, mo, d, h, mi, s, zone = m.groups()
+    if zone == "Z":
+        offset = timedelta(0)
+    else:
+        sign = -1 if zone[0] == "-" else 1
+        offset = sign * timedelta(hours=int(zone[1:3]), minutes=int(zone[-2:]))
+    try:
+        when = datetime(int(y), int(mo), int(d), int(h), int(mi), int(s or 0), tzinfo=timezone(offset))
+        return when.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+    except (ValueError, OverflowError):
+        return None
+
+
+def _bucket(answer, key):
+    """A bucket's (usage, reset), each None when missing."""
+    b = answer.get(key)
+    if not isinstance(b, dict):
+        return None, None
+    return _number(b.get("utilization")), _text(b.get("resets_at"))
+
+
+def _limit(limits, match):
+    for item in limits:
+        if not isinstance(item, dict) or not match(item):
+            continue
+        percent, reset = _number(item.get("percent")), _text(item.get("resets_at"))
+        if percent is None or (percent == 0 and reset is None):
+            continue  # no usable number, or a placeholder
+        return percent, reset
+    return None, None
+
+
+def _model(item):
+    scope = item.get("scope")
+    model = scope.get("model") if isinstance(scope, dict) else None
+    name = model.get("display_name") if isinstance(model, dict) else None
+    return name.lower() if isinstance(name, str) else ""
+
+
+def parse_usage(body):
+    """The cache keys from the endpoint's answer, or None when it has neither a session nor a weekly number."""
+    try:
+        answer = json.loads(body)
+    except (ValueError, TypeError, RecursionError):
+        return None
+    if not isinstance(answer, dict):
+        return None
+    limits = answer.get("limits") if isinstance(answer.get("limits"), list) else []
+    out = {}
+    no_five_hour = "five_hour" in answer and answer["five_hour"] is None
+
+    def put(key, value):
+        if value is not None:
+            out[key] = value
+
+    for prefix, bucket, kind in (("session", "five_hour", "session"), ("weekly", "seven_day", "weekly_all")):
+        if bucket == "five_hour" and no_five_hour:
+            out["sessionUsage"] = 0  # no 5-hour limit: no reset, and nothing from limits[]
+            continue
+        used, reset = _bucket(answer, bucket)
+        l_used, l_reset = _limit(limits, lambda i, k=kind: i.get("kind") == k)
+        put(prefix + "Usage", used if used is not None else l_used)
+        put(prefix + "ResetAt", reset if reset is not None else l_reset)
+    used, reset = _limit(limits, lambda i: i.get("kind") == "weekly_scoped" and "fable" in _model(i))
+    put("fableUsage", used)
+    put("fableResetAt", reset)
+    if "weeklyUsage" not in out and ("sessionUsage" not in out or no_five_hour):
+        return None  # no weekly number, and no session number beyond "no 5-hour limit"
+    return out
+
+
+def retry_after(value, now):
+    """A Retry-After header in seconds, given as seconds or as a date; None when absent, past or unreadable."""
+    if not value:
+        return None
+    value = value.strip()
+    if re.fullmatch(r"[0-9]+", value):
+        seconds = int(value) if len(value) <= 9 else 10 ** 9  # far past the hour it is capped at anyway
+    else:
+        try:
+            when = email.utils.parsedate_to_datetime(value)
+        except (TypeError, ValueError, IndexError, OverflowError):
+            return None
+        if when is None:
+            return None
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)  # "-0000": UTC, with no zone given
+        try:
+            seconds = math.ceil(when.timestamp() - now)
+        except (OverflowError, ValueError, OSError):
+            return None
+    return seconds if seconds > 0 else None
+
+
+def outcome(code, headers, body, now):
+    """(status, cache data or None, Retry-After seconds or None) for one answer."""
+    if code == 200:
+        data = parse_usage(body)
+        return ("ok", data, None) if data else ("endpoint-changed", None, None)
+    if code in (401, 403):
+        return "login-expired", None, None
+    if code == 429:
+        return "rate-limited", None, retry_after(headers.get("retry-after"), now)
+    if code is not None and 300 <= code < 500 and code != 408:
+        return "endpoint-changed", None, None
+    return "offline", None, None
+
+
+def wait_for(status, failures, retry):
+    """Seconds until the next try."""
+    if status == "ok":
+        return INTERVAL
+    if status in BROKEN:
+        return HOUR
+    if status == "rate-limited":
+        return min(retry or INTERVAL, HOUR)
+    first = 900 if status == "login-expired" else INTERVAL
+    return min(first * 2 ** min(max(failures, 1) - 1, 8), HOUR)
+
+
+# Files
+
+
+class NotPrivate(Exception):
+    pass
+
+
+def private(st):
+    return stat.S_ISDIR(st.st_mode) and st.st_uid == os.getuid() and not st.st_mode & 0o022
+
+
+def _folder():
+    """~/.cache/orchi, made mode 700 when missing. It must be a real folder of this user's that no one else can write."""
+    d = cache_dir()
+    with contextlib.suppress(FileExistsError):
+        os.makedirs(d, 0o700, exist_ok=True)  # the mode is the last folder's; ~/.cache gets the usual one
+    if not private(os.lstat(d)):
+        raise NotPrivate(d)
+    return d
+
+
+def write_json(d, name, obj):
+    """Replace the file whole, mode 600: a temporary file in the same folder, then a rename."""
+    fd, temp = tempfile.mkstemp(prefix=f".{name}.", dir=d)
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(obj, f)
+            f.write("\n")
+        os.replace(temp, os.path.join(d, name))
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(temp)
+        raise
+
+
+def load_state():
+    """The last pass's state, each field of the right type or None, or None when there is no usable state."""
+    try:
+        fd = os.open(os.path.join(cache_dir(), "usage-watch.json"), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+        raw = os.read(fd, LARGEST_STATE + 1)
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
+    if len(raw) > LARGEST_STATE:
+        return None
+    try:
+        s = json.loads(raw)
+    except (ValueError, RecursionError):
+        return None
+    if not isinstance(s, dict) or s.get("status") not in STATUSES:
+        return None
+    out = {"status": s["status"]}
+    for key in ("checkedAt", "okAt", "nextAt", "retryAt"):
+        out[key] = s.get(key) if epoch(s.get(key)) is not None else None
+    failures, code = s.get("failures"), s.get("http")
+    out["failures"] = failures if isinstance(failures, int) and not isinstance(failures, bool) and failures >= 0 else 0
+    out["http"] = code if isinstance(code, int) and not isinstance(code, bool) else None
+    return out
+
+
+@contextlib.contextmanager
+def locked(d, block):
+    """The pass lock, or None when another pass holds it and block is false."""
+    fd = os.open(os.path.join(d, "usage-watch.lock"), os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | (0 if block else fcntl.LOCK_NB))
+        except BlockingIOError:
+            yield None
+            return
+        yield fd
+    finally:
+        os.close(fd)
+
+
+# A pass
+
+
+def run(now=None, force=False, read=None, fetch=None, profile=UNSET, block=False, clock=None):
+    """One pass. Returns the state it leaves, or None when another pass is running. The clock is read when the lock is
+    held, to decide whether to ask, and again when the answer is in, for every time the pass records."""
+    clock = clock or ((lambda: now) if now is not None else time.time)
+    read, fetch = read or read_keychain, fetch or fetch_usage
+    d = _folder()
+    with locked(d, block) as lock:
+        if lock is None:
+            return None
+        start = clock()
+        before = load_state() or {}
+        failures = before.get("failures", 0)
+        # launchd's timer and the pass's own time would otherwise skip a due pass, so it may run EARLY seconds before
+        # nextAt; --now ignores nextAt. Neither ever goes before a Retry-After.
+        next_at, retry_at = epoch(before.get("nextAt")), epoch(before.get("retryAt"))
+        waits = [retry_at] + ([] if force or next_at is None else [next_at - EARLY])
+        if any(w is not None and start < w for w in waits):
+            return before
+        if profile is UNSET:
+            profile = orchi_settings.profile_dir()
+        status, token = read_login(read, profile, FIRST_READ_TIMEOUT if force else TIMEOUT)
+        code, data, retry, answer = None, None, None, None
+        if token:
+            answer = fetch(token, TIMEOUT)
+            token = None
+        answered = clock()
+        if answer:
+            code = answer[0]
+            status, data, retry = outcome(*answer, answered)
+        if data:
+            write_json(d, "usage.json", dict(data, updatedAt=iso(answered)))
+        failures = 0 if status == "ok" else (failures + 1 if status == before.get("status") else 1)
+        ok_at = iso(answered) if status == "ok" else before.get("okAt")
+        state = {"status": status, "checkedAt": iso(answered), "okAt": ok_at,
+                 "nextAt": iso(answered + wait_for(status, failures, retry)),
+                 "retryAt": iso(answered + min(retry, HOUR)) if retry else None, "failures": failures, "http": code}
+        write_json(d, "usage-watch.json", state)
+        state["changed"] = status != before.get("status")
+        return state
+
+
+def report(state, now, loaded):
+    """What doctor needs: the last state, whether the launch agent is loaded, and why it is broken, if it is."""
+    try:
+        folder_ok = private(os.lstat(cache_dir()))
+    except OSError:
+        folder_ok = True  # not made yet: the first pass makes it
+    s = state or {}
+    out = {k: s.get(k) for k in ("status", "checkedAt", "okAt", "nextAt", "retryAt", "failures", "http")}
+    out["loaded"] = loaded
+    status, ok_at = s.get("status"), epoch(s.get("okAt"))
+    if not folder_ok:
+        why = "cache folder not private"
+    elif not state:
+        why = "never ran"
+    elif status in BROKEN:
+        why = BROKEN[status]
+    elif not loaded:
+        why = "launch agent not loaded"
+    elif ok_at is None or now - ok_at > HOUR:
+        why = STALE.get(status, "no usage for over an hour")
+    else:
+        why = None
+    out["broken"] = why
+    return out
+
+
+def agent_loaded():
+    try:
+        r = subprocess.run([LAUNCHCTL, "print", f"gui/{os.getuid()}/{LABEL}"], stdin=subprocess.DEVNULL,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=TIMEOUT)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return r.returncode == 0
+
+
+class Parser(argparse.ArgumentParser):
+    def error(self, message):
+        print(f"usage-watch: {message}", file=sys.stderr)
+        raise SystemExit(2)
+
+
+def main(argv=None, read=None, fetch=None, loaded=None, now=None):
+    p = Parser(prog="usage-watch", allow_abbrev=False)
+    which = p.add_mutually_exclusive_group()
+    which.add_argument("--now", action="store_true")
+    which.add_argument("--status", action="store_true")
+    p.add_argument("--json", action="store_true")
+    try:
+        args = p.parse_args(argv)
+        if args.json and not args.status:
+            p.error("--json goes with --status")
+    except SystemExit as e:
+        return e.code
+    if args.status:
+        r = report(load_state(), time.time() if now is None else now, (loaded or agent_loaded)())
+        print(json.dumps(r) if args.json else (r["broken"] or r["status"]))
+        return 1 if r["broken"] else 0
+    try:
+        state = run(now, force=args.now, read=read, fetch=fetch, block=args.now)
+    except NotPrivate as e:
+        print(f"usage-watch: {e} is not a private folder", file=sys.stderr)
+        return 1
+    except OSError as e:
+        print(f"usage-watch: {e.filename or cache_dir()}: {e.strerror or type(e).__name__}", file=sys.stderr)
+        return 1
+    if state and state.pop("changed", False):
+        print(f"{state['checkedAt']} {state['status']} http {state['http'] or '-'}", file=sys.stderr)
+    if args.now:
+        print(state["status"])
+        return 0 if state["status"] == "ok" else 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

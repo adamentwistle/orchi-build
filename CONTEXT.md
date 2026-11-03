@@ -25,3 +25,7 @@
 - **The user**: whoever installed Orchi. The skills, commands and panels never name a person. A panel speaks to the
   user as "you"; a skill speaks to the agent reading it as "you" and calls the person "the user"; a command, which the
   user types, speaks as "me". A path, owner or team in them is the setting that holds it, such as `<legwork_dir>`.
+- **Usage cache**: `~/.cache/orchi/usage.json`, how full each Claude usage limit is. usage-watch writes it; Herd, the
+  Orchi panel, the chat pane, usage-guard and switchboard-wait read it.
+- **usage-watch**: the launch agent that reads Claude Code's own login from the keychain and keeps the usage cache fresh.
+  See `docs/usage-watch.md`.

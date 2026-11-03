@@ -180,7 +180,7 @@ export class Commands {
   load(u, cx) {
     const token = ++u.token, live = () => this.usage === u && u.token === token;
     cx.spawn(async (cx) => {
-      const limits = await readTextFile(`${home()}/.cache/ccstatusline/usage.json`).catch(() => null);
+      const limits = await readTextFile(`${home()}/.cache/orchi/usage.json`).catch(() => null);
       if (!live()) return;
       u.meters = limits ? limitMeters(limits, Date.now()) : [];
       this.fit(u); cx.notify();

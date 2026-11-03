@@ -36,7 +36,7 @@ export function meterCells(m, count) {
 
 const HOUR = 3600;
 
-// The meters from ~/.cache/ccstatusline/usage.json, which the Claude Code status line keeps fresh. A limit with no reset
+// The meters from ~/.cache/orchi/usage.json, which usage-watch keeps fresh. A limit with no reset
 // time is one the account doesn't have, such as the 5-hour one on an account without it, so it's left out. Herd's
 // copy in `mods/herd/meters.js` does the same.
 const meterOf = (label, used, resetAt, seconds, now, kind) => (typeof used === "number" && resetAt ? usageMeter(label, used, resetAt, seconds, now, kind) : null);

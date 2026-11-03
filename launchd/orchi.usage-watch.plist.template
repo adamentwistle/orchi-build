@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Launch agent for bin/usage-watch (docs/usage-watch.md): one pass every 5 minutes, and one when loaded.
+
+  Setup renders it and loads it with launchctl bootstrap gui/$(id -u) <plist>, after its own pass of
+  usage-watch in the foreground has made the first keychain read and the folder ~/.cache/orchi, which
+  must exist first: launchd does not create log folders.
+
+  Placeholders:
+    @ORCHI@           absolute path of Orchi's files, e.g. /Users/me/orchi-build
+    @HOME@            the home folder, e.g. /Users/me
+    @ORCHI_SETTINGS@  a line of its own: when ORCHI_SETTINGS is set while rendering, it becomes an
+                      EnvironmentVariables entry with that path, so the job reads the same settings,
+                      and so the same Claude profile, as setup. Otherwise the line goes.
+
+  The script runs on /usr/bin/python3 (3.9) and needs nothing on PATH: it runs /usr/bin/security and
+  /bin/launchctl by their full paths. Its standard error is the log, one line per change of status.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>orchi.usage-watch</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/bin/python3</string>
+		<string>@ORCHI@/bin/usage-watch</string>
+	</array>
+@ORCHI_SETTINGS@
+	<key>StartInterval</key>
+	<integer>300</integer>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>StandardOutPath</key>
+	<string>/dev/null</string>
+	<key>StandardErrorPath</key>
+	<string>@HOME@/.cache/orchi/usage-watch.log</string>
+</dict>
+</plist>

@@ -58,3 +58,9 @@ Linear's. Orchi is not made or endorsed by Linear.
 ## Sounds
 
 `sounds/needs-you.mp3` and `sounds/done.mp3` are CC0 sounds from OpenGameArt. `sounds/README.md` credits them.
+
+## usage-watch
+
+`bin/usage-watch` takes the usage endpoint, its `anthropic-beta` header, the mapping from its answer to the cache's
+keys and the key names from [sirmalloc/ccstatusline](https://github.com/sirmalloc/ccstatusline) 2.2.27 (MIT,
+Copyright (c) 2025 Matthew Breedlove). No code is copied; the script is written fresh in Python.

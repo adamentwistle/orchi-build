@@ -48,7 +48,7 @@ const agents = () => terminalAgents(exec);
 const io = async () => ({ exec, hc, home, readTextFile, writeTextFile, terminals, spaces, agents, now: Date.now, random: () => hex(8), discarded: () => shared(DISCARDED) ?? [], orchi: await orchi() });
 
 async function readUsage() {
-  const text = await readText(`${home()}/.cache/ccstatusline/usage.json`);
+  const text = await readText(`${home()}/.cache/orchi/usage.json`);
   return text ? metersFrom(JSON.parse(text), Date.now()) : [];
 }
 

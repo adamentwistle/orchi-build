@@ -4,10 +4,10 @@ import { readFileSync } from "node:fs";
 import { buildStats, albumRatio, compact, dayLabel, duration, heatGrid, landing, landingBar, limitMeters, loadDetail, modelName, parseStatsCache, parseUsageText, statsFigures, statsView, streaks, tokenTotals, topOf, usageText, WEEKS } from "../../mods/claude-chat/usage-data.js";
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8");
-// Made up, in the shapes Claude Code 2.1.316 and ccstatusline write: the headless /usage text, ccstatusline's usage.json
+// Made up, in the shapes Claude Code 2.1.316 and usage-watch write: the headless /usage text, the usage cache
 // and the profile folder's stats-cache.json.
 const text = fixture("usage-headless.txt");
-const usageJson = fixture("ccstatusline-usage.json");
+const usageJson = fixture("usage-cache.json");
 const cache = parseStatsCache(fixture("stats-cache.json"));
 
 // A mod can't import outside its own folder (herdr-app check: "resolves outside the application directory", and a symlink is
@@ -112,8 +112,8 @@ test("a session limit shows when the cache has its reset time", () => {
   assert.equal(week.label, "Current week");
 });
 
-// ccstatusline-usage.json is the file an Ultra plan gets, which has no 5-hour limit: sessionUsage 0 and no reset time.
-// ccstatusline-usage-5h.json is the same shape, for a plan that still has one.
+// usage-cache.json is the file an Ultra plan gets, which has no 5-hour limit: sessionUsage 0 and no reset time.
+// usage-cache-5h.json is the same shape, for a plan that still has one.
 test("an Ultra plan's cache has no 5-hour row, and the 0 is not drawn as 0 percent used", () => {
   const real = JSON.parse(usageJson);
   assert.equal(real.sessionUsage, 0);
@@ -124,7 +124,7 @@ test("an Ultra plan's cache has no 5-hour row, and the 0 is not drawn as 0 perce
 });
 
 test("a plan with a 5-hour limit still gets its row, first, with the weekly ones after it", () => {
-  const meters = limitMeters(fixture("ccstatusline-usage-5h.json"), Date.parse("2026-09-19T20:41:00Z"));
+  const meters = limitMeters(fixture("usage-cache-5h.json"), Date.parse("2026-09-19T20:41:00Z"));
   assert.deepEqual(meters.map((m) => m.label), ["Current session", "Current week", "Week, Fable"]);
   const [session] = meters;
   assert.equal(session.used, 29);

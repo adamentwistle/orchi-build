@@ -53,7 +53,7 @@ async function readSessions(sessions, since, sleep) {
 
 // The usage meters from the status line's usage file. A missing or broken file shows none.
 async function readUsage() {
-  try { return metersFrom(JSON.parse((await readTextFile(`${home()}/.cache/ccstatusline/usage.json`)) || "null"), Date.now()); } catch { return []; }
+  try { return metersFrom(JSON.parse((await readTextFile(`${home()}/.cache/orchi/usage.json`)) || "null"), Date.now()); } catch { return []; }
 }
 
 // Every terminal hc knows, finished ones too. A failure says what went wrong rather than looking like an empty list.

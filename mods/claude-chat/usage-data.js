@@ -12,7 +12,7 @@ const HOUR = 3600;
 // 0 percent used, so it gets no row. A user who has the limit has both fields, and a real 0 percent still shows.
 const held = (used, resetAt) => typeof used === "number" && Number.isFinite(used) && used >= 0 && typeof resetAt === "string" && Number.isFinite(Date.parse(resetAt));
 
-// The bars at the top of the panel from ~/.cache/ccstatusline/usage.json, as Orchi reads it. Each one is Orchi's
+// The bars at the top of the panel from ~/.cache/orchi/usage.json, as Orchi reads it. Each one is Orchi's
 // usageMeter: label, used, projected, elapsed, resetIn and tone. A limit that isn't held is left out.
 export function limitMeters(text, now) {
   let u;

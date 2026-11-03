@@ -87,7 +87,7 @@ Otherwise it waits, and returns as soon as:
   - a watched pane goes idle or done (see above), blocked or gone, or a herdr call
     fails ("unreachable": a timeout, herdr missing, or any error other than
     agent_not_found; reported once)
-  - the weekly all-models or Fable usage reaches 99% (ccstatusline cache)
+  - the weekly all-models or Fable usage reaches 99% (the usage cache)
   - a file appears in requests/ beside the state file, the Orchi panel's way
     of asking the switchboard for something. The switchboard deletes a request
     once handled, so one still there is reported on every start. Hidden files
@@ -114,7 +114,7 @@ WAKE = ASKS + ("CYCLE", "DONE")
 STOPPED = ("idle", "done", "blocked", "gone")
 RESTING = ("idle", "done")  # herdr's idle, seen or not; a flip keeps its seq
 USAGE_CACHE = (os.environ.get("SWITCHBOARD_USAGE_CACHE")
-               or os.path.expanduser("~/.cache/ccstatusline/usage.json"))
+               or os.path.expanduser("~/.cache/orchi/usage.json"))
 USAGE_FLOOR = 99
 REQUESTS_NAME = "requests"
 CURSOR_NAME = "switchboard-wait.cursor"
