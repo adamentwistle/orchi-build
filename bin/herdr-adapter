@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The app side of bin/herdr: herdr's agent, pane, tab, workspace and worktree calls, in app terminals.
 
-bin/herdr runs this only for a Herdr app terminal. It maps each call onto hc and
+bin/herdr sends every call here. It maps each one onto hc and
 `herdr-app do`, and prints what herdr would: {"id": ..., "result": ...} on stdout,
 or {"error": {"code": ..., "message": ...}, "id": ...} on stderr with exit 1.
 
@@ -12,7 +12,7 @@ in the label orchi.name. Terminals on other machines are left out.
 
 An hc failure is never agent_not_found, because switchboard-wait reads that as a
 pane that has gone. A call with no mapping fails with not_mapped rather than
-reaching terminal Herdr, which is the wrong Herdr here. docs/setup.md lists what
+reaching the real herdr, which is the wrong Herdr here. docs/setup.md lists what
 is mapped.
 """
 import json
@@ -493,7 +493,7 @@ def pane_current(args):
 
 def caller_space():
     """The space of the terminal running this. A guessed space would be whichever
-    one Adam is looking at, so having none is an error."""
+    one the user is looking at, so having none is an error."""
     t = terminal(os.environ.get("HC_TERMINAL_ID") or "")
     space = (t.get("labels") or {}).get("herdr.space") if t else None
     if not space:
@@ -572,7 +572,7 @@ def tab_create(args):
 
 def workspace_create(args):
     # A labelled tab, not a space: space.new would be shown at once, and the watcher
-    # that calls this is restarting a switchboard Adam isn't looking at.
+    # that calls this is restarting a switchboard the user isn't looking at.
     label, folder, env = tab_options(args, "workspace create")
     space = first_space()
     tab, address = open_tab(space, label, folder, env)

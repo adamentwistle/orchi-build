@@ -18,7 +18,7 @@ test("other statuses and ordinary prompts are not", () => {
 test("a prompt that needs Adam is marked", () => {
   assert.equal(readyPlan({ status: "queued" }, "Human action, not a Claude session.\n/fanout atlas").needsAdam, true);
   assert.equal(readyPlan({ status: "queued" }, "DECISION NEEDED\n/fanout atlas").needsAdam, true);
-  assert.equal(readyPlan({ status: "queued" }, "/fanout atlas\n(2) Adam runs `replay rec`").needsAdam, true);
+  assert.equal(readyPlan({ status: "queued" }, "/fanout atlas\n(2) Adam runs `atlas rec`").needsAdam, true);
   assert.equal(readyPlan({ status: "queued", blocked_on: "keys" }, "/fanout atlas").needsAdam, true);
 });
 

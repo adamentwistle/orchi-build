@@ -109,7 +109,8 @@ def test_on_renders_the_plist_into_the_state_dir_and_bootstraps_it(ctl):
     assert plist["EnvironmentVariables"]["PATH"].split(":")[:4] == [
         str(ctl.home / ".local" / "libexec" / "orchi-app"), str(ctl.home / ".local" / "bin"),
         "/opt/homebrew/bin", str(claude_dir)]
-    assert plist["EnvironmentVariables"]["ORCHI_HERDR"] == "app"
+    assert "ORCHI_HERDR" not in plist["EnvironmentVariables"]
+    assert "ORCHI_HERDR" not in ctl.plist.read_text()
     assert plist["StandardOutPath"] == str(ctl.state_dir / "health.out.log")
     assert plist["StandardErrorPath"] == str(ctl.state_dir / "health.err.log")
     assert "@" not in ctl.plist.read_text().split("-->", 1)[1]
@@ -196,13 +197,15 @@ def test_on_without_claude_is_an_error_and_loads_nothing(ctl):
 
 
 def test_on_without_the_launcher_is_an_error_and_loads_nothing(ctl):
-    # herdr would be terminal Herdr, which shows no switchboard, so the job would start one.
+    # herdr would be the wrong Herdr, which shows no switchboard, so the job would start one.
     ctl.configure(**{"print": 113})
     ctl.add_claude()
     ctl.launcher.unlink()
     rc, _, err = ctl.run("on")
     assert rc == 1
     assert "launcher" in err
+    assert "run scripts/install.sh in your Orchi checkout" in err
+    assert "herdr-build" not in err
     assert not [c for c in ctl.calls() if c[0] == "bootstrap"]
 
 
@@ -212,13 +215,13 @@ def test_on_gives_the_dry_run_the_same_herdr_as_the_job(ctl):
     ctl.add_claude()
     seen = ctl.home / "seen"
     ctl.launcher.write_text(f"""#!/bin/sh
-echo "$ORCHI_HERDR $*" >> {seen}
+echo "$*" >> {seen}
 echo '{{"result": {{"agents": []}}}}'
 """)
     ctl.state_dir.mkdir(parents=True)
     (ctl.state_dir / "state.md").write_text("# switchboard state\n## watching\n")
     assert ctl.run("on")[0] == 0
-    assert seen.read_text().splitlines()[0] == "app agent list"
+    assert seen.read_text().splitlines()[0] == "agent list"
 
 
 def test_on_without_orchi_settings_renders_no_settings_entry(ctl):
@@ -243,7 +246,7 @@ def test_on_gives_the_job_the_same_orchi_settings_as_the_dry_run(ctl, tmp_path):
     assert "no state file" in out
     plist = plistlib.loads(ctl.plist.read_bytes())
     assert plist["EnvironmentVariables"]["ORCHI_SETTINGS"] == str(settings)
-    assert plist["EnvironmentVariables"]["ORCHI_HERDR"] == "app"
+    assert "ORCHI_HERDR" not in plist["EnvironmentVariables"]
     assert plist["StandardOutPath"] == str(profile / "switchboard" / "health.out.log")
     assert "@" not in ctl.plist.read_text().split("-->", 1)[1]
 

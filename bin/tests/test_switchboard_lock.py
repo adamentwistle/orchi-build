@@ -1,9 +1,8 @@
 """Tests for bin/switchboard-lock.
 
-The real herdr is a stub reached through ORCHI_HERDR_REAL, and hc a stub on PATH,
-each answering from one file and recording its calls. An app lock goes through the
-real bin/herdr and bin/herdr-adapter, so which Herdr gets asked is exercised too.
-Every run names a temp lock file, so nothing touches the real switchboard folder.
+hc is a stub on PATH answering from one file and recording its calls, and the real herdr a stub reached
+through ORCHI_HERDR_REAL that must never be asked. A lock is read through the real bin/herdr and
+bin/herdr-adapter. Every run names a temp lock file, so nothing touches the real switchboard folder.
 """
 import importlib.machinery
 import importlib.util
@@ -122,83 +121,70 @@ def bed(tmp_path):
 
 
 def test_take_writes_the_contract_shape(bed):
+    # The Orchi panel reads herdr: "app" from this file.
+    assert bed.run("take", "t7")[0] == 0
+    assert bed.owner() == {"terminal": "t7", "herdr": "app", "started": "2026-10-30 22:40"}
+
+
+def test_take_still_accepts_the_word_app(bed):
+    # The switchboard skill passes it until it stops.
     assert bed.run("take", "t7", "app")[0] == 0
     assert bed.owner() == {"terminal": "t7", "herdr": "app", "started": "2026-10-30 22:40"}
 
 
 def test_take_makes_the_folder(bed):
     assert not bed.file.parent.exists()
-    assert bed.run("take", "w1:p2", "terminal")[0] == 0
-    assert bed.owner()["terminal"] == "w1:p2"
+    assert bed.run("take", "t3")[0] == 0
+    assert bed.owner()["terminal"] == "t3"
 
 
 def test_a_live_owner_stops_take_with_one_line(bed):
     bed.lock()
     bed.set(terminals={"t7": CLAUDE})
     before = bed.file.read_text()
-    rc, out, _ = bed.run("take", "t9", "app")
+    rc, out, _ = bed.run("take", "t9")
     assert rc == 1
-    assert out == "switchboard is running in the Herdr app, terminal t7, since 2026-10-30 21:00\n"
+    assert out == "switchboard is running in terminal t7, since 2026-10-30 21:00\n"
     assert bed.file.read_text() == before
-
-
-def test_a_live_terminal_owner_is_named_too(bed):
-    bed.lock("w1:p2", "terminal")
-    bed.set(panes=["w1:p2"])
-    rc, out, _ = bed.run("take", "t9", "app")
-    assert rc == 1
-    assert out == "switchboard is running in terminal Herdr, terminal w1:p2, since 2026-10-30 21:00\n"
 
 
 def test_a_dead_owner_is_replaced(bed):
     bed.lock()
-    assert bed.run("take", "t9", "app")[0] == 0
+    assert bed.run("take", "t9")[0] == 0
     assert bed.owner() == {"terminal": "t9", "herdr": "app", "started": "2026-10-30 22:40"}
 
 
 def test_a_terminal_with_only_a_shell_left_is_dead(bed):
     bed.lock()
     bed.set(terminals={"t7": None})
-    assert bed.run("take", "t9", "app")[0] == 0
+    assert bed.run("take", "t9")[0] == 0
 
 
-def test_a_lock_in_a_stopped_terminal_herdr_is_dead(bed):
+def test_a_lock_an_older_version_wrote_for_terminal_herdr_is_dead(bed):
+    # hc has never heard of w1:p2, and the real herdr is not asked.
     bed.lock("w1:p2", "terminal")
-    bed.set(error="server_not_running")
-    assert bed.run("take", "t9", "app")[0] == 0
+    bed.set(panes=["w1:p2"])
+    assert bed.run("take", "t9")[0] == 0
+    assert bed.owner() == {"terminal": "t9", "herdr": "app", "started": "2026-10-30 22:40"}
+    assert bed.calls() and {c[0] for c in bed.calls()} == {"hc"}
 
 
 def test_the_same_owner_keeps_its_start_and_asks_nobody(bed):
     bed.lock()
-    assert bed.run("take", "t7", "app")[0] == 0
+    assert bed.run("take", "t7")[0] == 0
     assert bed.owner()["started"] == "2026-10-30 21:00"
     assert bed.calls() == []
-
-
-def test_the_same_address_in_the_other_herdr_is_another_owner(bed):
-    bed.lock("t7", "terminal")
-    bed.set(panes=["t7"])
-    assert bed.run("take", "t7", "app")[0] == 1
 
 
 @pytest.mark.parametrize("cfg", [{"hc_broken": True}])
 def test_an_app_lock_that_cannot_be_checked_holds(bed, cfg):
     bed.lock()
     bed.set(**cfg)
-    rc, out, _ = bed.run("take", "t9", "app")
+    rc, out, _ = bed.run("take", "t9")
     assert rc == 1
     assert "could not check (hc_failed)" in out and "switchboard-lock release" in out
     assert len(out.splitlines()) == 1
     assert bed.owner()["terminal"] == "t7"
-
-
-@pytest.mark.parametrize("cfg,word", [({"error": "server_broken"}, "server_broken"),
-                                      ({"garbled": True}, "exit 1")])
-def test_a_terminal_lock_that_cannot_be_checked_holds(bed, cfg, word):
-    bed.lock("w1:p2", "terminal")
-    bed.set(**cfg)
-    rc, out, _ = bed.run("take", "t9", "app")
-    assert rc == 1 and word in out
 
 
 def test_a_hung_herdr_holds(bed, monkeypatch):
@@ -212,33 +198,27 @@ def test_a_hung_herdr_holds(bed, monkeypatch):
     assert "timed out" in mod.holder(str(bed.file))
 
 
-@pytest.mark.parametrize("text", ["", "not json", "[]", '{"terminal": "t7"}',
-                                  '{"terminal": "--help", "herdr": "app"}',
-                                  '{"terminal": "t7", "herdr": "other"}'])
+@pytest.mark.parametrize("text", ["", "not json", "[]", '{"herdr": "app"}',
+                                  '{"terminal": "--help", "herdr": "app"}', '{"terminal": 7}'])
 def test_a_lock_that_cannot_be_read_counts_as_none(bed, text):
     bed.file.parent.mkdir()
     bed.file.write_text(text)
     assert bed.run("show")[1] == "free: no lock\n"
-    assert bed.run("take", "t9", "app")[0] == 0
+    assert bed.run("take", "t9")[0] == 0
     assert bed.owner()["terminal"] == "t9"
     assert bed.calls() == [], "a flag in the file never reaches herdr"
 
 
-# Which Herdr gets asked.
+# Which Herdr gets asked: the app, whatever the environment says.
 
-def test_an_app_lock_is_read_through_the_adapter_even_from_terminal_herdr(bed):
+@pytest.mark.parametrize("env", [{}, {"HERDR_PANE_ID": "w1:p2"}, {"ORCHI_HERDR": "terminal"},
+                                 {"HC_TERMINAL_ID": "t9"}])
+def test_a_lock_is_read_through_the_adapter_and_never_the_real_herdr(bed, env):
     bed.lock()
     bed.set(terminals={"t7": CLAUDE})
-    assert bed.run("show", env={"HERDR_PANE_ID": "w1:p2"})[0] == 0
+    assert bed.run("show", env=env)[0] == 0
     assert bed.calls()[0][:2] == ["hc", "get"]
     assert not any(c[0] == "herdr" for c in bed.calls())
-
-
-def test_a_terminal_lock_reaches_the_real_herdr_even_from_the_app(bed):
-    bed.lock("w1:p2", "terminal")
-    bed.set(panes=["w1:p2"])
-    assert bed.run("show", env={"HC_TERMINAL_ID": "t9"})[0] == 0
-    assert bed.calls() == [["herdr", "agent", "get", "w1:p2"]]
 
 
 # release and show.
@@ -263,12 +243,12 @@ def test_show_a_live_owner(bed):
     bed.lock()
     bed.set(terminals={"t7": CLAUDE})
     assert bed.run("show")[:2] == (
-        0, "switchboard is running in the Herdr app, terminal t7, since 2026-10-30 21:00\n")
+        0, "switchboard is running in terminal t7, since 2026-10-30 21:00\n")
 
 
 def test_show_a_dead_owner(bed):
-    bed.lock("w1:p2", "terminal")
-    assert bed.run("show")[:2] == (0, "free: terminal w1:p2 in terminal Herdr has gone\n")
+    bed.lock("t5")
+    assert bed.run("show")[:2] == (0, "free: terminal t5 has gone\n")
 
 
 def test_show_writes_nothing(bed):
@@ -284,7 +264,7 @@ def test_two_takes_at_once_leave_one_owner(bed):
     results = {}
 
     def take(terminal):
-        results[terminal] = bed.run("take", terminal, "app")[0]
+        results[terminal] = bed.run("take", terminal)[0]
 
     bed.set(terminals={"t1": CLAUDE, "t2": CLAUDE})
     threads = [threading.Thread(target=take, args=(t,)) for t in ("t1", "t2")]
@@ -310,14 +290,13 @@ def test_the_default_file_is_in_the_switchboard_folder(tmp_path):
 
 
 def test_the_lock_file_can_be_set_for_tests(bed):
-    assert subprocess.run([sys.executable, str(SCRIPT), "take", "t7", "app"], text=True,
+    assert subprocess.run([sys.executable, str(SCRIPT), "take", "t7"], text=True,
                           capture_output=True, env=bed.env(SWITCHBOARD_LOCK=str(bed.file))).returncode == 0
     assert bed.owner()["terminal"] == "t7"
 
 
-@pytest.mark.parametrize("args", [[], ["take"], ["take", "t7"], ["take", "t7", "other"],
-                                  ["take", "--help", "app"], ["take", "", "app"],
-                                  ["take", "t7", "app", "x"], ["release", "x"], ["show", "x"],
+@pytest.mark.parametrize("args", [[], ["take"], ["take", "t7", "other"], ["take", "t7", "terminal"],
+                                  ["take", "--help"], ["take", ""], ["take", "t7", "app", "x"], ["release", "x"], ["show", "x"],
                                   ["steal"]])
 def test_bad_arguments(bed, args):
     assert bed.run(*args)[0] == 2

@@ -20,9 +20,9 @@
                   When it is not set, the line goes and the job reads
                   ~/.config/orchi/settings.json.
 
-  The watcher has no terminal, so ORCHI_HERDR=app tells bin/herdr it means the Herdr
-  app, and the launcher in ~/.local/libexec/orchi-app comes first on PATH so `herdr`
-  reaches bin/herdr at all. A launch agent's default PATH is /usr/bin:/bin:/usr/sbin:/sbin,
+  The watcher has no terminal, and the launcher in ~/.local/libexec/orchi-app comes
+  first on PATH so `herdr` reaches bin/herdr at all, which sends every call to the
+  Herdr app. A launch agent's default PATH is /usr/bin:/bin:/usr/sbin:/sbin,
   so PATH also adds ~/.local/bin for hc and herdr-app, which need nothing else from the
   environment, and /opt/homebrew/bin for what bin/herdr-adapter runs on and the banners.
   The script runs on /usr/bin/python3 (3.9). It runs with the default state directory, so
@@ -44,8 +44,6 @@
 	</array>
 	<key>EnvironmentVariables</key>
 	<dict>
-		<key>ORCHI_HERDR</key>
-		<string>app</string>
 @ORCHI_SETTINGS@
 		<key>PATH</key>
 		<string>@HOME@/.local/libexec/orchi-app:@HOME@/.local/bin:/opt/homebrew/bin:@CLAUDE_BIN@:/usr/bin:/bin:/usr/sbin:/sbin</string>

@@ -1,39 +1,39 @@
 #!/usr/bin/env python3
-"""Claude Code hook: a banner from the panes Adam wants to hear.
+"""Claude Code hook: a banner from the panes the user wants to hear.
 
 Usage: pane-notify   (as a Stop and Notification hook; reads the hook's JSON on stdin)
 
-Herdr's own toasts and sounds can be muted per agent kind only, so with them
-off this hook decides per pane. It shows a macOS banner with terminal-notifier
-and plays Herdr's chime with afplay, from an orchestrator pane (label or title
-orch-<project>) and from a normal Claude session. Not `herdr notification
-show`: with Herdr's toasts off it answers shown:true and shows nothing. It
-says nothing from:
+The Herdr app plays its own sounds, so this hook adds only a macOS banner,
+with terminal-notifier, from an orchestrator pane (label or title
+orch-<project>) and from a normal Claude session. It asks the app which
+terminal it runs in (HC_TERMINAL_ID) with `herdr pane current`, through the
+bin/herdr beside it, never the herdr on PATH. It says
+nothing from:
 
 - the switchboard pane (label or title `switchboard`),
 - a /fanout worker pane (label `fw-<slug>`; the label beats the title, because
   a worker's session title is whatever its task is called),
 - a subagent (`agent_id` in the input) or a SubagentStop,
-- headless Claude (`claude -p`, entrypoint sdk-*), which inherits the pane id
-  of whatever pane ran it,
-- outside Herdr, or a pane Herdr cannot describe (better silent than a
-  worker's ping).
+- headless Claude (`claude -p`, entrypoint sdk-*), which inherits the terminal
+  id of whatever terminal ran it,
+- outside a Herdr app terminal, or a terminal the app cannot describe (better
+  silent than a worker's ping).
 
 Stop shows "<name>: done" with the first line of the last message (or
-"Claude finished") and Herdr's done chime. Notification shows "<name>: needs
-you" with the request chime for permission_prompt and elicitation_dialog;
-other kinds (idle_prompt repeats a done) are quiet. <name> is the pane's
-label, else its title, else its directory's name. The chimes are
-~/.config/herdr/sounds/{done,request}.mp3; a missing file means no sound.
-Always exits 0 and prints nothing.
+"Claude finished"). Notification shows "<name>: needs you" for
+permission_prompt and elicitation_dialog; other kinds (idle_prompt repeats a
+done) are quiet. <name> is the pane's label, else its title, else its
+directory's name. Always exits 0 and prints nothing.
 """
 import json
 import os
 import shutil
 import subprocess
 import sys
-from pathlib import Path
 
+# The wrapper beside this file, which is the Herdr app's herdr. The one on PATH is the real herdr in a session
+# started by hand, and that is the wrong Herdr.
+HERDR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "herdr")
 HERDR_TIMEOUT = 5
 TITLE_MAX = 80
 BODY_MAX = 120
@@ -44,7 +44,7 @@ NOTIFY_TIMEOUT = 5
 
 def herdr(*args):
     try:
-        done = subprocess.run(["herdr", *args], capture_output=True, text=True,
+        done = subprocess.run([HERDR, *args], capture_output=True, text=True,
                               timeout=HERDR_TIMEOUT)
     except (OSError, subprocess.SubprocessError):
         return None
@@ -64,20 +64,8 @@ def banner(title, body):
         pass
 
 
-def chime(sound):
-    path = Path.home() / ".config" / "herdr" / "sounds" / f"{sound}.mp3"
-    if not path.is_file():
-        return
-    try:
-        subprocess.Popen(["afplay", str(path)], stdin=subprocess.DEVNULL,
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                         start_new_session=True)
-    except OSError:
-        pass
-
-
-def pane_info(pane_id):
-    out = herdr("pane", "get", pane_id)
+def pane_info(terminal):
+    out = herdr("pane", "current", "--pane", terminal)
     try:
         return json.loads(out)["result"]["pane"]
     except (TypeError, ValueError, KeyError):
@@ -85,8 +73,8 @@ def pane_info(pane_id):
 
 
 def quiet_pane(pane):
-    label = pane.get("label") or ""
-    title = pane.get("title") or ""
+    label = pane.get("name") or ""
+    title = pane.get("terminal_title") or ""
     if label:
         return label == "switchboard" or label.startswith("fw-")
     return title == "switchboard"
@@ -94,7 +82,7 @@ def quiet_pane(pane):
 
 def name_of(pane):
     cwd = (pane.get("cwd") or "").rstrip("/")
-    return pane.get("label") or pane.get("title") or os.path.basename(cwd) or "Claude"
+    return pane.get("name") or pane.get("terminal_title") or os.path.basename(cwd) or "Claude"
 
 
 def cut(text, limit):
@@ -109,12 +97,12 @@ def first_line(text):
 
 
 def message(hook):
-    """(suffix, body, sound) for this event, or None to stay quiet."""
+    """(suffix, body) for this event, or None to stay quiet."""
     event = hook.get("hook_event_name")
     if event == "Stop":
-        return "done", first_line(hook.get("last_assistant_message")) or "Claude finished", "done"
+        return "done", first_line(hook.get("last_assistant_message")) or "Claude finished"
     if event == "Notification" and hook.get("notification_type") in ASKS:
-        return "needs you", first_line(hook.get("message")) or "Claude needs you", "request"
+        return "needs you", first_line(hook.get("message")) or "Claude needs you"
     return None
 
 
@@ -127,19 +115,18 @@ def main():
         return
     if os.environ.get("CLAUDE_CODE_ENTRYPOINT", "").startswith("sdk"):
         return
-    pane_id = os.environ.get("HERDR_PANE_ID")
-    if os.environ.get("HERDR_ENV") != "1" or not pane_id:
+    terminal = os.environ.get("HC_TERMINAL_ID")
+    if not terminal:
         return
     what = message(hook)
     if what is None:
         return
-    pane = pane_info(pane_id)
+    pane = pane_info(terminal)
     if pane is None or quiet_pane(pane):
         return
-    suffix, body, sound = what
+    suffix, body = what
     title = f"{cut(name_of(pane), TITLE_MAX - len(suffix) - 2)}: {suffix}"
     banner(title, cut(body, BODY_MAX))
-    chime(sound)
 
 
 if __name__ == "__main__":

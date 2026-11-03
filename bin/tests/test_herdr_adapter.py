@@ -1127,7 +1127,7 @@ def test_worktree_create_refuses_focus(bed, repo):
 
 
 def test_worktree_create_with_no_space_creates_nothing(bed, repo):
-    # A guessed space would be whichever one Adam is looking at.
+    # A guessed space would be whichever one the user is looking at.
     bed.terminals(term("t4", labels={}))
     assert json.loads(create(bed, repo).stderr)["error"]["code"] == "no_space"
     assert not Path(f"{repo}-wt/one").exists()

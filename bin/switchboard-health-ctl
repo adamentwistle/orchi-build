@@ -20,13 +20,13 @@ plist is at ~/Library/LaunchAgents/orchi.switchboard-health.plist, `on` and `sta
 warn that it loads at login and print the command to remove it. This script
 never deletes it.
 
-The job reaches the Herdr app: ORCHI_HERDR=app, with ~/.local/libexec/orchi-app
-first on its PATH and ~/.local/bin next, for hc and herdr-app. `on` stops with an
-error if the launcher in orchi-app is missing, because `herdr` would then be
-terminal Herdr, and a watcher looking there finds no switchboard and starts one.
-The dry run gets the same two settings as the job. When ORCHI_SETTINGS is set,
-the job gets it too, so it watches the same switchboard folder the dry run
-checked.
+The job reaches the Herdr app: ~/.local/libexec/orchi-app is first on its PATH,
+so `herdr` finds bin/herdr, and ~/.local/bin next, for hc and herdr-app. `on`
+stops with an error if the launcher in orchi-app is missing, because `herdr`
+would then be the real one, which is the wrong Herdr, and a watcher looking there
+finds no switchboard and starts one. The dry run gets the same PATH as the job.
+When ORCHI_SETTINGS is set, the job gets it too, so it watches the same
+switchboard folder the dry run checked.
 
 claude is looked for on PATH, then under ~/.nvm/versions/node/*/bin (newest
 first). Exit 0 on success, 1 when something failed, 2 on bad arguments.
@@ -131,7 +131,7 @@ def cmd_on(state_dir):
         print("could not find claude on PATH or under ~/.nvm/versions/node/*/bin", file=sys.stderr)
         return 1
     if not os.access(os.path.join(app_bin(), "herdr"), os.X_OK):
-        print(f"no herdr launcher in {app_bin()}: scripts/install.sh in herdr-build writes it",
+        print(f"no herdr launcher in {app_bin()}: run scripts/install.sh in your Orchi checkout to write it",
               file=sys.stderr)
         return 1
     os.makedirs(state_dir, exist_ok=True)
@@ -143,7 +143,7 @@ def cmd_on(state_dir):
     path = os.pathsep.join([app_bin(), os.path.join(home(), ".local", "bin"), os.environ.get("PATH", "")])
     dry = subprocess.run([PYTHON, HEALTH, "--once", "--dry-run", "--state-dir", state_dir],
                          capture_output=True, text=True, timeout=120,
-                         env={**os.environ, "ORCHI_HERDR": "app", "PATH": path})
+                         env={**os.environ, "PATH": path})
     print((dry.stdout + dry.stderr).rstrip())
     if dry.returncode != 0:
         print(f"the dry run exited {dry.returncode}: not switching on", file=sys.stderr)

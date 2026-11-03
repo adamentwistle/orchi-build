@@ -550,7 +550,7 @@ def test_corrupt_cursor_re_reports_and_is_rewritten(sw, capsys, junk):
 # the next start matched the DECISION and reported the DONE again, three
 # times in three minutes.
 DUP = ("## cedar-1 DONE 2026-03-15 16:52\nRoadmap 1 wrapped.\n\n"
-       "## cedar-2 GRANT 2026-03-15 17:07\nAdam: \"b\"\nScope: item 8.\n\n"
+       "## cedar-2 GRANT 2026-03-15 17:07\nUser: \"b\"\nScope: item 8.\n\n"
        "## cedar-2 DECISION 2026-03-15 17:10\nAttempted: x\n\n"
        "ANSWERED cedar-2: b (2026-03-15 17:10)\n\n"
        "## cedar-2 DONE 2026-03-15 17:10\nRoadmap 2 wrapped.\n\n")
@@ -589,7 +589,7 @@ def test_replaces_on_the_heading_line_closes_a_decision(sw, capsys):
 def test_decided_with_replaces_closes_a_decision(sw, capsys):
     sw.write("## cedar-80 DECISION 2026-10-01 16:54\nAttempted: x\n\n"
              "## cedar-82 DECIDED 2026-10-01 16:57\nReplaces cedar-80\n"
-             "Adam said in the pane: \"after the tests\".\n\n")
+             "The user said in the pane: \"after the tests\".\n\n")
     assert sw.run(capsys=capsys)[:2] == (124, ["timeout"])
 
 
@@ -857,7 +857,7 @@ def test_missing_state_file_keeps_the_old_behaviour(sw, capsys, tmp_path):
 # that moves only when an agent's own state changes, so an idle and done
 # flip keeps its seq. A pane that only flips did nothing new, and while the
 # latest entry is an open DECISION already reported, the orchestrator is
-# waiting on Adam.
+# waiting on the user.
 DECISION = "## atlas-200 DECISION 2026-10-20 09:00\nAttempted: x\n\n"
 
 
@@ -987,7 +987,7 @@ def test_a_decided_that_replaces_it_brings_pane_reports_back(sw, capsys):
     sw.write(ATLAS["atlas-150"], DECISION)
     assert wait_with(sw, capsys) == (0, ["atlas atlas-200 DECISION"])
     sw.append("## atlas-201 DECIDED 2026-10-20 09:40\nReplaces atlas-200\n"
-              "Adam said in the pane: \"b\".\n\n")
+              "The user said in the pane: \"b\".\n\n")
     assert wait_with(sw, capsys, (0.3, sw.herdr, ["idle", 2]),
                      timeout=10) == (0, ["atlas pane idle"])
 
@@ -1019,7 +1019,7 @@ def test_a_grant_after_the_decision_brings_pane_reports_back(sw, capsys):
     assert wait_with(sw, capsys) == (0, ["atlas atlas-200 DECISION"])
     sw.herdr("idle", seq=2)
     assert wait_with(sw, capsys) == (124, ["timeout"])
-    sw.append('## atlas-g1 GRANT 2026-10-20 09:30\nAdam: "go on"\nScope: x\n\n')
+    sw.append('## atlas-g1 GRANT 2026-10-20 09:30\nUser: "go on"\nScope: x\n\n')
     assert wait_with(sw, capsys, (0.3, sw.herdr, ["working", 3]),
                      (0.6, sw.herdr, ["idle", 4]), timeout=10) == (0, ["atlas pane idle"])
 
@@ -1169,7 +1169,7 @@ def test_status_of_a_project_not_paused_has_no_paused_line(sw, capsys):
 # ACTION entries are reported as DECISION entries are.
 
 ACTION = ("## atlas-200 ACTION 2026-10-30 22:40\n"
-          "Why: the deploy needs Adam's login\n"
+          "Why: the deploy needs the user's login\n"
           "Do: run the deploy\n"
           "Where: this terminal\n"
           "Blocks: the release\n"
@@ -1210,10 +1210,10 @@ def test_status_shows_an_open_action_with_its_first_line(sw, capsys):
     sw.write(ACTION)
     assert sw.script.main(["--status", f"{sw.repo}:w1:p2"]) == 0
     assert capsys.readouterr().out.splitlines()[0] == (
-        "atlas atlas-200 ACTION Why: the deploy needs Adam's login")
+        "atlas atlas-200 ACTION Why: the deploy needs the user's login")
 
 
-# The switchboard wakes on an UPDATE, so Adam hears what a run is doing as it happens.
+# The switchboard wakes on an UPDATE, so the user hears what a run is doing as it happens.
 def test_new_update_wakes_a_running_wait(sw, capsys):
     sw.write(ATLAS["atlas-150"])
     t = threading.Timer(0.5, sw.append, ["## atlas-153 UPDATE 2026-03-14 20:31\nItem 1 landed.\n"])
@@ -1235,9 +1235,9 @@ def test_old_update_is_not_reported_on_a_first_start(sw, capsys):
     assert sw.run(capsys=capsys)[:2] == (124, ["timeout"])
 
 
-# An ACTION can ask Adam to run /go, with a DONE a moment later. Removing the project
+# An ACTION can ask the user to run /go, with a DONE a moment later. Removing the project
 # at that DONE would lose the rest of the run, so the DONE doesn't end the watch.
-HANDED_BACK = (ACTION + "## atlas-201 DONE 2026-10-30 22:41\nStopped for Adam's step.\n\n")
+HANDED_BACK = (ACTION + "## atlas-201 DONE 2026-10-30 22:41\nStopped for the user's step.\n\n")
 
 
 def test_done_with_an_open_action_is_reported_once(sw, capsys):

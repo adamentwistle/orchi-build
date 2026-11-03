@@ -75,6 +75,30 @@ else:
     print(json.dumps({{"id": "cli", "result": {{}}}}))
 """
 
+# hc as a lock check reaches it through bin/herdr and the adapter: a terminal is live when an agent in the
+# herdr stub's list has that pane id or name.
+HC = """#!{python}
+import json, sys
+with open({calls!r}, "a") as f:
+    f.write(json.dumps(sys.argv[1:]) + "\\n")
+cfg = json.load(open({cfg!r}))
+args = [a for a in sys.argv[1:] if a != "--json"]
+if cfg.get("hc_broken"):
+    print(json.dumps({{"error": {{"kind": "connection", "message": "no server"}}}}), file=sys.stderr)
+    sys.exit(1)
+if args[0] == "get":
+    for a in cfg["agents"]:
+        if args[1] in (a.get("pane_id"), a.get("name")):
+            print(json.dumps({{"address": args[1], "state": "live", "labels": {{}}, "turn": 1,
+                              "status": {{"app": "claude-code", "state": a["agent_status"]}}}}))
+            sys.exit(0)
+if args[0] == "ls":
+    print(json.dumps({{"terminals": []}}))
+    sys.exit(0)
+print(json.dumps({{"error": {{"kind": "not_found", "message": "no terminal"}}}}), file=sys.stderr)
+sys.exit(3)
+"""
+
 NOTIFIER = """#!{python}
 import json, sys
 with open({calls!r}, "a") as f:
@@ -143,6 +167,10 @@ def sh(tmp_path, monkeypatch):
     stub.write_text(HERDR.format(python=sys.executable, cfg=str(herdr_cfg),
                                  calls=str(herdr_calls)))
     stub.chmod(0o755)
+    hc_calls = tmp_path / "hc-calls.jsonl"
+    hc = bindir / "hc"
+    hc.write_text(HC.format(python=sys.executable, cfg=str(herdr_cfg), calls=str(hc_calls)))
+    hc.chmod(0o755)
     note_cfg = tmp_path / "notifier-code"
     note_calls = tmp_path / "notifier-calls.jsonl"
     note = bindir / "terminal-notifier"
@@ -162,12 +190,10 @@ def sh(tmp_path, monkeypatch):
                                                           wait=str(SCRIPT.parent / "switchboard-wait")))
     waiter_entries.chmod(0o755)
     monkeypatch.setenv("PATH", f"{bindir}:/usr/bin:/bin")
-    # A lock is checked through bin/herdr, so its real herdr is this stub too.
-    monkeypatch.setenv("ORCHI_HERDR_REAL", str(stub))
-    monkeypatch.delenv("ORCHI_HERDR", raising=False)
+    # A lock is checked through bin/herdr and the adapter, which ask the hc stub.
     monkeypatch.setattr(mod, "NOTIFIER", str(note))
     monkeypatch.setattr(mod, "CTL", str(ctl))
-    monkeypatch.setattr(mod, "ORCHI", "/orchi")
+    monkeypatch.setattr(mod, "ORCHI_DIR", "/orchi")
     monkeypatch.setattr(mod, "CLAUDE_CONFIG_DIR", "/profile")
     monkeypatch.setattr(mod, "CLEAR_TIMEOUT", 1)
     monkeypatch.setattr(mod, "CLEAR_POLL", 0.1)
@@ -212,7 +238,14 @@ def sh(tmp_path, monkeypatch):
             self.cfg.update(no_sessions=True, screen=screen, cleared_screen=cleared)
             herdr_cfg.write_text(json.dumps(self.cfg))
 
-        def lock(self, terminal="wZ:p1", herdr="terminal"):
+        def hc_calls(self):
+            return read_lines(hc_calls)
+
+        def hc_broken(self):
+            self.cfg["hc_broken"] = True
+            herdr_cfg.write_text(json.dumps(self.cfg))
+
+        def lock(self, terminal="wZ:p1", herdr="app"):
             (state_dir / "lock").write_text(json.dumps(
                 {"terminal": terminal, "herdr": herdr, "started": "2026-10-10 18:00"}))
 
@@ -321,8 +354,17 @@ def test_with_no_profile_in_the_settings_the_switchboard_still_runs_under_the_de
     assert load_script().CLAUDE_CONFIG_DIR == str(tmp_path / ".claude")
 
 
-def test_restart_opens_the_orchi_checkout_beside_bin():
-    assert load_script().ORCHI == str(SCRIPT.resolve().parent.parent)
+def test_restart_opens_the_orchi_checkout_from_the_settings(tmp_path, monkeypatch):
+    settings = tmp_path / "settings.json"
+    settings.write_text(json.dumps({"orchi_dir": str(tmp_path / "checkout")}))
+    monkeypatch.setenv("ORCHI_SETTINGS", str(settings))
+    assert load_script().ORCHI_DIR == str(tmp_path / "checkout")
+
+
+def test_restart_opens_the_default_checkout_when_the_settings_name_none(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("ORCHI_SETTINGS", str(tmp_path / "none.json"))
+    assert load_script().ORCHI_DIR == str(tmp_path / "orchi-build")
 
 
 def test_script_is_executable():
@@ -685,7 +727,7 @@ OPEN_DECISION = ("## atlas-1 UPDATE 2026-10-10 18:00\nStarted.\n\n"
 
 def test_idle_orchestrator_behind_an_open_decision_is_waiting_not_stalled(sh):
     # The wait stays quiet here, so the watcher must not wake the switchboard
-    # for it either: the orchestrator is waiting on Adam.
+    # for it either: the orchestrator is waiting on the user.
     watch(sh, "atlas")
     sh.wait_running(entries=True)
     sh.board(sh.repo, OPEN_DECISION)
@@ -700,7 +742,7 @@ def test_idle_orchestrator_behind_an_open_decision_is_waiting_not_stalled(sh):
 @pytest.mark.parametrize("after", [
     "ANSWERED atlas-2: b (2026-10-10 19:10)\n\n",
     "## atlas-3 UPDATE 2026-10-10 19:10\nCarrying on.\n\n",
-    '## atlas-g1 GRANT 2026-10-10 19:10\nAdam: "go on"\nScope: x\n\n',
+    '## atlas-g1 GRANT 2026-10-10 19:10\nUser: "go on"\nScope: x\n\n',
 ])
 def test_idle_orchestrator_past_its_decision_still_prompts_check_in(sh, after):
     watch(sh, "atlas")
@@ -1344,16 +1386,17 @@ def test_a_live_lock_stops_a_restart(sh):
     assert sh.banners() == []
     assert not sh.state_path.read_text().count("last_restart")
     assert any("terminal wZ:p1" in n for n in sh.log()[-1]["notes"])
+    assert ["get", "--json", "wZ:p1"] in sh.hc_calls()
 
 
 def test_a_lock_that_cannot_be_checked_stops_a_restart(sh):
     watch(sh, "atlas")
     sh.lock()
     sh.agents(orch("working"))
-    sh.fail("agent get", "server_broken")
+    sh.hc_broken()
     sh.run()
     assert restart_calls(sh) == []
-    assert any("server_broken" in n for n in sh.log()[-1]["notes"])
+    assert any("hc_failed" in n for n in sh.log()[-1]["notes"])
 
 
 def test_a_dead_lock_is_replaced_by_the_restart(sh):
@@ -1363,7 +1406,7 @@ def test_a_dead_lock_is_replaced_by_the_restart(sh):
     sh.run()
     assert restart_calls(sh)[0][:2] == ["workspace", "create"]
     lock = sh.read_lock()
-    assert (lock["terminal"], lock["herdr"]) == ("wS:p1", "terminal")
+    assert (lock["terminal"], lock["herdr"]) == ("wS:p1", "app")
 
 
 def test_a_restart_takes_the_lock_before_claude_starts(sh):
@@ -1382,19 +1425,11 @@ def test_a_restart_takes_the_lock_before_claude_starts(sh):
     assert seen == {"lock": "wS:p1"}
 
 
-def test_a_restart_in_the_app_says_so_in_the_lock(sh, monkeypatch):
-    monkeypatch.setenv("ORCHI_HERDR", "app")
-    watch(sh, "atlas")
-    sh.agents(orch("working"))
-    sh.run()
-    assert sh.read_lock()["herdr"] == "app"
-
-
 def test_a_lock_taken_during_the_restart_closes_the_new_pane(sh, monkeypatch):
     watch(sh, "atlas")
     sh.agents(orch("working"))
     taken = types.SimpleNamespace(holder=lambda path: None,
-                                  take=lambda path, pane, herdr: "switchboard is running somewhere else")
+                                  take=lambda path, pane: "switchboard is running somewhere else")
     monkeypatch.setattr(sh.script, "load_lock", lambda: taken)
     sh.run()
     assert ["pane", "close", "wS:p1"] in sh.herdr_calls()
@@ -1408,7 +1443,7 @@ def test_no_lock_read_while_the_switchboard_is_there(sh):
     sh.lock("wGone:p1")
     sh.agents(sw("working"), orch("working"))
     sh.run()
-    assert not any(c == ["agent", "get", "wGone:p1"] for c in sh.herdr_calls())
+    assert sh.hc_calls() == []
 
 
 def test_dry_run_with_a_live_lock_restarts_nothing(sh, capsys):
@@ -1475,7 +1510,7 @@ def test_a_session_id_is_still_what_counts_where_there_is_one(sh):
     assert not any(c[:2] == ["agent", "read"] for c in sh.herdr_calls())
 
 
-# ACTION entries wait on Adam, as DECISION entries do.
+# ACTION entries wait on the user, as DECISION entries do.
 
 ACTION = "## atlas-2 ACTION 2026-10-10 18:10\nWhy: x\nDo: y\nWhere: z\n\n"
 

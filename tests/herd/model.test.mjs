@@ -217,7 +217,7 @@ test("a finished session counts nothing", () => {
   assert.equal(herd.solo, null);
 });
 
-// Three background subagents of a session on its own, as herd.py read them for Adam's screenshot: one in a shell
+// Three background subagents of a session on its own, as herd.py read them from a screenshot: one in a shell
 // command, two between commands.
 const SHOT = 1793713764500;
 const shot = { t1: { model: "claude-opus-5-5", first: SHOT - 218000, size: 10, last: SHOT, events: [[SHOT - 47278, "o", 234]], agents: [
@@ -227,7 +227,7 @@ const shot = { t1: { model: "claude-opus-5-5", first: SHOT - 218000, size: 10, l
 ] } };
 
 test("a session's own subagents hang round the middle, one each, in order, in what they're doing, and the counts agree", () => {
-  const herd = buildHerd({ root: { address: "t1", name: "Herdr Build", live: true, agent: true }, nodes: [], facts: { t1: { status: { state: "working" } } }, reply: shot, fanout: null, now: SHOT });
+  const herd = buildHerd({ root: { address: "t1", name: "Atlas", live: true, agent: true }, nodes: [], facts: { t1: { status: { state: "working" } } }, reply: shot, fanout: null, now: SHOT });
   assert.equal(herd.running, 4);
   assert.equal(herd.solo, null);
   const [middle] = hangersOf(herd.groups, []);

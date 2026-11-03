@@ -211,9 +211,9 @@ def test_grant_appends_entry_and_sends(sa):
     sa.write(ATLAS["atlas-150"], ATLAS["atlas-151"])
     assert sa.grant("answer the grill questions", "grill questions only") == 0
     entry = sa.text().split("\n## ")[-1]
-    head, adam, scope = entry.splitlines()[:3]
+    head, said, scope = entry.splitlines()[:3]
     assert re.fullmatch(r"atlas-g1 GRANT \d{4}-\d\d-\d\d \d\d:\d\d", head)
-    assert adam == 'Adam: "answer the grill questions"'
+    assert said == 'User: "answer the grill questions"'
     assert scope == "Scope: grill questions only"
     assert sa.text().endswith("\n")
     call = sa.sent()
@@ -224,8 +224,8 @@ def test_grant_appends_entry_and_sends(sa):
 
 def test_grant_number_is_one_more_than_existing_grants(sa):
     sa.write(ATLAS["atlas-150"],
-             "## atlas-g1 GRANT 2026-03-15 10:00\nAdam: \"x\"\nScope: y\n\n",
-             "## atlas-g2 GRANT 2026-03-15 11:00\nAdam: \"x\"\nScope: y\n\n")
+             "## atlas-g1 GRANT 2026-03-15 10:00\nUser: \"x\"\nScope: y\n\n",
+             "## atlas-g2 GRANT 2026-03-15 11:00\nUser: \"x\"\nScope: y\n\n")
     assert sa.grant("more", "scope") == 0
     assert "## atlas-g3 GRANT " in sa.text()
     assert "SWITCHBOARD GRANT atlas-g3:" in sa.sent()[0][3]
@@ -268,7 +268,7 @@ def test_grant_refuses_newlines_and_empty(sa, words, scope):
 def test_grant_words_keep_quotes(sa):
     sa.write(ATLAS["atlas-151"])
     assert sa.grant('say "yes" to it', "s") == 0
-    assert 'Adam: "say "yes" to it"' in sa.text()
+    assert 'User: "say "yes" to it"' in sa.text()
 
 
 # switchboard-wait still reads what this writes
@@ -320,7 +320,7 @@ def test_wait_reports_next_decision_after_grant_and_answer(sa, wait, capsys):
 # ACTION entries close the same way.
 
 ACTION = ("## atlas-200 ACTION 2026-10-30 22:40\n"
-          "Why: the deploy needs Adam's login\n"
+          "Why: the deploy needs the user's login\n"
           "Do: run the deploy\n"
           "Where: this terminal\n"
           "Run: ! gh pr merge 12 --squash\n"
@@ -477,7 +477,7 @@ def test_close_works_on_a_planner_board(sa):
     assert sa.sent() == []
 
 
-def finish(sa, why="Marked complete by Adam."):
+def finish(sa, why="Marked complete by the user."):
     return sa.script.main(["--finish", str(sa.repo), why])
 
 
@@ -486,8 +486,8 @@ def test_finish_closes_what_is_open_and_writes_a_done(sa):
     assert finish(sa) == 0
     assert sa.sent() == []
     text = sa.text()
-    assert re.search(r"^ANSWERED birch-1: closed by Adam: run finished \(", text, re.M)
-    assert re.search(r"^## birch-3 DONE \d{4}-\d{2}-\d{2} \d{2}:\d{2}\nMarked complete by Adam\.$", text, re.M)
+    assert re.search(r"^ANSWERED birch-1: closed by the user: run finished \(", text, re.M)
+    assert re.search(r"^## birch-3 DONE \d{4}-\d{2}-\d{2} \d{2}:\d{2}\nMarked complete by the user\.$", text, re.M)
 
 
 def test_finish_is_seen_as_the_end_of_the_run(sa, wait):
@@ -507,7 +507,7 @@ def test_finish_twice_writes_one_done(sa):
 
 
 def test_finish_numbers_past_a_grant_and_a_repeated_id(sa):
-    sa.write("## birch-7 UPDATE 2026-10-31 21:00\nA.\n\n## birch-g2 GRANT 2026-10-31 21:01\nAdam: \"x\"\nScope: y\n\n")
+    sa.write("## birch-7 UPDATE 2026-10-31 21:00\nA.\n\n## birch-g2 GRANT 2026-10-31 21:01\nUser: \"x\"\nScope: y\n\n")
     finish(sa)
     assert "## birch-8 DONE " in sa.text()
 

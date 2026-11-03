@@ -12,7 +12,7 @@ about a decision. It also says, per repo, whether a wait is watching it:
 "<repo-name> wait running since HH:MM (pid N)" or "<repo-name> wait none", or
 "<repo-name> paused" for a paused project.
 
-An ACTION is reported exactly as a DECISION is, here and below: it asks Adam
+An ACTION is reported exactly as a DECISION is, here and below: it asks the user
 for something, and it closes the same ways.
 
 A project in the "## paused" section of the state file is left out of a wait
@@ -30,7 +30,7 @@ On start it reports state, not only changes. Before waiting it prints
     idle or done it is reported on every start, not once, because the
     switchboard has to act on it. A DONE with an ACTION of the same run
     still open is the exception: it's reported once, because the run is
-    waiting on Adam's step, and again once that ACTION closes
+    waiting on the user's step, and again once that ACTION closes
   - the pane, if it is already idle, done, blocked or gone
   - any UPDATE written since the last wait, once a cursor exists. A first start
     leaves old ones out, because they aren't state, and --status never shows one
@@ -52,7 +52,7 @@ has to learn the block is gone.
 And while a repo's latest entry is an open DECISION that has been reported
 (the cursor is on it, whether this wait or an earlier one printed it), its
 pane going idle or done is not reported, unless it was last blocked: the
-orchestrator is waiting on Adam, which the switchboard already knows. A DECISION printed on start,
+orchestrator is waiting on the user, which the switchboard already knows. A DECISION printed on start,
 or one that lands in the same poll as the pane stopping, is printed on its
 own. Once the DECISION is answered or replaced, or any later entry lands (a
 GRANT from switchboard-answer too), pane reports come back as usual.
@@ -109,7 +109,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 import orchi_settings  # noqa: E402
 
-ASKS = ("DECISION", "ACTION")  # entries that wait on Adam until closed
+ASKS = ("DECISION", "ACTION")  # entries that wait on the user until closed
 WAKE = ASKS + ("CYCLE", "DONE")
 STOPPED = ("idle", "done", "blocked", "gone")
 RESTING = ("idle", "done")  # herdr's idle, seen or not; a flip keeps its seq
@@ -291,7 +291,7 @@ def reportable(entries, answered, after, latest_only):
 
 def handed_back(entries, answered, times, started):
     """True when the latest entry is a DONE with an ACTION of this run still open:
-    the run has stopped to wait for Adam's step, and it carries on in the same pane."""
+    the run has stopped to wait for the user's step, and it carries on in the same pane."""
     if not entries or entries[-1][1] != "DONE":
         return False
     return any(entries[i][1] == "ACTION" and not before_start(entries, times, i, started)
@@ -303,7 +303,7 @@ def entry_events(w, since, latest_only, pane_stopped=False):
 
     With pane_stopped, a latest CYCLE or DONE is reported even if the cursor
     is already on it: the switchboard has to act on it while the pane is stopped.
-    A DONE handed back to Adam has nothing to act on until his ACTION closes.
+    A DONE handed back to the user has nothing to act on until their ACTION closes.
     """
     entries, answered = parse(w["path"])
     times = heading_times(w["path"])
@@ -358,7 +358,7 @@ def latest_kind(path):
 
 def awaiting_user(w):
     """True while the repo's latest entry is an open DECISION or ACTION the cursor
-    is on: the orchestrator waits on Adam, so its pane resting is not news."""
+    is on: the orchestrator waits on the user, so its pane resting is not news."""
     entries, answered = parse(w["path"])
     last = len(entries) - 1
     if last < 0 or entries[last][1] not in ASKS or latest_kind(w["path"]) != entries[last][1]:

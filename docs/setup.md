@@ -20,7 +20,7 @@ The directory must be `orchi_dir`. Claude Code stops at a "trust this folder" qu
 
 In the new session type `/switchboard <project>` (a legwork project or orchestrator session name, several allowed), or `/switchboard resume` to pick up the state file. The skill loads only from that command, so "check in" or "watch" in any other session does not start a switchboard. Inside the switchboard session, "watch <project>" works too: it finds the project's `orch-<project>` pane and repo, adds it to the state file and starts the wait. The switchboard watches every repo from this one session.
 
-There's one switchboard at a time, across both Herdrs. `<claude_dir>/switchboard/lock` records the owner's terminal, which Herdr it's in and its start time. The skill takes it with `bin/switchboard-lock take <terminal> <app|terminal>` before it does anything else, and the health watcher and the panel check it before they start one. A live owner stops a `take` with exit 1 and one line saying where the switchboard is. An owner whose terminal has gone, or no longer runs Claude Code, is replaced. If its Herdr can't be asked, the lock holds and the line says so, and `switchboard-lock release` clears it by hand. `switchboard-lock show` prints where the running one is, or a line starting `free:`.
+There's one switchboard at a time. `<claude_dir>/switchboard/lock` records the owner's terminal and its start time, with `"herdr": "app"`, which the panel reads. The skill takes it with `bin/switchboard-lock take <terminal>` before it does anything else, and the health watcher and the panel check it before they start one. A live owner stops a `take` with exit 1 and one line saying where the switchboard is. An owner whose terminal has gone, or no longer runs Claude Code, is replaced, and so is one an older version recorded for a terminal Herdr pane, which the app has never heard of. If the app can't be asked, the lock holds and the line says so, and `switchboard-lock release` clears it by hand. `switchboard-lock show` prints where the running one is, or a line starting `free:`.
 
 The model and effort are flags on the start line. Opus at high effort, because the switchboard uses few tokens, and on Sonnet at the default low effort it drifted from its skill. Orchestrators run on Opus at high effort too; the agents under them run on whatever model fits each task.
 
@@ -64,7 +64,7 @@ switchboard-health-ctl off
 
 The plist lives in the state directory on purpose, not in `~/Library/LaunchAgents`. Anything in `LaunchAgents` loads at every login, which is the opposite of "only when I need it". `--state-dir DIR` puts the plist and logs somewhere else. The plist puts `/opt/homebrew/bin` and the directory of `claude` on the job's `PATH`, because launchd has neither. `on` finds `claude` on `PATH`, then under `~/.nvm`, and stops with an error if it is not there.
 
-The job watches the Herdr app. It has no terminal, so the plist sets `ORCHI_HERDR=app`, and puts `~/.local/libexec/orchi-app` first on `PATH` so `herdr` reaches `bin/herdr`, then `~/.local/bin` for `hc` and `herdr-app`. They need nothing else from launchd: both answered with only `HOME`, `USER` and `PATH` set. `on` stops with an error if the launcher isn't there, because `herdr` would then be terminal Herdr, which shows no switchboard, and the job would start one. An orchestrator still in terminal Herdr isn't watched.
+The job watches the Herdr app. It has no terminal, so the plist puts `~/.local/libexec/orchi-app` first on `PATH` so `herdr` reaches `bin/herdr`, then `~/.local/bin` for `hc` and `herdr-app`. They need nothing else from launchd: both answered with only `HOME`, `USER` and `PATH` set. `on` stops with an error if the launcher isn't there, because `herdr` would then be the real one, which shows no switchboard, and the job would start one. The error tells you to run `scripts/install.sh` in your Orchi checkout, which writes the launcher.
 
 If an older copy of the plist is in `~/Library/LaunchAgents`, `on` and `status` warn that it loads at login and print the `rm` command to remove it. The script never deletes it. Switch the watcher off first, then remove the old plist.
 
@@ -76,31 +76,21 @@ When the switchboard itself is the problem, the watcher shows a banner with `ter
 
 ## Notifications
 
-Only orchestrator panes and normal Claude sessions notify. The switchboard pane, /fanout worker panes and subagents stay quiet. Herdr can mute its toasts and sounds only per agent kind, not per pane, so its own are switched off and `bin/pane-notify`, a Claude Code hook, shows a macOS banner with `terminal-notifier` and plays Herdr's chime from `~/.config/herdr/sounds` with `afplay`. It does not use `herdr notification show`: with `delivery = "off"` that answers `"shown":true` and shows nothing.
+Only orchestrator panes and normal Claude sessions notify. The switchboard pane, /fanout worker panes and subagents stay quiet. The Herdr app plays its own sounds (see `docs/space-agents.md`), so `bin/pane-notify`, a Claude Code hook, adds only a macOS banner, with `terminal-notifier`. It asks the app which terminal it runs in, from `HC_TERMINAL_ID` with `herdr pane current`, and says nothing anywhere else.
 
-- quiet for a pane labelled or titled `switchboard`, a pane labelled `fw-<slug>` (fanout names every worker that way), a subagent, headless `claude -p` (it inherits the pane id of the pane that ran it), and a pane Herdr cannot describe;
-- Stop shows "<name>: done" with the first line of the last message and plays `done.mp3`;
-- a permission prompt or a question shows "<name>: needs you" and plays `request.mp3`. "Waiting for your input" after a done is quiet. A missing sound file means no sound, the banner still shows;
-- <name> is the pane's label, else its title (an orchestrator's `orch-<project>`, a normal session's title), else its directory.
+- quiet for a pane named or titled `switchboard`, a pane named `fw-<slug>` (fanout names every worker that way), a subagent, headless `claude -p` (it inherits the terminal id of the terminal that ran it), and a terminal the app cannot describe;
+- Stop shows "<name>: done" with the first line of the last message;
+- a permission prompt or a question shows "<name>: needs you". "Waiting for your input" after a done is quiet;
+- <name> is the pane's name, else its title (an orchestrator's `orch-<project>`, a normal session's title), else its directory.
 
-To switch it on, in `~/.config/herdr/config.toml` (then `herdr server reload-config`):
-
-```toml
-[ui.toast]
-delivery = "off"
-
-[ui.sound.agents]
-claude = "off"
-```
-
-and in `<claude_dir>/settings.json`, beside the hooks already there, with your home in place of `/Users/me`:
+To switch it on, in `<claude_dir>/settings.json`, beside the hooks already there, with your home in place of `/Users/me`:
 
 ```json
 "Stop": [ { "hooks": [ { "type": "command", "command": "/Users/me/.claude/bin/pane-notify", "timeout": 10 } ] } ],
 "Notification": [ { "hooks": [ { "type": "command", "command": "/Users/me/.claude/bin/pane-notify", "timeout": 10 } ] } ]
 ```
 
-Link it first (see "Linking the skills and scripts"). terminal-notifier must be allowed to notify (System Settings, Notifications); the hook falls back to `/opt/homebrew/bin/terminal-notifier` when Homebrew is not on the hook's `PATH`. After switching it on, end a turn in a normal pane and check a "<name>: done" banner appears. To switch it off, put `delivery = "system"` back, drop the `claude = "off"` line and the two hook entries.
+Link it first (see "Linking the skills and scripts"). terminal-notifier must be allowed to notify (System Settings, Notifications); the hook falls back to `/opt/homebrew/bin/terminal-notifier` when Homebrew is not on the hook's `PATH`. After switching it on, end a turn in a normal pane and check a "<name>: done" banner appears. To switch it off, drop the two hook entries.
 
 ## Allow rules the switchboard session needs
 
@@ -170,21 +160,13 @@ Each project repo's gitignored `.claude/settings.local.json` needs allow rules f
 
 ## The herdr wrapper
 
-`bin/herdr` lets Orchi's scripts and skills work in the Herdr desktop app without knowing which Herdr they are in. It decides which Herdr a call is for, in this order:
+`bin/herdr` lets Orchi's scripts and skills talk to the Herdr app with the commands they know. Every call goes to `bin/herdr-adapter`, which maps it onto the app's `hc`. Nothing in `bin/herdr` reaches the real `/opt/homebrew/bin/herdr`, which is the wrong Herdr in an app terminal. Whatever `HC_TERMINAL_ID`, `HERDR_PANE_ID` or `ORCHI_HERDR` hold, the call goes to the adapter. The adapter itself runs the real `herdr` only for `--help`, `-h`, `--version`, `-V`, `--skill` and no arguments, because the app has nothing to say for them.
 
-| Case | Goes to |
-|---|---|
-| `ORCHI_HERDR=terminal` | the real `/opt/homebrew/bin/herdr` |
-| `ORCHI_HERDR=app` | `bin/herdr-adapter` |
-| `HERDR_PANE_ID` is set, which marks a terminal Herdr pane | the real `herdr` |
-| `HC_TERMINAL_ID` is set, which marks an app terminal | `bin/herdr-adapter` |
-| anything else | the real `herdr` |
+Terminal Herdr is not supported. Where the app's `hc` does a job, nothing else does it: `switchboard-lock` has no second Herdr to ask, `pane-notify` takes the terminal from `HC_TERMINAL_ID`, and a lock an older version wrote for a terminal Herdr pane counts as a switchboard that has gone.
 
-`ORCHI_HERDR=app` is for the launchd watcher, which has no terminal, and the launch agent sets it. `switchboard-lock` sets it per call, to ask whichever Herdr a lock names.
+The wrapper is one `exec` in a shell script. `bin/tests/test_herdr_wrapper.py` proves the arguments, stdin, stdout, stderr, exit code, environment and process id all come through unchanged.
 
-The real path is one `exec` in a shell script, so nothing can get between a terminal Herdr pane and `herdr`. `bin/tests/test_herdr_wrapper.py` proves the arguments, stdin, stdout, stderr, exit code, environment and process id all come through unchanged.
-
-**It's on only for agents the app starts.** A shell line can't do this. `~/.zshenv` puts Homebrew first in every zsh, so `PATH` set when a terminal starts loses to the real `herdr`, and a line in `~/.zshrc` would take terminal Herdr away from every other app session: `switchboard-wait` there gets `agent_not_found` for a live `w...` pane and reports it gone.
+**It's on only for agents the app starts.** A shell line can't do this. `~/.zshenv` puts Homebrew first in every zsh, so `PATH` set when a terminal starts loses to the real `herdr`, and a line in `~/.zshrc` would change `herdr` in every other app terminal too, which Orchi doesn't do to a terminal it didn't start.
 
 So `PATH` is set when Claude Code starts. The panels start it with `~/.local/libexec/orchi-app` first on `PATH`, and `agent start` here does the same, with `HERDR_ENV=1`, which `/fanout` checks before it uses panes, so an orchestrator hands both to its workers. When Orchi's settings set `claude_dir`, both also give the session `CLAUDE_CONFIG_DIR` set to it, so it runs under the profile the panels read, whatever `~/.zshrc` sets. That folder holds one file, a `herdr` launcher that `scripts/install.sh` writes, which runs `bin/herdr`. If this checkout goes, the launcher fails rather than falling back to the real `herdr`. Every other app terminal keeps the real one.
 
@@ -212,12 +194,12 @@ Any other call fails with `not_mapped`, because the real `herdr` is the wrong He
 - `agent prompt` presses Ctrl+S first when Claude Code is running and no `› stashed` hint shows. `hc send` adds to whatever is unsent and presses Enter, so a command left by Put in terminal would run with the text joined on. Claude Code puts the line back after the submit, including after `/clear`. Text typed over a held stash still goes, because Ctrl+S would replace the stash.
 - `pane send-text` takes letters and digits only, because `hc send` always presses Enter.
 - `hc` keeps its terminals on other machines out of the list.
-- As in terminal Herdr, `--until idle` doesn't match an agent that is `done`.
+- As with the real `herdr`, `--until idle` doesn't match an agent that is `done`.
 - Claude Code keeps its prompt at the bottom of the screen, so on a tall terminal a short reply can sit further up than `tail -40` reaches.
 
 ## Linking the skills and scripts
 
-Claude Code reads the skills and commands from `claude_dir`, so link them there from the checkout. Then a pull is the install. A few scripts go in `<claude_dir>/bin`, which goes on your `PATH`: add `export PATH="$HOME/.claude/bin:$PATH"` to `~/.zshrc`. Put only these there, not the whole of `bin/`, because `bin/herdr` on every shell's `PATH` would take terminal Herdr away from app sessions (see "The herdr wrapper").
+Claude Code reads the skills and commands from `claude_dir`, so link them there from the checkout. Then a pull is the install. A few scripts go in `<claude_dir>/bin`, which goes on your `PATH`: add `export PATH="$HOME/.claude/bin:$PATH"` to `~/.zshrc`. Put only these there, not the whole of `bin/`, because `bin/herdr` on every shell's `PATH` would change `herdr` in every app terminal (see "The herdr wrapper").
 
 ```
 O=~/orchi-build C=~/.claude    # your orchi_dir and claude_dir
@@ -229,6 +211,6 @@ for b in bugbot-wait usage-guard switchboard-health-ctl pane-notify; do ln -sfn 
 
 A skill that's already a real folder in `<claude_dir>/skills` has to be moved out first, or the link lands inside it.
 
-`usage-guard` also works as the profile's UserPromptSubmit and PostToolUse hook, and `pane-notify` as its Stop and Notification hook (see Notifications), so keep those links in place while the hooks point at them.
+`usage-guard` also works as the profile's UserPromptSubmit and PostToolUse hook, and `pane-notify` as its Stop and Notification hook (see Notifications), so keep those links in place while the hooks point at them. The hook asks a session to pause when any usage limit reaches `usage_guard_percent` in Orchi's settings, 95 when unset.
 
 The legwork skills (`legwork-tracker`, `/wrap`, `/go`, `/add`, `/log`, `/pickup`, `/shelve`, `/vision`) live in the legwork tracker repo, not here.

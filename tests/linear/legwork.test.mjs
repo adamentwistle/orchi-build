@@ -14,11 +14,11 @@ name: Birch tools
 category: work
 repo: none
 linear: P-ENG-1027
-@@projects/replay.md
+@@projects/notes.md
 ---
-name: Replay
+name: Notes
 category: personal
-repo: E:/dev/replay
+repo: ~/dev/notes
 `;
 
 test("linkedIds reads lists, ranges and project ids", () => {
@@ -55,7 +55,7 @@ test("findProject prefers the linear line, then the identifier map", () => {
 
 test("a Linear project name never picks a project", () => {
   const projects = parseProjects(tracker);
-  assert.equal(findProject(projects, { identifier: "ENG-1", project: "Replay" }), null);
+  assert.equal(findProject(projects, { identifier: "ENG-1", project: "Notes" }), null);
   assert.equal(findProject(projects, { identifier: "ENG-1", project: "Atlas app" }, { "Atlas app": "atlas" }), null);
 });
 

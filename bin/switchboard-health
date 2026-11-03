@@ -8,7 +8,7 @@ the switchboard's state file, DIR/state.md (written only by the switchboard
 session), and `herdr agent list`, then checks in this order:
 
   1. The switchboard pane: the agent whose name is "switchboard", else whose
-     title is. Blocked (a prompt it cannot clear itself): banner to Adam.
+     title is. Blocked (a prompt it cannot clear itself): banner to the user.
      Missing (pane gone or its agent exited): restart it, see below.
   2. Its cycle: state.md's last line is "CYCLE <date>" and the pane is idle:
      send "/clear", then, once herdr reports a new session id for the pane
@@ -27,7 +27,7 @@ session), and `herdr agent list`, then checks in this order:
   4. The orchestrators. A pane blocked, or idle with no trailing CYCLE or
      DONE, on two passes in a row: prompt
      "SWITCHBOARD HEALTH check-in <project>: <condition>". A pane idle while
-     the latest entry is an open DECISION or ACTION is waiting on Adam, not
+     the latest entry is an open DECISION or ACTION is waiting on the user, not
      stalled, and gets no check-in, as switchboard-wait stays quiet about it.
      A pane working whose .legwork/switchboard.md mtime and herdr
      state_change_seq have not moved for 60 minutes: prompt "SWITCHBOARD
@@ -40,7 +40,7 @@ switchboard and for switching the watcher off.
 "Idle" means herdr's idle or done: both mean the agent is ready for input.
 Check-in and stall prompts also go to a working switchboard, which is
 inside its wait nearly all the time: the prompt queues and lands when the
-wait returns, up to 590 s later (docs/probes-2026-10.md, probe d). They
+wait returns, up to 590 s later. They
 never go to a blocked switchboard, where they would answer its prompt, nor
 while the CYCLE marker is there. Wait-none and the cycle need it idle. No
 prompt is ever sent with Esc or any other key, so a running wait is never
@@ -56,9 +56,9 @@ Restart (decision 10): when the switchboard is missing, the lock file DIR/lock
 is checked first (bin/switchboard-lock). A live owner, or one that can't be
 checked, means a switchboard is running where the watcher can't see it, so
 nothing is started and the pass logs a note saying where. Otherwise open a
-workspace in the Orchi checkout (the folder above bin/) with CLAUDE_CONFIG_DIR set to
-claude_dir from Orchi's settings (~/.claude when unset, where the switchboard's
-files are) and DISABLE_AUTO_UPDATE=true (a launch agent has
+workspace in orchi_dir from Orchi's settings (~/orchi-build when unset) with
+CLAUDE_CONFIG_DIR set to claude_dir from the settings (~/.claude when unset,
+where the switchboard's files are) and DISABLE_AUTO_UPDATE=true (a launch agent has
 no current pane to split), name the pane, `herdr agent start switchboard
 --kind claude ... -- --model opus --effort high`, then send "/rename switchboard" and
 "/switchboard resume". The new pane takes the lock before Claude Code starts, and
@@ -66,7 +66,7 @@ a lock taken meanwhile by someone else closes the pane again. At most one restar
 that hour, or a start that ends in agent_not_ready, shows a banner and
 does not retry until the hour is up. With no
 state.md the switchboard has never run, so nothing is checked or restarted.
-A state.md that watches nothing is not restarted either: Adam may have
+A state.md that watches nothing is not restarted either: the user may have
 closed the switchboard on purpose. Both are logged as a note.
 
 Switching itself off: a pass that finds nothing to watch (no state.md, or a
@@ -113,7 +113,7 @@ import orchi_settings  # noqa: E402
 
 SETTINGS = orchi_settings.read()
 DEFAULT_STATE_DIR = orchi_settings.switchboard_dir(SETTINGS)
-ORCHI = os.path.dirname(HERE)
+ORCHI_DIR = SETTINGS["orchi_dir"]
 CLAUDE_CONFIG_DIR = orchi_settings.claude_dir(SETTINGS)
 NOTIFIER = "/opt/homebrew/bin/terminal-notifier"
 WAIT = os.path.join(HERE, "switchboard-wait")
@@ -138,7 +138,7 @@ OFF_PASSES = 2  # passes in a row with nothing to watch before switching off
 PANE = re.compile(r"[A-Za-z0-9][A-Za-z0-9:_.-]*")
 HEADING = re.compile(r"^## (\S+) ([A-Z]+)\b", re.M)  # any entry, GRANT included
 CONTEXT = re.compile(r"context:[^\d\n]*([\d.]+)%")  # as the Orchi panel reads a status line
-ASKS = ("DECISION", "ACTION")  # entries that wait on Adam until closed
+ASKS = ("DECISION", "ACTION")  # entries that wait on the user until closed
 
 
 def now():
@@ -297,7 +297,7 @@ class Pass:
             if what == "banner":
                 print(f"would banner: {action['text']}")
             elif what == "restart":
-                print(f"would restart the switchboard in {ORCHI}")
+                print(f"would restart the switchboard in {ORCHI_DIR}")
             else:
                 for text in action.get("texts") or [action["text"]]:
                     print(f"would prompt {action['to']}: {text}")
@@ -458,7 +458,7 @@ def notify(text):
 
 def restart():
     """(ok, pane, error) for one attempt to bring the switchboard back."""
-    result, err = herdr("workspace", "create", "--cwd", ORCHI, "--label", NAME,
+    result, err = herdr("workspace", "create", "--cwd", ORCHI_DIR, "--label", NAME,
                         "--env", f"CLAUDE_CONFIG_DIR={CLAUDE_CONFIG_DIR}",
                         # An oh-my-zsh update question at shell start eats the first
                         # letter herdr types, so `claude` arrives as `laude`.
@@ -471,8 +471,7 @@ def restart():
         pane = None
     if not valid_pane(pane):
         return False, None, f"herdr workspace create returned no usable root pane id: {pane!r}"
-    which = "app" if os.environ.get("ORCHI_HERDR") == "app" else "terminal"
-    held = load_lock().take(LOCK_FILE, pane, which)
+    held = load_lock().take(LOCK_FILE, pane)
     if held:
         herdr("pane", "close", pane)
         return False, pane, held

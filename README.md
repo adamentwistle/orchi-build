@@ -31,7 +31,7 @@ its default holds. `src/orchi/settings.schema.json` is the schema. No secret eve
 | `orchi_dir` | Orchi's checkout | `~/orchi-build` |
 | `legwork_dir` | The legwork tracker | none |
 | `worker_limit` | Workers that can run at once, across every run, from 1 to 50 | `6` |
-| `usage_guard_percent` | How full a usage limit gets, from 1 to 100, before usage-guard pauses a session (usage-guard doesn't read it yet) | `95` |
+| `usage_guard_percent` | How full a usage limit gets, from 1 to 100, before usage-guard pauses a session | `95` |
 | `sources` | The ticket sources planning reads: `legwork`, `github`, `linear`, `markdown` | `["legwork"]` |
 | `github.own_owners` | GitHub users and organisations that are yours | none |
 | `github.repos` | GitHub repos whose issues are tickets, as `owner/repo` | none |

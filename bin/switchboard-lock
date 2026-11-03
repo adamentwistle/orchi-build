@@ -1,34 +1,34 @@
 #!/usr/bin/env python3
 """The one lock that keeps it to a single switchboard.
 
-Usage: switchboard-lock [--file FILE] take TERMINAL app|terminal
+Usage: switchboard-lock [--file FILE] take TERMINAL
        switchboard-lock [--file FILE] release
        switchboard-lock [--file FILE] show
 
 Two switchboards would both relay decisions, both cycle orchestrators and
-overwrite each other's state file, and neither can see the other from a
-different Herdr. So every start path checks this file: the switchboard skill,
-switchboard-health and the Orchi panel. It is JSON:
+overwrite each other's state file. So every start path checks this file: the
+switchboard skill, switchboard-health and the Orchi panel. It is JSON:
 
   {"terminal": "t7", "herdr": "app", "started": "2026-10-30 22:40"}
 
-take     record TERMINAL (a Herdr pane id or an app terminal address) in that
-         Herdr as the switchboard. A live owner stops it with exit 1 and one
-         line saying where the switchboard is. A dead owner is replaced. The
-         same owner taking it again keeps its start time, which is what a
-         /switchboard resume after a /clear does.
+The panel reads "herdr": "app", so it is always written. The word `app` after
+TERMINAL is accepted and ignored, for the switchboard skill, which still passes it.
+
+take     record TERMINAL (a Herdr app terminal address) as the switchboard. A
+         live owner stops it with exit 1 and one line saying where the
+         switchboard is. A dead owner is replaced. The same owner taking it
+         again keeps its start time, which is what a /switchboard resume after
+         a /clear does.
 release  remove the lock. No lock is fine.
 show     print one line. "free: ..." when a switchboard may start, otherwise
          where the running one is.
 
-An owner is alive while `herdr agent get <terminal>` answers, asked of the Herdr
-the lock names through bin/herdr with ORCHI_HERDR set, so an app lock is read
-through the wrapper and a terminal one reaches the real herdr, whichever this
-runs in. agent_not_found means its terminal has gone or no longer runs Claude
-Code. server_not_running means terminal Herdr is down, so its panes have gone
-too. Any other failure can't say, and counts as alive, because a second
-switchboard is worse than a late one: the line then gives the command to clear
-the lock by hand.
+An owner is alive while `herdr agent get <terminal>` answers, asked through
+bin/herdr. agent_not_found means its terminal has gone or no longer runs Claude
+Code, and so does a lock an older version wrote for a terminal Herdr pane, which
+the app has never heard of. Any other failure can't say, and counts as alive,
+because a second switchboard is worse than a late one: the line then gives the
+command to clear the lock by hand.
 
 A lock that can't be read counts as no lock. The file is FILE, else
 $SWITCHBOARD_LOCK, else lock in the switchboard folder (<claude_dir>/switchboard,
@@ -54,8 +54,7 @@ import orchi_settings  # noqa: E402
 HERE = os.path.dirname(os.path.realpath(__file__))
 WRAPPER = os.path.join(HERE, "herdr")
 HERDR_TIMEOUT = 30
-HERDRS = {"app": "the Herdr app", "terminal": "terminal Herdr"}
-GONE = ("agent_not_found", "server_not_running")
+GONE = ("agent_not_found",)
 TERMINAL = re.compile(r"[A-Za-z0-9][A-Za-z0-9:_.-]*")
 
 
@@ -75,8 +74,7 @@ def read(path):
             owner = json.load(f)
     except (OSError, ValueError):
         return None
-    if (not isinstance(owner, dict) or owner.get("herdr") not in HERDRS
-            or not isinstance(owner.get("terminal"), str)
+    if (not isinstance(owner, dict) or not isinstance(owner.get("terminal"), str)
             or not TERMINAL.fullmatch(owner["terminal"])):
         return None
     return owner
@@ -93,8 +91,8 @@ def write(path, owner):
 
 
 def where(owner):
-    return (f"switchboard is running in {HERDRS[owner['herdr']]}, "
-            f"terminal {owner['terminal']}, since {owner.get('started', 'an unknown time')}")
+    return (f"switchboard is running in terminal {owner['terminal']}, "
+            f"since {owner.get('started', 'an unknown time')}")
 
 
 def unknown(owner, why):
@@ -104,10 +102,9 @@ def unknown(owner, why):
 
 def state_of(owner):
     """None when the owner is dead, else the one line saying where it is."""
-    env = {**os.environ, "ORCHI_HERDR": owner["herdr"]}
     try:
         done = subprocess.run([WRAPPER, "agent", "get", owner["terminal"]], capture_output=True,
-                              text=True, errors="replace", timeout=HERDR_TIMEOUT, env=env)
+                              text=True, errors="replace", timeout=HERDR_TIMEOUT)
     except subprocess.TimeoutExpired:
         return unknown(owner, f"herdr timed out after {HERDR_TIMEOUT} s")
     except OSError as e:
@@ -128,18 +125,18 @@ def holder(path):
     return state_of(owner) if owner else None
 
 
-def take(path, terminal, herdr):
+def take(path, terminal):
     """Take the lock. None when taken, else the line saying where the owner is."""
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(f"{path}.guard", "a") as guard:
         fcntl.flock(guard, fcntl.LOCK_EX)
         owner = read(path)
-        if owner and (owner["terminal"], owner["herdr"]) == (terminal, herdr):
+        if owner and owner["terminal"] == terminal:
             return None
         held = state_of(owner) if owner else None
         if held:
             return held
-        write(path, {"terminal": terminal, "herdr": herdr, "started": now()})
+        write(path, {"terminal": terminal, "herdr": "app", "started": now()})
     return None
 
 
@@ -159,7 +156,7 @@ def show(path):
     held = state_of(owner)
     if held:
         return held
-    return f"free: terminal {owner['terminal']} in {HERDRS[owner['herdr']]} has gone"
+    return f"free: terminal {owner['terminal']} has gone"
 
 
 def usage():
@@ -174,10 +171,10 @@ def main(argv):
             return usage()
         path, argv = os.path.expanduser(argv[1]), argv[2:]
     cmd, args = (argv[0], argv[1:]) if argv else (None, [])
-    if cmd == "take" and len(args) == 2:
-        if not TERMINAL.fullmatch(args[0]) or args[1] not in HERDRS:
+    if cmd == "take" and len(args) in (1, 2):
+        if not TERMINAL.fullmatch(args[0]) or args[1:] not in ([], ["app"]):
             return usage()
-        held = take(path, args[0], args[1])
+        held = take(path, args[0])
         if held:
             print(held)
             return 1

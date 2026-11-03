@@ -7,7 +7,7 @@ const named = () => "";
 
 test("the button shows on an orchestrator and on nothing else", () => {
   assert.equal(progressState([orch], named).terminal, "t1");
-  assert.equal(progressState([{ ...orch, title: "Herdr-build pickup" }], named), null);
+  assert.equal(progressState([{ ...orch, title: "Atlas pickup" }], named), null);
   assert.equal(progressState([{ ...orch, title: "x" }], (a) => (a === "t1" ? "orch-atlas" : "")).terminal, "t1");
   assert.equal(progressState([{ ...orch, app: null }], named), null);
   assert.equal(progressState([{ ...orch, terminal: "remote/t1" }], named), null);

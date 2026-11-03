@@ -1,15 +1,16 @@
 """Tests for bin/pane-notify.
 
-herdr is a stub on PATH that records every call, answers `pane get` with
-the pane each test sets, and exits with codes each test sets. terminal-notifier
-and afplay are stubs on PATH that record their calls in the same file, so
-a banner is a ["terminal-notifier", ...] call and a sound an ["afplay", ...]
-call; terminal-notifier's stdin is recorded after "STDIN". HOME is a temporary directory holding Herdr's two sound files. The
-hook input is the JSON Claude Code sends on stdin.
+herdr is a stub on PATH that records every call, answers `pane current` with the pane each test sets the way
+bin/herdr-adapter does (a pane's label is its `name`, its title is `terminal_title`), and exits with codes each
+test sets. terminal-notifier and afplay are stubs on PATH that record their calls in the same file, so a banner is
+a ["terminal-notifier", ...] call; terminal-notifier's stdin is recorded after "STDIN". afplay is there to prove
+it is never run: the Herdr app plays its own sounds. HOME is a temporary directory. The hook input is the JSON
+Claude Code sends on stdin.
 """
 import time
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -25,12 +26,16 @@ args = sys.argv[1:]
 with open({calls!r}, "a") as f:
     f.write(json.dumps(args) + "\\n")
 cfg = json.load(open({cfg!r}))
-if args[:2] == ["pane", "get"]:
+if args[:2] == ["pane", "current"]:
     if cfg.get("get_rc"):
-        print("pane not found", file=sys.stderr)
+        print(json.dumps({{"error": {{"code": "pane_not_found"}}}}), file=sys.stderr)
         sys.exit(cfg["get_rc"])
-    pane = dict(cfg.get("pane", {{}}), pane_id=args[2])
-    print(json.dumps({{"id": "cli:pane:get", "result": {{"pane": pane, "type": "pane_info"}}}}))
+    given = cfg.get("pane", {{}})
+    pane = {{"pane_id": args[args.index("--pane") + 1], "cwd": given.get("cwd"),
+             "terminal_title": given.get("title", ""), "title": given.get("label") or given.get("title", "")}}
+    if given.get("label"):
+        pane["name"] = given["label"]
+    print(json.dumps({{"id": "cli:pane:current", "result": {{"pane": pane, "type": "pane_current"}}}}))
     sys.exit(0)
 sys.exit(cfg.get("show_rc", 0))
 """
@@ -64,10 +69,16 @@ class Env:
                                            cfg=str(self.cfg_file), name=name, rc=rc))
             rec.chmod(0o755)
         self.home = tmp_path / "home"
-        self.sounds = self.home / ".config" / "herdr" / "sounds"
-        self.sounds.mkdir(parents=True)
-        for name in ("done.mp3", "request.mp3"):
-            (self.sounds / name).write_bytes(b"ID3")
+        self.home.mkdir()
+        # The hook runs from a copy beside the herdr stub, as the real one runs beside bin/herdr.
+        self.script = self.bin / "pane-notify"
+        shutil.copy(SCRIPT, self.script)
+        # A herdr that is not Orchi's, first on PATH as in a terminal started by hand. It must never be asked.
+        self.wrong = tmp_path / "wrong"
+        self.wrong.mkdir()
+        self.wrong_calls = tmp_path / "wrong-calls"
+        (self.wrong / "herdr").write_text(f"#!/bin/sh\necho asked >> {self.wrong_calls}\nexit 1\n")
+        (self.wrong / "herdr").chmod(0o755)
 
     def configure(self, **cfg):
         self.cfg_file.write_text(json.dumps(cfg))
@@ -78,16 +89,15 @@ class Env:
 
     def run(self, hook_input, herdr=True, **env_extra):
         env = {k: v for k, v in os.environ.items()
-               if not k.startswith(("HERDR_", "CLAUDE_CODE_ENTRYPOINT"))}
-        env["PATH"] = f"{self.bin}:{env['PATH']}"
+               if not k.startswith(("HC_", "HERDR_", "CLAUDE_CODE_ENTRYPOINT"))}
+        env["PATH"] = f"{self.wrong}:{self.bin}:{env['PATH']}"
         env["HOME"] = str(self.home)
         if herdr:
-            env.update(HERDR_ENV="1", HERDR_PANE_ID="wAX:p2",
-                       HERDR_SOCKET_PATH="/tmp/herdr.sock")
+            env.update(HC_TERMINAL_ID="t7")
         env["CLAUDE_CODE_ENTRYPOINT"] = "cli"
         env.update(env_extra)
         env = {k: v for k, v in env.items() if v is not None}
-        return subprocess.run([sys.executable, str(SCRIPT)], input=json.dumps(hook_input),
+        return subprocess.run([sys.executable, str(self.script)], input=json.dumps(hook_input),
                               capture_output=True, text=True, env=env, timeout=30)
 
     def calls(self):
@@ -100,14 +110,10 @@ class Env:
         assert not [c for c in self.calls() if c[:2] == ["notification", "show"]]
         return [c for c in self.calls() if c[0] == "terminal-notifier"]
 
-    def sounds_played(self, wait=True):
-        # afplay is started detached, so give it a moment to record itself.
-        deadline = time.monotonic() + (3 if wait else 0)
-        while True:
-            played = [c for c in self.calls() if c[0] == "afplay"]
-            if played or time.monotonic() >= deadline:
-                return played
-            time.sleep(0.05)
+    def sounds_played(self):
+        # afplay would be started detached, so give it a moment to record itself.
+        time.sleep(0.3)
+        return [c for c in self.calls() if c[0] == "afplay"]
 
 
 def stop(**extra):
@@ -138,9 +144,7 @@ def test_orchestrator_pane_by_title_notifies_done(env):
     assert done.returncode == 0
     [show] = env.shows()
     assert opt(show, "-title") == "orch-birch: done"
-    [played] = env.sounds_played()
-    assert played == ["afplay", str(env.sounds / "done.mp3")]
-    assert ["pane", "get", "wAX:p2"] in env.calls()
+    assert ["pane", "current", "--pane", "t7"] in env.calls()
 
 
 def test_orchestrator_pane_by_label_notifies(env):
@@ -221,6 +225,22 @@ def test_outside_herdr_does_nothing(env):
     assert env.calls() == []
 
 
+def test_it_asks_the_wrapper_beside_it_never_the_herdr_on_path(env):
+    # A claude started by hand in an app terminal has the real herdr on PATH, which is the wrong Herdr.
+    env.pane(title="orch-birch")
+    env.run(stop())
+    assert not env.wrong_calls.exists()
+    assert len(env.shows()) == 1
+
+
+def test_a_terminal_herdr_pane_id_alone_does_nothing(env):
+    # Terminal Herdr is not supported: only an app terminal, which has HC_TERMINAL_ID, notifies.
+    env.pane(title="orch-birch")
+    done = env.run(stop(), herdr=False, HERDR_ENV="1", HERDR_PANE_ID="wAX:p2")
+    assert done.returncode == 0
+    assert env.calls() == []
+
+
 # What it says
 
 def test_permission_prompt_asks_with_request_sound(env):
@@ -229,8 +249,6 @@ def test_permission_prompt_asks_with_request_sound(env):
     [show] = env.shows()
     assert opt(show, "-title") == "orch-birch: needs you"
     assert opt(show, "STDIN") == "Claude needs your permission to use Bash"
-    [played] = env.sounds_played()
-    assert played == ["afplay", str(env.sounds / "request.mp3")]
 
 
 def test_elicitation_dialog_asks(env):
@@ -238,13 +256,11 @@ def test_elicitation_dialog_asks(env):
     env.run(notification("elicitation_dialog", "Claude has a question"))
     [show] = env.shows()
     assert opt(show, "-title") == "orch-birch: needs you"
-    [played] = env.sounds_played()
-    assert played == ["afplay", str(env.sounds / "request.mp3")]
 
 
 @pytest.mark.parametrize("kind", ["idle_prompt", "auth_success", ""])
 def test_other_notifications_are_quiet(env, kind):
-    # Herdr's own toasts covered done and blocked; idle_prompt repeats a done.
+    # idle_prompt repeats a done.
     env.pane(title="orch-birch")
     env.run(notification(kind, "Claude is waiting for your input"))
     assert env.shows() == []
@@ -301,8 +317,7 @@ def test_bad_input_exits_zero(env):
     env.pane(title="orch-birch")
     done = subprocess.run([sys.executable, str(SCRIPT)], input="not json",
                           capture_output=True, text=True, timeout=30,
-                          env=dict(os.environ, PATH=f"{env.bin}:{os.environ['PATH']}",
-                                   HERDR_ENV="1", HERDR_PANE_ID="wAX:p2"))
+                          env=dict(os.environ, PATH=f"{env.bin}:{os.environ['PATH']}", HC_TERMINAL_ID="t7"))
     assert done.returncode == 0
     assert env.shows() == []
 
@@ -313,30 +328,13 @@ def test_missing_herdr_exits_zero(env):
     assert done.returncode == 0
 
 
-def test_banner_carries_no_sound_of_its_own(env):
-    # The sound is Herdr's chime through afplay; a -sound would play twice.
+def test_it_plays_no_sound_because_the_app_plays_its_own(env):
     env.pane(title="orch-birch")
-    env.run(stop())
-    [show] = env.shows()
-    assert "-sound" not in show
-
-
-def test_quiet_pane_plays_no_sound(env):
-    env.pane(label="switchboard")
     env.run(stop())
     env.run(notification())
-    assert env.shows() == []
-    assert env.sounds_played(wait=False) == []
-
-
-def test_missing_sound_file_still_shows_banner(env):
-    (env.sounds / "done.mp3").unlink()
-    env.pane(title="orch-birch")
-    done = env.run(stop())
-    assert done.returncode == 0
-    [show] = env.shows()
-    assert opt(show, "-title") == "orch-birch: done"
-    assert env.sounds_played(wait=False) == []
+    [done, asks] = env.shows()
+    assert "-sound" not in done and "-sound" not in asks
+    assert env.sounds_played() == []
 
 
 def test_failed_banner_still_exits_zero(env):

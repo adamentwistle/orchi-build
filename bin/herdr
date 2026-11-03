@@ -1,23 +1,8 @@
 #!/bin/sh
-# herdr: one command for either Herdr. See "The herdr wrapper" in docs/setup.md.
+# herdr: Orchi's one command for Herdr. See "The herdr wrapper" in docs/setup.md.
 #
-# Live orchestrators in terminal Herdr can reach this file, so the real path is
-# a single exec with nothing before it that can fail. App calls go to
-# herdr-adapter, and never fall back to the real herdr, which is the wrong Herdr
-# in an app terminal.
-#
-# ORCHI_HERDR=app or terminal says which one outright, for the launchd watcher,
-# which has no terminal. HERDR_PANE_ID marks a terminal Herdr pane, and wins over
-# an HC_TERMINAL_ID it may have inherited. ORCHI_HERDR_REAL is for the tests.
-real=${ORCHI_HERDR_REAL:-/opt/homebrew/bin/herdr}
-case ${ORCHI_HERDR:-} in
-    app) ;;
-    terminal) exec "$real" "$@" ;;
-    *)
-        if [ -n "${HERDR_PANE_ID:-}" ] || [ -z "${HC_TERMINAL_ID:-}" ]; then
-            exec "$real" "$@"
-        fi
-        ;;
-esac
+# The Herdr app is the only Herdr, so every call goes to herdr-adapter, which maps it onto the app's hc.
+# Nothing here reaches the real herdr, which is the wrong Herdr in an app terminal: herdr-adapter runs
+# it itself, only for --help, --version and --skill.
 self=$(realpath -- "$0") || exit 1
 exec "${self%/*}/herdr-adapter" "$@"

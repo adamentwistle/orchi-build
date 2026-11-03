@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Relay Adam's answer or delegation to an orchestrator and record it.
+"""Relay the user's answer or delegation to an orchestrator and record it.
 
 Usage: switchboard-answer REPO PANE ID ANSWER
        switchboard-answer --board FILE PANE ID ANSWER
@@ -20,21 +20,21 @@ repo. FILE must exist.
 
 --grant records a delegation: it appends
   ## <project>-gN GRANT <date>
-  Adam: "<words>"
+  User: "<words>"
   Scope: <scope>
 to the file (N is one more than the GRANT entries already there, project
 comes from the ids of the existing entries, else the repo directory name)
 and sends "SWITCHBOARD GRANT <project>-gN: <words> (Scope: <scope>)" to the
 pane.
 
---close marks an open DECISION or ACTION as settled: a later entry, or Adam,
+--close marks an open DECISION or ACTION as settled: a later entry, or the user,
 shows it no longer needs an answer. It appends
 "ANSWERED <id>: closed by the switchboard: <why> (<date>)" and sends nothing,
 so it needs no pane and the orchestrator hears nothing. It refuses what the
 first form refuses.
 
---finish ends a run on Adam's word, for a run that will never write its own
-DONE. It closes every entry still open, as "ANSWERED <id>: closed by Adam: run
+--finish ends a run on the user's word, for a run that will never write its own
+DONE. It closes every entry still open, as "ANSWERED <id>: closed by the user: run
 finished (<date>)", then appends "## <project>-<n> DONE <date>" with WHY under
 it, n being one more than the highest number in the file. It sends nothing. A
 board that already ends in a DONE with nothing open is left as it is.
@@ -189,7 +189,7 @@ def finish(repo, why):
         if not still and entries and entries[-1][1] == "DONE":
             return 0
         for ident in still:
-            append(path, f"ANSWERED {ident}: closed by Adam: run finished ({stamp()})\n")
+            append(path, f"ANSWERED {ident}: closed by the user: run finished ({stamp()})\n")
         try:
             with open(path, encoding="utf-8", errors="replace") as f:
                 numbers = [int(n) for n in NUMBERED.findall(f.read())]
@@ -224,7 +224,7 @@ def grant(repo, pane, words, scope):
         err = send(pane, f"SWITCHBOARD GRANT {ident}: {words} (Scope: {scope})")
         if err:
             return fail(err)
-        append(path, f'## {ident} GRANT {stamp()}\nAdam: "{words}"\nScope: {scope}\n\n')
+        append(path, f'## {ident} GRANT {stamp()}\nUser: "{words}"\nScope: {scope}\n\n')
     return 0
 
 

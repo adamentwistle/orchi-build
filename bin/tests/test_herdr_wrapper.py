@@ -1,9 +1,9 @@
-"""Tests for bin/herdr, the part that chooses which Herdr a call is for.
+"""Tests for bin/herdr, the wrapper every call to herdr goes through.
 
-The real herdr is replaced by a stub, reached through ORCHI_HERDR_REAL, that
-records what it was given. Live orchestrators in terminal Herdr go through this
-path, so it proves bytes, exit codes and the process itself, not just that the
-stub ran.
+The app is the only Herdr, so the wrapper has one job: hand the call to bin/herdr-adapter, whole and
+unchanged, and never to the real herdr, which is the wrong Herdr in an app terminal. A stub adapter beside the
+copied wrapper records what it was given, so these prove bytes, exit codes and the process itself. A stub real
+herdr, reached through ORCHI_HERDR_REAL, proves it is never run.
 """
 import json
 import os
@@ -37,23 +37,22 @@ class Bed:
     def __init__(self, tmp_path):
         self.tmp = tmp_path
         self.record = tmp_path / "record.json"
+        self.real_record = tmp_path / "real-record.json"
         self.real = tmp_path / "real-herdr"
-        self.stub(0)
+        self.real.write_text(STUB.format(record=str(self.real_record), code=0))
+        self.real.chmod(0o755)
         # The wrapper's own folder is the stand-in for bin/, so a stub adapter
         # sits beside it and the real bin/herdr-adapter is never run.
         self.bin = tmp_path / "bin"
         self.bin.mkdir()
         self.wrapper = self.bin / "herdr"
         shutil.copy(SCRIPT, self.wrapper)
+        self.stub(0)
 
     def stub(self, code):
-        self.real.write_text(STUB.format(record=str(self.record), code=code))
-        self.real.chmod(0o755)
-
-    def adapter(self):
-        path = self.bin / "herdr-adapter"
-        path.write_text("#!/bin/sh\necho adapter \"$@\"\n")
-        path.chmod(0o755)
+        adapter = self.bin / "herdr-adapter"
+        adapter.write_text(STUB.format(record=str(self.record), code=code))
+        adapter.chmod(0o755)
 
     def env(self, **extra):
         env = {k: v for k, v in os.environ.items()
@@ -125,7 +124,7 @@ def test_exit_code_comes_back(bed, code):
     assert p.returncode == code
 
 
-def test_herdr_replaces_the_wrapper_process(bed):
+def test_the_adapter_replaces_the_wrapper_process(bed):
     # Same pid, so a timeout or signal from a caller lands on herdr itself.
     p, _, _ = bed.run("agent", "list")
     assert bed.seen()["pid"] == p.pid
@@ -141,64 +140,47 @@ def test_environment_is_unchanged(bed):
            {k: v for k, v in want.items() if k not in SHELL_VARS}
 
 
-def test_a_missing_real_herdr_fails_rather_than_looping(bed):
-    p, _, _ = bed.run("agent", "list", ORCHI_HERDR_REAL=str(bed.tmp / "gone"))
-    assert p.returncode != 0
-    assert not bed.record.exists()
-
-
-def test_the_default_real_herdr_is_the_homebrew_one(bed):
+def test_the_wrapper_has_no_path_to_the_real_herdr():
     text = SCRIPT.read_text()
-    assert "${ORCHI_HERDR_REAL:-/opt/homebrew/bin/herdr}" in text
+    assert "ORCHI_HERDR" not in text
+    assert "HERDR_PANE_ID" not in text
+    assert "/opt/homebrew" not in text
 
 
-@pytest.mark.parametrize("setting,env,to_app", [
-    ("ORCHI_HERDR=terminal", {"ORCHI_HERDR": "terminal"}, False),
-    ("terminal beats an app terminal", {"ORCHI_HERDR": "terminal", "HC_TERMINAL_ID": "t4"}, False),
-    ("ORCHI_HERDR=app", {"ORCHI_HERDR": "app"}, True),
-    ("app beats a terminal pane", {"ORCHI_HERDR": "app", "HERDR_PANE_ID": "w9J:p4"}, True),
-    ("a live terminal Herdr pane", {"HERDR_ENV": "1", "HERDR_PANE_ID": "w9J:p4"}, False),
-    ("a pane that inherited HC_TERMINAL_ID", {"HERDR_ENV": "1", "HERDR_PANE_ID": "w9J:p4",
-                                              "HC_TERMINAL_ID": "t4"}, False),
-    ("an app terminal", {"HC_TERMINAL_ID": "t4"}, True),
-    ("an app terminal with HERDR_ENV", {"HC_TERMINAL_ID": "t4", "HERDR_ENV": "1"}, True),
-    ("neither", {}, False),
-    ("HERDR_ENV alone", {"HERDR_ENV": "1"}, False),
-    ("an empty HC_TERMINAL_ID", {"HC_TERMINAL_ID": ""}, False),
-    ("an unknown setting, no terminal", {"ORCHI_HERDR": "ap"}, False),
-    ("an unknown setting in a pane", {"ORCHI_HERDR": "ap", "HERDR_PANE_ID": "w9J:p4",
-                                      "HC_TERMINAL_ID": "t4"}, False),
+@pytest.mark.parametrize("setting,env", [
+    ("an app terminal", {"HC_TERMINAL_ID": "t4"}),
+    ("an app terminal with HERDR_ENV", {"HC_TERMINAL_ID": "t4", "HERDR_ENV": "1"}),
+    ("no terminal at all, as the launchd watcher has", {}),
+    ("HERDR_ENV alone", {"HERDR_ENV": "1"}),
+    ("an empty HC_TERMINAL_ID", {"HC_TERMINAL_ID": ""}),
+    ("the old ORCHI_HERDR=terminal", {"ORCHI_HERDR": "terminal"}),
+    ("the old ORCHI_HERDR=terminal in an app terminal", {"ORCHI_HERDR": "terminal", "HC_TERMINAL_ID": "t4"}),
+    ("the old ORCHI_HERDR=app", {"ORCHI_HERDR": "app"}),
+    ("a terminal Herdr pane", {"HERDR_ENV": "1", "HERDR_PANE_ID": "w9J:p4"}),
+    ("a pane that also has HC_TERMINAL_ID", {"HERDR_ENV": "1", "HERDR_PANE_ID": "w9J:p4", "HC_TERMINAL_ID": "t4"}),
+    ("an unknown ORCHI_HERDR", {"ORCHI_HERDR": "ap", "HERDR_PANE_ID": "w9J:p4"}),
 ])
-def test_which_herdr(bed, setting, env, to_app):
-    bed.adapter()
+def test_every_call_goes_to_the_adapter_and_never_the_real_herdr(bed, setting, env):
     p, out, _ = bed.run("agent", "list", **env)
     assert p.returncode == 0, setting
-    if to_app:
-        assert out == b"adapter agent list\n", setting
-        assert not bed.record.exists(), setting
-    else:
-        assert bed.seen()["argv"] == [b"agent".hex(), b"list".hex()], setting
-
-
-def test_adapter_arguments_arrive_whole(bed):
-    bed.adapter()
-    p, out, _ = bed.run("agent", "prompt", "t1", "a  b", HC_TERMINAL_ID="t4")
-    assert p.returncode == 0
-    assert out == b"adapter agent prompt t1 a  b\n"
+    assert bed.seen()["argv"] == [b"agent".hex(), b"list".hex()], setting
+    assert out == b"out\n\x00\xff", setting
+    assert not bed.real_record.exists(), setting
 
 
 def test_adapter_is_found_through_a_symlink(bed):
-    bed.adapter()
     other = bed.tmp / "elsewhere"
     other.mkdir()
     (other / "herdr").symlink_to(bed.wrapper)
-    p = subprocess.run([str(other / "herdr"), "agent", "list"], capture_output=True,
-                       env=bed.env(HC_TERMINAL_ID="t4"))
-    assert p.stdout == b"adapter agent list\n"
+    p = subprocess.run([str(other / "herdr"), "agent", "list"], capture_output=True, env=bed.env())
+    assert p.returncode == 0
+    assert bed.seen()["argv"] == [b"agent".hex(), b"list".hex()]
 
 
 def test_a_missing_adapter_never_reaches_the_real_herdr(bed):
     # In an app terminal the real herdr is the wrong Herdr, so this must fail.
+    (bed.bin / "herdr-adapter").unlink()
     p, _, _ = bed.run("agent", "list", HC_TERMINAL_ID="t4")
     assert p.returncode != 0
+    assert not bed.real_record.exists()
     assert not bed.record.exists()
