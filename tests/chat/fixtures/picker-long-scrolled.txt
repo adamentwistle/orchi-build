@@ -1,0 +1,14 @@
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+   Select model
+   Switch between Claude models. Your pick becomes the default for new sessions. For
+   other/previous model names, specify with --model.
+
+   ↑ 11. Opus 4.7               Best for everyday, complex tasks
+     12. Opus 4.6               Best for everyday, complex tasks
+   ❯ 13. Sonnet 4.6             Efficient for routine tasks
+
+
+
+   ◐ Medium effort ←/→ to adjust
+
+   Enter to set as default · s to use this session only · Esc to cancel

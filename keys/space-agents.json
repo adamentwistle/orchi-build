@@ -1,0 +1,5 @@
+{
+    "global": {
+        "cmd-shift-u": "space-agents.oldest-blocked"
+    }
+}

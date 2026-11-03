@@ -1,0 +1,684 @@
+#!/usr/bin/env python3
+"""The app side of bin/herdr: herdr's agent, pane, tab, workspace and worktree calls, in app terminals.
+
+bin/herdr runs this only for a Herdr app terminal. It maps each call onto hc and
+`herdr-app do`, and prints what herdr would: {"id": ..., "result": ...} on stdout,
+or {"error": {"code": ..., "message": ...}, "id": ...} on stderr with exit 1.
+
+A pane id and a terminal id are the hc address, such as t7. A workspace id is the
+herdr.space label and a tab id the herdr.tab label. hc can only name a terminal
+when it starts one, so `agent rename`, `pane rename` and `agent start` keep a name
+in the label orchi.name. Terminals on other machines are left out.
+
+An hc failure is never agent_not_found, because switchboard-wait reads that as a
+pane that has gone. A call with no mapping fails with not_mapped rather than
+reaching terminal Herdr, which is the wrong Herdr here. docs/setup.md lists what
+is mapped.
+"""
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+import time
+import uuid
+
+REAL = os.environ.get("ORCHI_HERDR_REAL") or "/opt/homebrew/bin/herdr"
+APP_BIN = os.environ.get("ORCHI_APP_BIN") or os.path.expanduser("~/.local/libexec/orchi-app")
+HC_TIMEOUT = 25  # under the 30 s orchi's scripts give a herdr call
+RECENT_LINES = 1000  # what a read with no --lines reaches back over
+APP_TIMEOUT = 25
+GIT_TIMEOUT = 120
+CLOSE_SECONDS = 5  # terminal.kill returns before the terminal has ended
+TAB_SECONDS = 5  # a labelled terminal's tab took 0.5 s at most to appear
+POLL = 0.25
+SETTLE = 2  # seconds after a prompt that no status change still counts as handled
+START_TIMEOUT_MS = 30000  # herdr's default
+STATES = ("idle", "working", "blocked", "done")
+STOPPED = ("idle", "done", "blocked")
+KINDS = {"claude-code": "claude"}
+SOURCES = ("visible", "recent", "recent-unwrapped")
+ABOUT_HERDR = ("--help", "-h", "--version", "-V", "--skill")
+TARGET = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]*")
+NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+KEY = re.compile(r"[A-Za-z0-9][A-Za-z0-9+_-]*")
+LETTERS = re.compile(r"[A-Za-z0-9]+")
+REF = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
+STASH_HELD = re.compile(r"\u203a[ \t]*stashed[ \t]*$", re.M)  # Claude Code's hint while it holds a stash
+SET_ASIDE = "ctrl+s"
+ENV = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
+
+
+class Failed(Exception):
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+class NoTerminal(Exception):
+    """hc says there is no such terminal, which is not hc failing."""
+
+
+def hc(command, *args, env=None):
+    """hc's parsed JSON reply. Raises NoTerminal, or Failed for anything else."""
+    try:
+        done = subprocess.run(["hc", command, "--json", *args], capture_output=True, text=True,
+                              errors="replace", timeout=HC_TIMEOUT, env=env)
+    except (OSError, subprocess.SubprocessError) as e:
+        raise Failed("hc_failed", f"could not run hc {command}: {e}")
+    raw = done.stdout if done.stdout.strip() else done.stderr
+    try:
+        reply = json.loads(raw)
+    except ValueError:
+        reply = None
+    if not isinstance(reply, dict):
+        raise Failed("hc_failed", f"hc {command} gave no JSON (exit {done.returncode})")
+    error = reply.get("error")
+    if done.returncode == 0 and error is None:
+        return reply
+    if isinstance(error, dict) and error.get("kind") == "not_found":
+        raise NoTerminal()
+    raise Failed("hc_failed", f"hc {command} failed (exit {done.returncode}): {str(error)[:200]}")
+
+
+def herdr_app(command, body=None):
+    """The parsed reply of `herdr-app do`, or of `herdr-app ls` with no body. Raises Failed."""
+    argv = ["herdr-app", "ls"] if body is None else ["herdr-app", "do", command, json.dumps(body)]
+    try:
+        done = subprocess.run(argv, capture_output=True, text=True, errors="replace",
+                              timeout=APP_TIMEOUT)
+    except (OSError, subprocess.SubprocessError) as e:
+        raise Failed("app_failed", f"could not run herdr-app {command}: {e}")
+    try:
+        reply = json.loads(done.stdout)
+    except ValueError:
+        reply = None
+    if done.returncode != 0 or not isinstance(reply, dict) or reply.get("error"):
+        detail = (done.stdout or done.stderr).strip()[:200]
+        raise Failed("app_failed", f"herdr-app {command} failed (exit {done.returncode}): {detail}")
+    return reply
+
+
+def git(cwd, *args):
+    """git's stdout. Raises Failed."""
+    try:
+        done = subprocess.run(["git", "-C", cwd, *args], capture_output=True, text=True,
+                              errors="replace", timeout=GIT_TIMEOUT)
+    except (OSError, subprocess.SubprocessError) as e:
+        raise Failed("git_failed", f"could not run git {args[0]}: {e}")
+    if done.returncode != 0:
+        raise Failed("git_failed", f"git {args[0]} failed: {done.stderr.strip()[:300]}")
+    return done.stdout
+
+
+def get(address):
+    """A terminal, or None when it is unknown or has finished."""
+    try:
+        t = hc("get", address)
+    except NoTerminal:
+        return None
+    return t if t.get("state") == "live" else None
+
+
+def terminals():
+    """Every live terminal on this Mac, in full. `hc ls` leaves out the labels."""
+    found = []
+    for row in hc("ls").get("terminals") or []:
+        address = row.get("address")
+        if isinstance(address, str) and "/" not in address and row.get("state") == "live":
+            t = get(address)
+            if t:
+                found.append(t)
+    return found
+
+
+def name_of(t):
+    return (t.get("labels") or {}).get("orchi.name") or t.get("name")
+
+
+def terminal(target):
+    """The live terminal a target means, by address, hc name, orchi.name or title, or None."""
+    if not TARGET.fullmatch(target):
+        return None
+    t = get(target)
+    if t:
+        return t
+    everyone = terminals()
+    for key in (name_of, lambda t: t.get("title")):
+        for t in everyone:
+            if key(t) == target:
+                return t
+    return None
+
+
+def agent_terminal(target):
+    """As terminal(), for a terminal running an agent. A plain shell has no status."""
+    t = terminal(target)
+    if t is None or not t.get("status"):
+        raise Failed("agent_not_found", f"agent target {target} not found")
+    return t
+
+
+def pane_terminal(target):
+    t = terminal(target)
+    if t is None:
+        raise Failed("pane_not_found", f"pane {target} not found")
+    return t
+
+
+def entry_of(t):
+    """A terminal, in the fields herdr gives an agent or a pane."""
+    status = t.get("status") or {}
+    labels = t.get("labels") or {}
+    foreground = t.get("foreground") or {}
+    title = t.get("title") or ""
+    name = name_of(t)
+    state = status.get("state")
+    entry = {
+        "agent_status": state if state in STATES else "unknown",
+        "cwd": t.get("cwd"),
+        "foreground_cwd": foreground.get("cwd") or t.get("cwd"),
+        "pane_id": t.get("address"),
+        "state_change_seq": t.get("turn"),
+        "tab_id": labels.get("herdr.tab"),
+        "terminal_id": t.get("address"),
+        "terminal_title": title,
+        "terminal_title_stripped": title,
+        "title": name or title,
+        "workspace_id": labels.get("herdr.space"),
+    }
+    if status.get("app"):
+        entry["agent"] = KINDS.get(status["app"], status["app"])
+    if name:
+        entry["name"] = name
+    return entry
+
+
+def options(args, valued=(), flags=()):
+    """(positional, opts) from one command's arguments, refusing any it doesn't take."""
+    positional, opts = [], {}
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        i += 1
+        if arg == "--":
+            positional += args[i:]
+            break
+        if arg in flags:
+            opts[arg] = True
+        elif arg in valued:
+            if i == len(args):
+                raise Failed("usage", f"{arg} needs a value")
+            opts.setdefault(arg, []).append(args[i])
+            i += 1
+        elif arg.startswith("-") and len(arg) > 1:
+            raise Failed("usage", f"{arg} is not mapped here")
+        else:
+            positional.append(arg)
+    return positional, opts
+
+
+def one(positional):
+    if len(positional) != 1:
+        raise Failed("usage", "expected one target")
+    return positional[0]
+
+
+def number(opts, key):
+    """An option's whole number, or None when it isn't given."""
+    if key not in opts:
+        return None
+    try:
+        value = int(opts[key][-1])
+    except ValueError:
+        value = -1
+    if value < 0:
+        raise Failed("usage", f"{key} needs a whole number")
+    return value
+
+
+def states_from(opts):
+    states = opts.get("--until", STOPPED)
+    for state in states:
+        if state not in STATES and state != "unknown":
+            raise Failed("usage", f"--until {state} is not a state")
+    return states
+
+
+def wait_for(address, states, timeout_ms, ready=None):
+    """The terminal once it reaches one of the states and ready(t) holds.
+
+    Polls because `hc wait` only waits for a terminal to stop working, and
+    `agent wait --until working` needs the opposite."""
+    deadline = None if timeout_ms is None else time.time() + timeout_ms / 1000
+    while True:
+        t = get(address)
+        if t is None:
+            raise Failed("agent_not_found", f"agent target {address} not found")
+        if entry_of(t)["agent_status"] in states and (ready is None or ready(t)):
+            return t
+        if deadline is not None and time.time() >= deadline:
+            raise Failed("timeout", "timed out waiting for agent status")
+        time.sleep(POLL)
+
+
+def send(address, text):
+    """Paste text into a terminal and press Enter.
+
+    From a terminal, hc wraps the text in an <hc from=...> tag. Claude Code then
+    won't run a slash command, so /clear and /rename would do nothing, and hc's
+    manual says to read a tagged message as a child's report. Sending with no
+    HC_TERMINAL_ID leaves the tag off."""
+    untagged = {k: v for k, v in os.environ.items() if k != "HC_TERMINAL_ID"}
+    try:
+        hc("send", address, "--", text, env=untagged)
+    except NoTerminal:
+        raise Failed("pane_not_found", f"pane {address} not found")
+
+
+def set_name(address, name):
+    if not NAME.fullmatch(name):
+        raise Failed("usage", f"{name!r} is not a usable name")
+    try:
+        hc("label", address, f"orchi.name={name}")
+    except NoTerminal:
+        raise Failed("pane_not_found", f"pane {address} not found")
+
+
+def read_screen(t, opts):
+    """Print a terminal's text as herdr would: its last --lines lines, plain."""
+    source = opts.get("--source", ["recent"])[-1]
+    if source not in SOURCES:
+        raise Failed("usage", f"--source {source} is not mapped here")
+    lines = number(opts, "--lines")
+    history = [] if source == "visible" else ["--lines", str(lines or RECENT_LINES)]
+    try:
+        text = hc("read", *history, t["address"]).get("text") or ""
+    except NoTerminal:
+        raise Failed("pane_not_found", f"pane {t['address']} not found")
+    rows = text.split("\n")
+    while rows and not rows[-1].strip():
+        rows.pop()
+    if lines:
+        rows = rows[-lines:]
+    if rows:
+        print("\n".join(rows))
+
+
+def set_draft_aside(t):
+    """True when a half-typed line may have gone aside. Claude Code puts it back after the
+    next submit, slash commands included.
+
+    hc send adds to whatever is unsent and presses Enter, and Put in terminal leaves a
+    command there to be read first. Ctrl+S does nothing on an empty prompt, but it brings a
+    held stash back, and a line typed over one replaces it, so it isn't pressed while one is
+    held. A shell would freeze on it."""
+    if not str((t.get("foreground") or {}).get("name", "")).startswith("claude"):
+        return False
+    try:
+        if STASH_HELD.search(hc("read", t["address"]).get("text") or ""):
+            return False
+        hc("keys", t["address"], SET_ASIDE)
+    except (Failed, NoTerminal):
+        return False
+    return True
+
+
+def put_draft_back(t):
+    try:
+        hc("keys", t["address"], SET_ASIDE)
+    except (Failed, NoTerminal):
+        pass
+
+
+def agent_list(args):
+    options(args)
+    return {"agents": [entry_of(t) for t in terminals() if t.get("status")]}
+
+
+def agent_get(args):
+    positional, _ = options(args)
+    return {"agent": entry_of(agent_terminal(one(positional)))}
+
+
+def agent_read(args):
+    positional, opts = options(args, valued=("--source", "--lines"))
+    read_screen(agent_terminal(one(positional)), opts)
+
+
+def pane_read(args):
+    positional, opts = options(args, valued=("--source", "--lines"))
+    read_screen(pane_terminal(one(positional)), opts)
+
+
+def agent_prompt(args):
+    positional, opts = options(args, valued=("--until", "--timeout"), flags=("--wait",))
+    if len(positional) != 2:
+        raise Failed("usage", "expected a target and the text")
+    target, text = positional
+    states = states_from(opts)
+    timeout = number(opts, "--timeout")
+    t = agent_terminal(target)
+    if entry_of(t)["agent_status"] == "blocked":
+        # As herdr does: Enter would land on the approval or question it's waiting at.
+        raise Failed("agent_blocked", f"agent {target} is blocked")
+    before = (t.get("turn"), t.get("status_ms"))
+    sent = time.time()
+    aside = set_draft_aside(t)
+    try:
+        send(t["address"], text)
+    except Failed:
+        if aside:
+            put_draft_back(t)
+        raise
+    if "--wait" not in opts:
+        return {"agent": entry_of(t)}
+
+    def handled(now):
+        # Before the send, the agent may already be in the wanted state. A command
+        # like /low-priority starts no turn, so time has to end this too.
+        return (now.get("turn"), now.get("status_ms")) != before or time.time() - sent >= SETTLE
+
+    return {"agent": entry_of(wait_for(t["address"], states, timeout, handled))}
+
+
+def agent_wait(args):
+    positional, opts = options(args, valued=("--until", "--timeout"))
+    states = states_from(opts)
+    timeout = number(opts, "--timeout")
+    t = agent_terminal(one(positional))
+    return {"agent": entry_of(wait_for(t["address"], states, timeout))}
+
+
+def agent_send_keys(args):
+    positional, _ = options(args)
+    if len(positional) < 2:
+        raise Failed("usage", "expected a target and at least one key")
+    target, *keys = positional
+    for key in keys:
+        if not KEY.fullmatch(key):
+            raise Failed("usage", f"{key!r} is not a key name")
+    t = agent_terminal(target)
+    hc("keys", t["address"], *keys)
+    return {}
+
+
+def agent_rename(args):
+    positional, _ = options(args)
+    if len(positional) != 2:
+        raise Failed("usage", "expected a target and a name")
+    t = agent_terminal(positional[0])
+    set_name(t["address"], positional[1])
+    return {"agent": entry_of(get(t["address"]) or t)}
+
+
+def agent_start(args):
+    extra = []
+    if "--" in args:
+        split = args.index("--")
+        args, extra = args[:split], args[split + 1:]
+    positional, opts = options(args, valued=("--kind", "--pane", "--timeout"))
+    name = one(positional)
+    if opts.get("--kind") != ["claude"]:
+        raise Failed("usage", "only --kind claude is mapped here")
+    if "--pane" not in opts:
+        raise Failed("usage", "--pane is required")
+    timeout = number(opts, "--timeout")
+    t = pane_terminal(opts["--pane"][-1])
+    if t.get("status"):
+        # herdr needs a shell prompt. hc would type this into the agent as a prompt.
+        raise Failed("pane_busy", f"pane {t['address']} already runs an agent")
+    if not os.access(os.path.join(APP_BIN, "herdr"), os.X_OK):
+        raise Failed("no_launcher", f"no herdr launcher in {APP_BIN}")
+    set_name(t["address"], name)
+    # The agent and all it runs reach this wrapper, and nothing else in the app does.
+    # A shell can't set this up: ~/.zshenv puts Homebrew first in every zsh.
+    # /fanout reads HERDR_ENV before it uses panes.
+    send(t["address"], f'HERDR_ENV=1 PATH={shlex.quote(APP_BIN)}:"$PATH" '
+         + shlex.join(["claude", *extra]))
+    started = wait_for(t["address"], STATES, START_TIMEOUT_MS if timeout is None else timeout)
+    if entry_of(started)["agent_status"] == "blocked":
+        raise Failed("agent_blocked", f"agent {name} is blocked at start")
+    return {"agent": entry_of(started)}
+
+
+def pane_rename(args):
+    positional, _ = options(args)
+    if len(positional) < 2:
+        raise Failed("usage", "expected a pane and a name")
+    t = pane_terminal(positional[0])
+    set_name(t["address"], " ".join(positional[1:]))
+    return {"pane": entry_of(get(t["address"]) or t)}
+
+
+def pane_send_text(args):
+    positional, _ = options(args)
+    if len(positional) != 2:
+        raise Failed("usage", "expected a pane and the text")
+    target, text = positional
+    # hc send always presses Enter, so this goes key by key, and hc has a name
+    # for letters and digits only.
+    if not LETTERS.fullmatch(text):
+        raise Failed("not_mapped", "pane send-text takes letters and digits only in the app")
+    hc("keys", pane_terminal(target)["address"], *text)
+    return {}
+
+
+def pane_close(args):
+    positional, _ = options(args)
+    address = pane_terminal(one(positional))["address"]
+    herdr_app("terminal.kill", {"terminal": address})
+    deadline = time.time() + CLOSE_SECONDS
+    while get(address):
+        if time.time() >= deadline:
+            raise Failed("timeout", f"pane {address} has not ended")
+        time.sleep(POLL)
+    return {}
+
+
+def pane_current(args):
+    _, opts = options(args, valued=("--pane",), flags=("--current",))
+    target = opts.get("--pane", [os.environ.get("HC_TERMINAL_ID") or ""])[-1]
+    return {"pane": entry_of(pane_terminal(target)), "type": "pane_current"}
+
+
+def caller_space():
+    """The space of the terminal running this. A guessed space would be whichever
+    one Adam is looking at, so having none is an error."""
+    t = terminal(os.environ.get("HC_TERMINAL_ID") or "")
+    space = (t.get("labels") or {}).get("herdr.space") if t else None
+    if not space:
+        raise Failed("no_space", "this terminal has no space to open a tab in")
+    return space
+
+
+def first_space():
+    """The first space on this Mac, for a caller with no terminal of its own, such
+    as the launchd watcher. Terminals here can't join another machine's space."""
+    spaces = herdr_app("ls").get("spaces")
+    for space in spaces if isinstance(spaces, list) else []:
+        if isinstance(space, dict) and not space.get("machine") and space.get("id"):
+            return space["id"]
+    raise Failed("no_space", "there is no space on this Mac to open a tab in")
+
+
+def name_tab(tab, name):
+    # The tab appears a moment after its terminal, and "no tab" until then.
+    deadline = time.time() + TAB_SECONDS
+    while True:
+        try:
+            herdr_app("tab.rename", {"id": tab, "name": name})
+            return
+        except Failed as e:
+            if "no tab" not in e.message or time.time() >= deadline:
+                raise
+        time.sleep(POLL)
+
+
+def open_tab(space, name, folder, env=()):
+    """(tab id, terminal address) of a new tab in a space, with a shell in it.
+
+    tab.new selects the tab and takes focus, even in a space that isn't shown, so
+    this never uses it. Herdr gives a terminal labelled with a tab id it doesn't
+    know a tab of its own, and leaves the window alone."""
+    tab = f"tb{uuid.uuid4().hex}"
+    shell = os.environ.get("SHELL") or "/bin/zsh"
+    argv = ["/usr/bin/env", *env, shell] if env else [shell]
+    address = hc("run", "--bg", "--keep", "--no-parent", "--outlive-parent", "--cwd", folder,
+                 "--label", f"herdr.space={space}", "--label", f"herdr.tab={tab}",
+                 "--", *argv).get("address")
+    if not isinstance(address, str):
+        raise Failed("hc_failed", "hc run gave no terminal")
+    if name:
+        try:
+            name_tab(tab, name)
+        except Failed:
+            try:
+                herdr_app("terminal.kill", {"terminal": address})
+            except Failed:
+                pass  # the reason the name failed is the one to report
+            raise
+    return tab, address
+
+
+def tab_options(args, what):
+    """(label, folder, env) from the arguments of tab create or workspace create."""
+    positional, opts = options(args, valued=("--cwd", "--label", "--env"), flags=("--no-focus",))
+    if positional or "--cwd" not in opts:
+        raise Failed("usage", f"{what} needs --cwd")
+    env = opts.get("--env", [])
+    for pair in env:
+        if not ENV.fullmatch(pair):
+            raise Failed("usage", f"--env {pair!r} is not KEY=VALUE")
+    return opts.get("--label", [None])[-1], os.path.abspath(opts["--cwd"][-1]), env
+
+
+def tab_create(args):
+    label, folder, env = tab_options(args, "tab create")
+    space = caller_space()
+    tab, address = open_tab(space, label, folder, env)
+    return {"tab": {"tab_id": tab, "workspace_id": space},
+            "root_pane": {"pane_id": address, "terminal_id": address}}
+
+
+def workspace_create(args):
+    # A labelled tab, not a space: space.new would be shown at once, and the watcher
+    # that calls this is restarting a switchboard Adam isn't looking at.
+    label, folder, env = tab_options(args, "workspace create")
+    space = first_space()
+    tab, address = open_tab(space, label, folder, env)
+    return {"workspace": {"workspace_id": space},
+            "tab": {"tab_id": tab, "workspace_id": space},
+            "root_pane": {"pane_id": address, "terminal_id": address}}
+
+
+def worktree_create(args):
+    positional, opts = options(args, valued=("--cwd", "--branch", "--base", "--path", "--label"),
+                               flags=("--no-focus", "--trust-repository"))
+    required = ("--cwd", "--branch", "--base", "--path")
+    if positional or any(key not in opts for key in required):
+        raise Failed("usage", "worktree create needs --cwd, --branch, --base and --path")
+    branch, base = opts["--branch"][-1], opts["--base"][-1]
+    if not REF.fullmatch(branch) or not REF.fullmatch(base):
+        raise Failed("usage", "--branch and --base need a plain ref")
+    label = opts.get("--label", [branch])[-1]
+    cwd, path = os.path.abspath(opts["--cwd"][-1]), os.path.abspath(opts["--path"][-1])
+    space = caller_space()
+    git(cwd, "worktree", "add", "-q", "-b", branch, path, base)
+    try:
+        tab, address = open_tab(space, label, path)
+    except Failed:
+        try:
+            git(cwd, "worktree", "remove", "--force", path)
+            git(cwd, "branch", "-D", branch)
+        except Failed:
+            pass  # the reason the tab failed is the one to report
+        raise
+    # A worker's tab sits in the project's space, so the worktree has no space of
+    # its own. Its id is its path, which still means something after pane close.
+    return {"workspace": {"workspace_id": path},
+            "tab": {"tab_id": tab},
+            "root_pane": {"pane_id": address, "terminal_id": address},
+            "worktree": {"branch": branch, "path": path}}
+
+
+def worktree_list(args):
+    _, opts = options(args, valued=("--cwd",))
+    cwd = opts.get("--cwd", [os.getcwd()])[-1]
+    try:
+        out = git(cwd, "worktree", "list", "--porcelain")
+    except Failed:
+        raise Failed("not_git_worktree",
+                     "Herdr worktree actions require a workspace inside a Git work tree")
+    found = []
+    for block in out.strip().split("\n\n")[1:]:  # the first is the main checkout
+        fields = dict(line.partition(" ")[::2] for line in block.splitlines())
+        found.append({"branch": fields.get("branch", "").removeprefix("refs/heads/"),
+                      "path": fields.get("worktree"), "workspace_id": fields.get("worktree")})
+    return {"worktrees": found}
+
+
+def worktree_remove(args):
+    _, opts = options(args, valued=("--workspace",), flags=("--force", "--trust-repository"))
+    if "--workspace" not in opts:
+        raise Failed("usage", "worktree remove needs --workspace")
+    path = os.path.abspath(opts["--workspace"][-1])
+    if not os.path.isdir(path):
+        raise Failed("worktree_not_found", f"no worktree at {path}")
+    try:
+        found = git(path, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir")
+    except Failed:
+        raise Failed("worktree_not_found", f"no worktree at {path}")
+    git_dir, common = found.split("\n")[:2]
+    # In a main checkout these are the same, and that folder must never go.
+    if git_dir == common:
+        raise Failed("not_linked_worktree", f"{path} is not a linked worktree")
+    git(os.path.dirname(common), "worktree", "remove", *(["--force"] if "--force" in opts else []), path)
+    return {}
+
+
+HANDLERS = {
+    ("agent", "get"): agent_get,
+    ("agent", "list"): agent_list,
+    ("agent", "prompt"): agent_prompt,
+    ("agent", "read"): agent_read,
+    ("agent", "rename"): agent_rename,
+    ("agent", "send-keys"): agent_send_keys,
+    ("agent", "start"): agent_start,
+    ("agent", "wait"): agent_wait,
+    ("pane", "close"): pane_close,
+    ("pane", "current"): pane_current,
+    ("pane", "read"): pane_read,
+    ("pane", "rename"): pane_rename,
+    ("pane", "send-text"): pane_send_text,
+    ("tab", "create"): tab_create,
+    ("workspace", "create"): workspace_create,
+    ("worktree", "create"): worktree_create,
+    ("worktree", "list"): worktree_list,
+    ("worktree", "remove"): worktree_remove,
+}
+
+
+def main(argv):
+    if not argv or argv[0] in ABOUT_HERDR:
+        os.execv(REAL, ["herdr", *argv])
+    group, verb = argv[0], argv[1] if len(argv) > 1 else ""
+    command = f"cli:{group}:{verb}"
+    try:
+        handler = HANDLERS.get((group, verb))
+        if handler is None:
+            raise Failed("not_mapped", f"herdr {group} {verb} has no mapping in the app".strip())
+        result = handler(argv[2:])
+    except Failed as e:
+        print(json.dumps({"error": {"code": e.code, "message": e.message}, "id": command}),
+              file=sys.stderr)
+        return 1
+    if result is not None:
+        print(json.dumps({"id": command, "result": result}))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

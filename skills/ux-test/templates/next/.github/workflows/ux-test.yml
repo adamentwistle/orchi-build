@@ -1,0 +1,42 @@
+name: ux-test
+
+# Written by the ux-test scaffold. Runs the Playwright smoke spec against
+# `next dev`, started by the webServer block in playwright.config.ts.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The env values the app needs to start, copied from the target's own
+    # workflows by the ux-test skill.
+    env: {}
+    steps:
+      - uses: __USES_CHECKOUT__
+
+__PM_SETUP__
+
+      # Registry auth for private packages, if the target needs it, goes here,
+      # copied from the target's own workflows by the ux-test skill.
+
+      - name: Install dependencies
+        run: __PM_INSTALL__
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke
+        run: npx playwright test
+
+      - uses: __USES_UPLOAD_ARTIFACT__
+        if: failure()
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 14

@@ -1,0 +1,1 @@
+{ "programs": { "herdr-browser": { "name": "Browser", "icon": "mods/panel-buttons/browser.svg", "tint": true, "run": ["herdr-browser", "pane"] } } }

@@ -1,0 +1,4 @@
+      - uses: __USES_SETUP_NODE__
+        with:
+          __NODE__
+          cache: npm

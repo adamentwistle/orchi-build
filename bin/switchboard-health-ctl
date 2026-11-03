@@ -1,0 +1,242 @@
+#!/usr/bin/env python3
+"""Switch the switchboard health watcher on and off.
+
+Usage: switchboard-health-ctl on|off|status [--state-dir DIR]
+
+on      Render launchd/orchi.switchboard-health.plist.template into
+        DIR/orchi.switchboard-health.plist, run one pass of
+        `switchboard-health --once --dry-run` and show it, then
+        `launchctl bootstrap gui/<uid>` the plist. The job runs one pass when
+        it is switched on (RunAtLoad), then one every 5 minutes. Already
+        loaded: says so and does nothing.
+off     `launchctl bootout` the job. Not loaded: says so and does nothing.
+status  Whether the job is loaded, and the last pass in health.jsonl in plain
+        words.
+
+The plist lives in DIR, never in ~/Library/LaunchAgents, so the watcher is off
+after every login or reboot until you switch it on. DIR defaults to the
+switchboard folder, <claude_dir>/switchboard from Orchi's settings. If an old
+plist is at ~/Library/LaunchAgents/orchi.switchboard-health.plist, `on` and `status`
+warn that it loads at login and print the command to remove it. This script
+never deletes it.
+
+The job reaches the Herdr app: ORCHI_HERDR=app, with ~/.local/libexec/orchi-app
+first on its PATH and ~/.local/bin next, for hc and herdr-app. `on` stops with an
+error if the launcher in orchi-app is missing, because `herdr` would then be
+terminal Herdr, and a watcher looking there finds no switchboard and starts one.
+The dry run gets the same two settings as the job. When ORCHI_SETTINGS is set,
+the job gets it too, so it watches the same switchboard folder the dry run
+checked.
+
+claude is looked for on PATH, then under ~/.nvm/versions/node/*/bin (newest
+first). Exit 0 on success, 1 when something failed, 2 on bad arguments.
+Needs Python 3.9 and the standard library only.
+"""
+import glob
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from xml.sax.saxutils import escape
+
+LABEL = "orchi.switchboard-health"
+HERE = os.path.dirname(os.path.realpath(__file__))
+sys.path.insert(0, HERE)
+import orchi_settings  # noqa: E402
+
+ORCHI = os.path.dirname(HERE)
+TEMPLATE = os.path.join(ORCHI, "launchd", LABEL + ".plist.template")
+HEALTH = os.path.join(HERE, "switchboard-health")
+PYTHON = "/usr/bin/python3"
+USAGE = "Usage: switchboard-health-ctl on|off|status [--state-dir DIR]"
+
+
+def home():
+    return os.path.expanduser("~")
+
+
+def default_state_dir():
+    return orchi_settings.switchboard_dir()
+
+
+def old_plist():
+    return os.path.join(home(), "Library", "LaunchAgents", LABEL + ".plist")
+
+
+def target():
+    return f"gui/{os.getuid()}/{LABEL}"
+
+
+def launchctl(*args):
+    return subprocess.run(["launchctl", *args], capture_output=True, text=True, timeout=60)
+
+
+def loaded():
+    return launchctl("print", target()).returncode == 0
+
+
+def version_key(path):
+    return [int(n) for n in re.findall(r"\d+", path.split("/versions/node/")[-1])]
+
+
+def find_claude():
+    """The directory holding claude, from PATH, else the newest ~/.nvm node, else None."""
+    found = shutil.which("claude")
+    if found:
+        return os.path.dirname(found)
+    pattern = os.path.join(home(), ".nvm", "versions", "node", "*", "bin", "claude")
+    hits = [p for p in glob.glob(pattern) if os.access(p, os.X_OK)]
+    if hits:
+        return os.path.dirname(max(hits, key=version_key))
+    return None
+
+
+def app_bin():
+    return os.path.join(home(), ".local", "libexec", "orchi-app")
+
+
+def render(state_dir, claude_bin):
+    """The template with its placeholders filled in. The leading comment stays as it is."""
+    with open(TEMPLATE, encoding="utf-8") as f:
+        text = f.read()
+    head, sep, body = text.partition("-->")
+    for key, value in (("@ORCHI@", ORCHI), ("@STATE_DIR@", state_dir), ("@CLAUDE_BIN@", claude_bin),
+                       ("@HOME@", home())):
+        body = body.replace(key, escape(value))
+    entry = ""
+    if os.environ.get("ORCHI_SETTINGS"):
+        value = escape(orchi_settings.path())
+        entry = f"\t\t<key>ORCHI_SETTINGS</key>\n\t\t<string>{value}</string>\n"
+    body = re.sub(r"^[ \t]*@ORCHI_SETTINGS@\n", lambda m: entry, body, flags=re.M)
+    return head + sep + body
+
+
+def warn_old_plist():
+    path = old_plist()
+    if os.path.exists(path):
+        print(f"Warning: {path} loads the health watcher at login.")
+        print(f"Remove it once the watcher is off: rm {path}")
+
+
+def cmd_on(state_dir):
+    if loaded():
+        print("The health watcher is already on.")
+        warn_old_plist()
+        return 0
+    claude_bin = find_claude()
+    if claude_bin is None:
+        print("could not find claude on PATH or under ~/.nvm/versions/node/*/bin", file=sys.stderr)
+        return 1
+    if not os.access(os.path.join(app_bin(), "herdr"), os.X_OK):
+        print(f"no herdr launcher in {app_bin()}: scripts/install.sh in herdr-build writes it",
+              file=sys.stderr)
+        return 1
+    os.makedirs(state_dir, exist_ok=True)
+    plist = os.path.join(state_dir, LABEL + ".plist")
+    with open(plist, "w", encoding="utf-8") as f:
+        f.write(render(state_dir, claude_bin))
+    print(f"Wrote {plist}")
+    print("Dry run, nothing sent or written:")
+    path = os.pathsep.join([app_bin(), os.path.join(home(), ".local", "bin"), os.environ.get("PATH", "")])
+    dry = subprocess.run([PYTHON, HEALTH, "--once", "--dry-run", "--state-dir", state_dir],
+                         capture_output=True, text=True, timeout=120,
+                         env={**os.environ, "ORCHI_HERDR": "app", "PATH": path})
+    print((dry.stdout + dry.stderr).rstrip())
+    if dry.returncode != 0:
+        print(f"the dry run exited {dry.returncode}: not switching on", file=sys.stderr)
+        return 1
+    done = launchctl("bootstrap", f"gui/{os.getuid()}", plist)
+    if done.returncode != 0:
+        print(f"launchctl bootstrap failed (exit {done.returncode}): {done.stderr.strip()}",
+              file=sys.stderr)
+        return 1
+    print("The health watcher is switched on. It runs one pass now, then every 5 minutes.")
+    print("It stays on until you run: switchboard-health-ctl off, or log out or reboot.")
+    warn_old_plist()
+    return 0
+
+
+def cmd_off():
+    if not loaded():
+        print("The health watcher is already off.")
+        return 0
+    done = launchctl("bootout", target())
+    if done.returncode != 0:
+        print(f"launchctl bootout failed (exit {done.returncode}): {done.stderr.strip()}",
+              file=sys.stderr)
+        return 1
+    print("The health watcher is switched off.")
+    return 0
+
+
+def plain_time(stamp):
+    try:
+        return time.strftime("%Y-%m-%d %H:%M", time.strptime(stamp, "%Y-%m-%dT%H:%M:%S%z"))
+    except (TypeError, ValueError):
+        return str(stamp)
+
+
+def last_pass(state_dir):
+    path = os.path.join(state_dir, "health.jsonl")
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            lines = [l for l in f.read().splitlines() if l.strip()]
+    except OSError:
+        return "There is no pass logged yet."
+    if not lines:
+        return "There is no pass logged yet."
+    try:
+        rec = json.loads(lines[-1])
+        observed = rec.get("observed") or []
+        conditions = []
+        for o in observed:
+            c = o.get("condition", "?") if isinstance(o, dict) else str(o)
+            if c not in conditions:
+                conditions.append(c)
+        if conditions:
+            n = len(observed)
+            alerts = f"{n} alert{'' if n == 1 else 's'} ({', '.join(conditions)})"
+        else:
+            alerts = "no alerts"
+        actions = len(rec.get("actions") or [])
+        errors = rec.get("errors") or []
+        text = (f"Last pass {plain_time(rec.get('time'))}: {alerts}, "
+                f"{actions} action{'' if actions == 1 else 's'}, "
+                f"{len(errors)} error{'' if len(errors) == 1 else 's'}.")
+        for e in errors[:3]:
+            text += f"\n  error: {e}"
+        return text
+    except (ValueError, AttributeError, TypeError):
+        return "The last line of health.jsonl is unreadable."
+
+
+def cmd_status(state_dir):
+    print("The health watcher is on." if loaded() else "The health watcher is off.")
+    print(last_pass(state_dir))
+    warn_old_plist()
+    return 0
+
+
+def main(argv):
+    if any(a in ("-h", "--help") for a in argv):
+        print(__doc__.strip())
+        return 0
+    state_dir, rest, args = default_state_dir(), [], list(argv)
+    while args:
+        a = args.pop(0)
+        if a == "--state-dir" and args:
+            state_dir = os.path.expanduser(args.pop(0))
+        else:
+            rest.append(a)
+    if len(rest) != 1 or rest[0] not in ("on", "off", "status"):
+        print(USAGE, file=sys.stderr)
+        return 2
+    return {"on": lambda: cmd_on(state_dir), "off": cmd_off,
+            "status": lambda: cmd_status(state_dir)}[rest[0]]()
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -1,0 +1,701 @@
+#!/usr/bin/env python3
+"""Check on the switchboard and the orchestrators it watches. No LLM.
+
+Usage: switchboard-health --once [--dry-run] [--state-dir DIR]
+
+Run every 5 minutes by a launch agent (launchd/, decision 9). One pass reads
+the switchboard's state file, DIR/state.md (written only by the switchboard
+session), and `herdr agent list`, then checks in this order:
+
+  1. The switchboard pane: the agent whose name is "switchboard", else whose
+     title is. Blocked (a prompt it cannot clear itself): banner to Adam.
+     Missing (pane gone or its agent exited): restart it, see below.
+  2. Its cycle: state.md's last line is "CYCLE <date>" and the pane is idle:
+     send "/clear", then, once herdr reports a new session id for the pane
+     (the sign /clear took, waited for up to 30 s), "/rename switchboard"
+     and "/switchboard resume". The Herdr app reports no session id, so
+     there the sign is the status line's "context:" reading 0.0%, as the
+     switchboard checks for an orchestrator. With neither, nothing is sent.
+     The fingerprint holds the CYCLE line's date.
+     Still the last line, with the pane idle, on a later pass: send the
+     three again, once. Still there on the pass after that: banner.
+  3. The waits: `switchboard-wait --status` on every watched repo. "wait none"
+     with the switchboard idle, on two passes in a row: prompt
+     "SWITCHBOARD HEALTH wait-none: <repo>". Not counted while the CYCLE
+     marker is there, because a switchboard asking to be cycled has stopped
+     watching on purpose.
+  4. The orchestrators. A pane blocked, or idle with no trailing CYCLE or
+     DONE, on two passes in a row: prompt
+     "SWITCHBOARD HEALTH check-in <project>: <condition>". A pane idle while
+     the latest entry is an open DECISION or ACTION is waiting on Adam, not
+     stalled, and gets no check-in, as switchboard-wait stays quiet about it.
+     A pane working whose .legwork/switchboard.md mtime and herdr
+     state_change_seq have not moved for 60 minutes: prompt "SWITCHBOARD
+     HEALTH stall <project>: <N> min with no change" and show a banner.
+
+A project in state.md's "## paused" section is left out of checks 3 and 4:
+it is idle on purpose. It still counts as watched for restarting the
+switchboard and for switching the watcher off.
+
+"Idle" means herdr's idle or done: both mean the agent is ready for input.
+Check-in and stall prompts also go to a working switchboard, which is
+inside its wait nearly all the time: the prompt queues and lands when the
+wait returns, up to 590 s later (docs/probes-2026-10.md, probe d). They
+never go to a blocked switchboard, where they would answer its prompt, nor
+while the CYCLE marker is there. Wait-none and the cycle need it idle. No
+prompt is ever sent with Esc or any other key, so a running wait is never
+cut short. At most one prompt goes per pass, so the rest are logged as
+deferred and sent on later passes, in check order.
+
+Every alert has a fingerprint (repo, pane, condition). One fingerprint
+prompts once and banners once, until a pass no longer sees the condition. A
+banner is /opt/homebrew/bin/terminal-notifier; a non-zero exit is logged as a
+failed banner and the fingerprint stays open, so the next pass tries again.
+
+Restart (decision 10): when the switchboard is missing, the lock file DIR/lock
+is checked first (bin/switchboard-lock). A live owner, or one that can't be
+checked, means a switchboard is running where the watcher can't see it, so
+nothing is started and the pass logs a note saying where. Otherwise open a
+workspace in the Orchi checkout (the folder above bin/) with CLAUDE_CONFIG_DIR set to
+claude_dir from Orchi's settings and DISABLE_AUTO_UPDATE=true (a launch agent has
+no current pane to split), name the pane, `herdr agent start switchboard
+--kind claude ... -- --model opus --effort high`, then send "/rename switchboard" and
+"/switchboard resume". The new pane takes the lock before Claude Code starts, and
+a lock taken meanwhile by someone else closes the pane again. At most one restart an hour. Missing again inside
+that hour, or a start that ends in agent_not_ready, shows a banner and
+does not retry until the hour is up. With no
+state.md the switchboard has never run, so nothing is checked or restarted.
+A state.md that watches nothing is not restarted either: Adam may have
+closed the switchboard on purpose. Both are logged as a note.
+
+Switching itself off: a pass that finds nothing to watch (no state.md, or a
+state.md that watches nothing and has no CYCLE marker), after a pass that
+found the same, runs `switchboard-health-ctl off` as its last act, once the
+pass is logged. The switchboard switches the watcher on when it starts and
+off when its watch list empties; this catches the times it could not, such
+as a /clear or a closed pane. The count starts again after a long gap and
+after switching off, so a watcher switched on again gets two passes.
+
+Each pass appends one JSON line to DIR/health.jsonl and keeps fingerprints,
+two-pass counts, the off count, stall clocks, the last pass and the last restart in
+DIR/health-state.json. A pass more than 15 minutes after the last one (the
+Mac slept, or launchd did not run) restarts every stall clock and two-pass
+count, so a sleep is never read as a stall. Prompts and banners already
+sent stay sent. A prompt or cycle held back because the switchboard is busy
+is logged on the first pass that holds it, not on every pass after.
+It never writes state.md.
+
+A pane id that is not a plain id or name (not a string, empty, or starting
+with "-") never reaches herdr: it is logged as an error and that check is
+skipped. A check of one repo that fails for any reason is logged as an
+error line, its alerts carried over, and the pass goes on to the next.
+
+--dry-run prints what the pass would do, sends nothing, starts nothing and
+writes nothing (not even the log), so it is safe against the real state.
+--state-dir defaults to the switchboard folder, <claude_dir>/switchboard from
+Orchi's settings.
+
+Exit 0 after a pass, 2 on bad arguments.
+"""
+import importlib.machinery
+import importlib.util
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+sys.path.insert(0, HERE)
+import orchi_settings  # noqa: E402
+
+DEFAULT_STATE_DIR = orchi_settings.switchboard_dir()
+ORCHI = os.path.dirname(HERE)
+CLAUDE_CONFIG_DIR = orchi_settings.claude_dir()
+NOTIFIER = "/opt/homebrew/bin/terminal-notifier"
+WAIT = os.path.join(HERE, "switchboard-wait")
+STATE_FILE = os.path.join(DEFAULT_STATE_DIR, "state.md")  # set per pass
+LOCK = os.path.join(HERE, "switchboard-lock")
+LOCK_FILE = os.path.join(DEFAULT_STATE_DIR, "lock")  # set per pass
+CTL = os.path.join(HERE, "switchboard-health-ctl")
+NAME = "switchboard"
+READY = ("idle", "done")
+CYCLE_PROMPTS = ("/clear", "/rename switchboard", "/switchboard resume")
+RESUME_PROMPTS = ("/rename switchboard", "/switchboard resume")
+HERDR_TIMEOUT = 30
+CLEAR_TIMEOUT = 30  # seconds to wait for /clear to start a new session
+CLEAR_POLL = 1
+START_TIMEOUT = 90  # seconds herdr gives Claude Code to come up
+STALL = 60 * 60
+RESTART_GAP = 60 * 60
+PASS_GAP = 15 * 60  # longer than this between passes: start counting again
+OFF_PASSES = 2  # passes in a row with nothing to watch before switching off
+
+
+PANE = re.compile(r"[A-Za-z0-9][A-Za-z0-9:_.-]*")
+HEADING = re.compile(r"^## (\S+) ([A-Z]+)\b", re.M)  # any entry, GRANT included
+CONTEXT = re.compile(r"context:[^\d\n]*([\d.]+)%")  # as the Orchi panel reads a status line
+ASKS = ("DECISION", "ACTION")  # entries that wait on Adam until closed
+
+
+def now():
+    return time.time()
+
+
+def valid_pane(pane):
+    """True for a pane id or agent name herdr can take as one argument, never a flag."""
+    return isinstance(pane, str) and PANE.fullmatch(pane) is not None
+
+
+def herdr(*args, timeout=HERDR_TIMEOUT):
+    """(result, None) when herdr succeeded, else (None, why)."""
+    try:
+        done = subprocess.run(["herdr"] + list(args), capture_output=True, text=True,
+                              timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return None, f"herdr {' '.join(args[:2])} timed out after {timeout} s"
+    except OSError as e:
+        return None, f"could not run herdr: {e}"
+    # herdr prints a result on stdout, and an error as JSON on stderr.
+    raw = done.stdout if done.stdout.strip() else done.stderr
+    try:
+        reply = json.loads(raw)
+    except ValueError:
+        reply = None
+    if done.returncode == 0:
+        result = reply.get("result") if isinstance(reply, dict) else None
+        return (result if isinstance(result, dict) else {}), None
+    try:
+        detail = reply["error"]["code"]
+    except (TypeError, KeyError):
+        detail = raw.strip()[:200]
+    return None, f"herdr {' '.join(args[:2])} failed (exit {done.returncode}) {detail}".strip()
+
+
+def load_lock():
+    """switchboard-lock's module, so the watcher and the skill judge a lock the same way."""
+    loader = importlib.machinery.SourceFileLoader("switchboard_lock", LOCK)
+    spec = importlib.util.spec_from_loader("switchboard_lock", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def read_state(path):
+    """The switchboard's state file as {"watching": [...], "paused": set of projects,
+    "cycle": line or None}, or None."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            lines = [l.strip() for l in f.read().splitlines()]
+    except OSError:
+        return None
+    watching, paused, section = [], set(), None
+    for line in lines:
+        if line.startswith("## "):
+            section = line[3:].strip()
+        elif section == "watching" and line and not line.startswith("#"):
+            parts = line.split()
+            if len(parts) >= 3:
+                repo = os.path.expanduser(" ".join(parts[1:-1]))
+                watching.append((parts[0], repo, parts[-1]))
+        elif section == "paused" and line and not line.startswith("CYCLE"):
+            paused.add(line.split()[0])
+    filled = [l for l in lines if l]
+    cycle = filled[-1] if filled and filled[-1].startswith("CYCLE") else None
+    return {"watching": watching, "paused": paused, "cycle": cycle}
+
+
+def find_switchboard(agents):
+    for field in ("name", "title"):
+        for a in agents:
+            if isinstance(a, dict) and a.get(field) == NAME:
+                return a
+    return None
+
+
+def find_pane(agents, pane):
+    for a in agents:
+        if isinstance(a, dict) and pane in (a.get("pane_id"), a.get("name")):
+            return a
+    return None
+
+
+def wait_status(repo, pane):
+    """switchboard-wait --status lines for one repo, repo name dropped, or (None, why).
+
+    The wait reads the same state file, so a CYCLE or DONE from before the run
+    started is left out and never counts as this run's end.
+    """
+    try:
+        done = subprocess.run([sys.executable, WAIT, "--status", "--state", STATE_FILE,
+                               f"{repo}:{pane}"],
+                              capture_output=True, text=True, timeout=HERDR_TIMEOUT + 15)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return None, f"switchboard-wait --status {repo}: {e}"
+    if done.returncode != 0:
+        return None, f"switchboard-wait --status {repo} exit {done.returncode}: {done.stderr.strip()[:200]}"
+    return [l.split(" ", 1)[1] for l in done.stdout.splitlines() if " " in l], None
+
+
+def load_json(path):
+    try:
+        with open(path) as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_json(path, d):
+    tmp = f"{path}.{os.getpid()}.tmp"
+    with open(tmp, "w") as f:
+        json.dump(d, f, indent=1, sort_keys=True)
+        f.write("\n")
+    os.replace(tmp, path)
+
+
+class Pass:
+    """One pass: what was seen, what was done, and the state carried to the next."""
+
+    def __init__(self, state, dry, t, state_dir):
+        self.state, self.dry, self.t, self.state_dir = state, dry, t, state_dir
+        alerts = state.get("alerts")
+        self.alerts = alerts if isinstance(alerts, dict) else {}
+        self.can_prompt = False  # the switchboard takes prompts and nothing has gone to it yet
+        self.switch_off = False
+        self.seen = set()
+        self.record = {"time": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(t)),
+                       "switchboard": None, "observed": [], "actions": [], "cleared": [],
+                       "notes": [], "errors": []}
+
+    def observe(self, repo, pane, condition):
+        """The alert for this fingerprint, its pass count raised by one."""
+        key = f"{repo}|{pane}|{condition}"
+        old = self.alerts.get(key)
+        a = old if isinstance(old, dict) else {"first": self.t, "count": 0}
+        a["count"] = a.get("count", 0) + 1
+        self.alerts[key] = a
+        self.seen.add(key)
+        self.record["observed"].append({"repo": repo, "pane": pane, "condition": condition,
+                                        "count": a["count"]})
+        a["key"] = key
+        return a
+
+    def keep(self, repo=None):
+        """Carry alerts over unchanged when a pass could not look at them."""
+        for key in self.alerts:
+            if repo is None or key.startswith(f"{repo}|"):
+                self.seen.add(key)
+
+    def act(self, **action):
+        self.record["actions"].append(action)
+        if self.dry and action.get("ok") is None and action.get("dry_run"):
+            what = action["kind"]
+            if what == "banner":
+                print(f"would banner: {action['text']}")
+            elif what == "restart":
+                print(f"would restart the switchboard in {ORCHI}")
+            else:
+                for text in action.get("texts") or [action["text"]]:
+                    print(f"would prompt {action['to']}: {text}")
+
+    def prompt(self, a, to, text):
+        if a.get("prompt"):
+            return
+        base = {"kind": "prompt", "fingerprint": a["key"], "to": to, "text": text}
+        if not self.can_prompt:
+            if not a.get("held"):
+                a["held"] = True
+                self.act(ok=None, note="switchboard blocked, cycling or already prompted "
+                                       "this pass, sent on a later pass", **base)
+        elif self.dry:
+            self.act(ok=None, dry_run=True, **base)
+            self.can_prompt = False
+        else:
+            err = send(to, [text])
+            a["prompt"] = err is None
+            self.can_prompt = err is not None
+            self.act(ok=err is None, error=err, **base)
+
+    def banner(self, a, text):
+        if a.get("banner"):
+            return
+        base = {"kind": "banner", "fingerprint": a["key"], "text": text}
+        if self.dry:
+            self.act(ok=None, dry_run=True, **base)
+            return
+        err = notify(text)
+        a["banner"] = err is None
+        self.act(ok=err is None, error=err, **base)
+
+    def save(self):
+        os.makedirs(self.state_dir, exist_ok=True)
+        save_json(os.path.join(self.state_dir, "health-state.json"), self.state)
+
+    def finish(self, state_dir):
+        alerts = {}
+        for key, a in self.alerts.items():
+            if key in self.seen:
+                a.pop("key", None)
+                alerts[key] = a
+            else:
+                self.record["cleared"].append(key)
+        self.state["alerts"] = alerts
+        self.state["last_pass"] = self.t
+        line = json.dumps(self.record, sort_keys=True)
+        if self.dry:
+            print(line)
+            if self.switch_off:
+                print("would switch the health watcher off: nothing to watch")
+            return
+        self.save()
+        with open(os.path.join(state_dir, "health.jsonl"), "a") as f:
+            f.write(line + "\n")
+        if self.switch_off:
+            # Last, because under launchd this ends the pass's own process.
+            subprocess.run([sys.executable, CTL, "off"], capture_output=True, timeout=60)
+
+
+def count_off(p, sb):
+    """Count passes with nothing to watch; the second in a row switches the watcher off."""
+    if sb is None or (not sb["watching"] and not sb["cycle"]):
+        n = p.state.get("off_count")
+        n = (n if isinstance(n, int) else 0) + 1
+    else:
+        n = 0
+    if n >= OFF_PASSES:
+        p.switch_off = True
+        p.act(kind="self-off")
+        n = 0
+    p.state["off_count"] = n
+
+
+def send(pane, texts):
+    """Send prompts in order, letting the agent settle between them. None or why not."""
+    for i, text in enumerate(texts):
+        if i:
+            # Best effort: a slash command may never show as working.
+            herdr("agent", "wait", pane, "--timeout", str(HERDR_TIMEOUT * 1000),
+                  timeout=HERDR_TIMEOUT + 5)
+        _, err = herdr("agent", "prompt", pane, text)
+        if err:
+            return err
+    return None
+
+
+def session_of(pane):
+    """(herdr's session id for the agent in pane, None), or (None, why not)."""
+    result, err = herdr("agent", "get", pane)
+    if err:
+        return None, err
+    try:
+        return result["agent"]["agent_session"]["value"], None
+    except (KeyError, TypeError):
+        return None, None
+
+
+def context_of(pane):
+    """The last context: figure on the pane's screen as a number, or None."""
+    try:
+        # The whole screen, because a list of running agents can sit below the status line.
+        done = subprocess.run(["herdr", "agent", "read", pane, "--source", "visible"],
+                              capture_output=True, encoding="utf-8", errors="replace",
+                              timeout=HERDR_TIMEOUT)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    figures = CONTEXT.findall(done.stdout) if done.returncode == 0 else []
+    try:
+        return float(figures[-1]) if figures else None
+    except ValueError:
+        return None
+
+
+def cycle(pane):
+    """Send the cycle prompts, the rest only once /clear has taken. None or why not."""
+    before, err = session_of(pane)
+    if err:
+        return err
+    if before is None and context_of(pane) is None:
+        return ("herdr shows no session id or context figure for the switchboard, "
+                "so /clear cannot be confirmed")
+    _, err = herdr("agent", "prompt", pane, CYCLE_PROMPTS[0])
+    if err:
+        return err
+    # /clear starts a new Claude Code session: herdr reports its new id, or in the
+    # app, which has no ids, the status line goes back to nothing used.
+    deadline = time.time() + CLEAR_TIMEOUT
+    while True:
+        if before is None:
+            if context_of(pane) == 0:
+                break
+        else:
+            after, _ = session_of(pane)
+            if after is not None and after != before:
+                break
+        if time.time() >= deadline:
+            return f"/clear did not start a new session within {CLEAR_TIMEOUT} s"
+        time.sleep(CLEAR_POLL)
+    # Best effort: if the new session lost herdr's name, the next pass still finds it.
+    herdr("agent", "rename", pane, NAME)
+    return send(pane, CYCLE_PROMPTS[1:])
+
+
+def notify(text):
+    """Show a macOS banner. None when terminal-notifier exited 0, else why not."""
+    try:
+        done = subprocess.run([NOTIFIER, "-title", "orchi switchboard", "-message", text],
+                              capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return f"terminal-notifier: {e}"
+    if done.returncode != 0:
+        detail = (done.stderr or done.stdout).strip()[:200]
+        return f"terminal-notifier exit {done.returncode} {detail}".strip()
+    return None
+
+
+def restart():
+    """(ok, pane, error) for one attempt to bring the switchboard back."""
+    result, err = herdr("workspace", "create", "--cwd", ORCHI, "--label", NAME,
+                        "--env", f"CLAUDE_CONFIG_DIR={CLAUDE_CONFIG_DIR}",
+                        # An oh-my-zsh update question at shell start eats the first
+                        # letter herdr types, so `claude` arrives as `laude`.
+                        "--env", "DISABLE_AUTO_UPDATE=true", "--no-focus")
+    if err:
+        return False, None, err
+    try:
+        pane = result["root_pane"]["pane_id"]
+    except (KeyError, TypeError):
+        pane = None
+    if not valid_pane(pane):
+        return False, None, f"herdr workspace create returned no usable root pane id: {pane!r}"
+    which = "app" if os.environ.get("ORCHI_HERDR") == "app" else "terminal"
+    held = load_lock().take(LOCK_FILE, pane, which)
+    if held:
+        herdr("pane", "close", pane)
+        return False, pane, held
+    _, err = herdr("pane", "rename", pane, NAME)
+    if not err:
+        _, err = herdr("agent", "start", NAME, "--kind", "claude", "--pane", pane,
+                       "--timeout", str(START_TIMEOUT * 1000), "--", "--model", "opus", "--effort", "high",
+                       timeout=START_TIMEOUT + 15)
+    if not err:
+        err = send(pane, RESUME_PROMPTS)
+    return err is None, pane, err
+
+
+def check_down(p):
+    """Check 1 when the switchboard is missing: restart, or banner if that already failed."""
+    held = load_lock().holder(LOCK_FILE)
+    if held:
+        p.record["notes"].append(f"no switchboard pane here, not restarted: {held}")
+        return
+    a = p.observe("", "", "switchboard-down")
+    last = p.state.get("last_restart")
+    if isinstance(last, (int, float)) and p.t - last < RESTART_GAP:
+        again = time.strftime("%H:%M", time.localtime(last + RESTART_GAP))
+        p.banner(a, f"The switchboard is down and was restarted under an hour ago. "
+                    f"No restart before {again}.")
+        return
+    if p.dry:
+        p.act(kind="restart", ok=None, dry_run=True)
+        return
+    p.state["last_restart"] = p.t
+    p.save()  # before the attempt, so a crash in it still holds the hourly cap
+    ok, pane, err = restart()
+    p.act(kind="restart", ok=ok, pane=pane, error=err)
+    if err and "agent_not_ready" in err:
+        p.banner(a, f"The switchboard restart stopped at agent_not_ready in pane {pane}. "
+                    f"No retry this hour.")
+
+
+def waiting_on_user(repo, words):
+    """True when the repo's latest entry is a DECISION or ACTION that --status shows open."""
+    try:
+        with open(os.path.join(repo, ".legwork", "switchboard.md"),
+                  encoding="utf-8", errors="replace") as f:
+            heads = HEADING.findall(f.read())
+    except (OSError, ValueError):
+        return False
+    if not heads or heads[-1][1] not in ASKS:
+        return False
+    return any(w[:2] == [heads[-1][0], heads[-1][1]] for w in words)
+
+
+def check_repo(p, agents, project, repo, pane, sw_idle, cycle, to, stalls):
+    """Checks 3 and 4 for one watched repo."""
+    lines, err = wait_status(repo, pane)
+    if err:
+        p.record["errors"].append(err)
+        p.keep(repo)
+        old = p.state.get("stalls", {}).get(f"{repo}|{pane}")
+        if old:
+            stalls[f"{repo}|{pane}"] = old
+        return
+    words = [l.split() for l in lines]
+    if sw_idle and not cycle and ["wait", "none"] in words:
+        a = p.observe(repo, "", "wait-none")
+        if a["count"] >= 2:
+            p.prompt(a, to, f"SWITCHBOARD HEALTH wait-none: {repo}")
+
+    agent = find_pane(agents, pane)
+    status = agent.get("agent_status") if agent else "gone"
+    trailing = any(len(w) > 1 and w[0] not in ("pane", "wait") and w[1] in ("CYCLE", "DONE")
+                   for w in words)
+    condition = None
+    if status == "blocked":
+        condition = "pane blocked"
+    elif status in READY and not trailing and not waiting_on_user(repo, words):
+        condition = "pane idle with no CYCLE or DONE"
+    if condition:
+        a = p.observe(repo, pane, f"check-in:{condition}")
+        if a["count"] >= 2:
+            p.prompt(a, to, f"SWITCHBOARD HEALTH check-in {project}: {condition}")
+
+    if status != "working":
+        return
+    try:
+        mtime = os.path.getmtime(os.path.join(repo, ".legwork", "switchboard.md"))
+    except OSError:
+        mtime = None
+    seq = agent.get("state_change_seq")
+    key = f"{repo}|{pane}"
+    old = p.state.get("stalls", {}).get(key)
+    if isinstance(old, dict) and old.get("mtime") == mtime and old.get("seq") == seq:
+        stalls[key] = old
+        still = p.t - old.get("since", p.t)
+        if still >= STALL:
+            a = p.observe(repo, pane, "stall")
+            minutes = int(still // 60)
+            p.prompt(a, to, f"SWITCHBOARD HEALTH stall {project}: {minutes} min with no change")
+            p.banner(a, f"{project}: pane {pane} working {minutes} min with no change "
+                        "to its switchboard file or herdr state.")
+    else:
+        stalls[key] = {"mtime": mtime, "seq": seq, "since": p.t}
+
+
+def check_cycle(p, marker, to, sw_idle):
+    """Check 2: send the cycle, resend it once, then banner if it never takes."""
+    a = p.observe("", to, f"cycle {marker[5:].strip()}")
+    sends = a.get("sends", 0)
+    base = {"kind": "cycle", "fingerprint": a["key"], "to": to,
+            "texts": list(CYCLE_PROMPTS), "attempt": sends + 1}
+    if not sw_idle:
+        if not sends and not a.get("held"):
+            a["held"] = True
+            p.act(ok=None, note="switchboard not idle, sent on a later pass", **base)
+    elif sends < 2:
+        if p.dry:
+            p.act(ok=None, dry_run=True, **base)
+            return
+        a["sends"] = sends + 1
+        err = cycle(to)
+        p.act(ok=err is None, error=err, **base)
+    else:
+        p.banner(a, f"The switchboard did not cycle: {marker} is still the last line of "
+                    f"its state file after two tries and pane {to} is idle. Send "
+                    f"/switchboard resume there yourself.")
+
+
+def run_pass(state_dir, dry):
+    global STATE_FILE, LOCK_FILE
+    STATE_FILE = os.path.join(state_dir, "state.md")
+    LOCK_FILE = os.path.join(state_dir, "lock")
+    p = Pass(load_json(os.path.join(state_dir, "health-state.json")), dry, now(), state_dir)
+    last = p.state.get("last_pass")
+    if isinstance(last, (int, float)) and p.t - last > PASS_GAP:
+        for a in p.alerts.values():
+            if isinstance(a, dict):
+                a["count"] = 0
+        p.state["stalls"] = {}
+        p.state["off_count"] = 0
+        p.record["notes"].append(f"gap of {int((p.t - last) // 60)} min since the last pass: "
+                                 "stall clocks and two-pass counts restarted")
+    sb = read_state(os.path.join(state_dir, "state.md"))
+    count_off(p, sb)
+    if sb is None:
+        p.record["notes"].append(f"no state file in {state_dir}: the switchboard has not run")
+        p.keep()
+        p.finish(state_dir)
+        return 0
+    result, err = herdr("agent", "list")
+    agents = result.get("agents") if result else None
+    if err or not isinstance(agents, list):
+        err = err or "herdr agent list gave no agents"
+        p.record["errors"].append(err)
+        p.keep()
+        p.banner(p.observe("", "", "herdr-unreachable"),
+                 f"herdr is not answering, so the switchboard cannot be checked: {err}")
+        p.finish(state_dir)
+        return 0
+
+    sw = find_switchboard(agents)
+    sw_idle = False
+    to = None
+    if sw is None and not sb["watching"]:
+        p.record["notes"].append("switchboard missing but its state file watches nothing: "
+                                 "not restarted")
+    elif sw is None:
+        check_down(p)
+    else:
+        to, status = sw.get("pane_id"), sw.get("agent_status")
+        p.record["switchboard"] = {"pane": to, "status": status}
+        if status == "blocked":
+            p.banner(p.observe("", to, "switchboard-blocked"),
+                     f"The switchboard is blocked on a prompt in pane {to}. It needs you.")
+        sw_idle = status in READY
+        # Working is nearly always its wait: a prompt queues until the wait returns.
+        p.can_prompt = sw_idle or status == "working"
+        if not valid_pane(to):
+            p.record["errors"].append(f"switchboard pane id {to!r} is not usable: nothing sent")
+            sw_idle = p.can_prompt = False
+        elif sb["cycle"]:
+            check_cycle(p, sb["cycle"], to, sw_idle)
+            # It is cycling, or stuck at its cycle: nothing else goes to it this pass.
+            p.can_prompt = False
+
+    stalls = {}
+    for project, repo, pane in sb["watching"]:
+        if project in sb["paused"]:
+            continue
+        try:
+            if not valid_pane(pane):
+                raise ValueError(f"pane id {pane!r} in the state file is not usable")
+            check_repo(p, agents, project, repo, pane, sw_idle, sb["cycle"], to, stalls)
+        except Exception as e:  # one bad repo must not stop the pass
+            p.record["errors"].append(f"check of {repo} failed: {type(e).__name__}: {e}")
+            p.keep(repo)
+            old = p.state.get("stalls")
+            for key, clock in (old.items() if isinstance(old, dict) else ()):
+                if key.startswith(f"{repo}|"):
+                    stalls[key] = clock
+    p.state["stalls"] = stalls
+    p.finish(state_dir)
+    return 0
+
+
+def main(argv):
+    if "-h" in argv or "--help" in argv:
+        print(__doc__.strip())
+        return 0
+    once, dry, state_dir = False, False, DEFAULT_STATE_DIR
+    args = list(argv)
+    while args:
+        arg = args.pop(0)
+        if arg == "--once":
+            once = True
+        elif arg == "--dry-run":
+            dry = True
+        elif arg == "--state-dir" and args:
+            state_dir = args.pop(0)
+        else:
+            once = False
+            break
+    if not once:
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+    return run_pass(os.path.abspath(os.path.expanduser(state_dir)), dry)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

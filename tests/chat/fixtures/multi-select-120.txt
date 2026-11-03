@@ -1,0 +1,40 @@
+⏺ User answered Claude's questions:
+  ⎿  · Tea or coffee? → Coffee
+
+⏺ You chose coffee.
+
+✻ Cooked for 16s · done 15:48
+
+❯ Use the AskUserQuestion tool once, with exactly three questions in one call. Question 1: 'Which drink?', header
+  'Drink', options Tea (Hot leaves), Coffee (Roasted beans). Question 2: 'Which snack?', header 'Snack', options Toast
+  (Warm bread), Fruit (Fresh), Nuts (Salty). Question 3: 'Where to sit?', header 'Seat', options Window (Bright), Aisle
+  (Quick). Do nothing else, and say nothing before calling the tool.
+
+⏺ User answered Claude's questions:
+  ⎿  · Which drink? → Coffee
+     · Which snack? → Nuts
+     · Where to sit? → Window
+
+⏺ Coffee, nuts, and a window seat.
+
+✻ Cogitated for 16s · done 15:49
+
+❯ Use the AskUserQuestion tool once, with one question: 'Which toppings?', header 'Toppings', multiSelect true, options
+  Cheese (Melted), Ham (Smoked), Olives (Black). Do nothing else, and say nothing before calling the tool.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☐ Toppings  ✔ Submit  →
+
+Which toppings?
+
+❯ 1. [ ] Cheese
+         Melted
+  2. [ ] Ham
+         Smoked
+  3. [ ] Olives
+         Black
+  4. [ ] Type something
+     Submit
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel

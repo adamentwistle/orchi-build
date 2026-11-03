@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Launch agent for bin/switchboard-health (decision 9): one pass every 5 minutes.
+
+  Do not copy this into ~/Library/LaunchAgents: it would load at every login. Use
+  bin/switchboard-health-ctl on|off|status, which renders it into the state directory
+  and loads it only when you ask. RunAtLoad is true, which here means "run one pass
+  when the watcher is switched on".
+
+  Placeholders:
+    @ORCHI@       absolute path of the orchi checkout, e.g. /Users/me/orchi-build
+    @STATE_DIR@   the health watcher's state directory, e.g. /Users/me/.claude/switchboard
+                  (must exist before loading: launchd does not create log directories)
+    @CLAUDE_BIN@  directory holding the claude binary, from `dirname $(which claude)`,
+                  e.g. /Users/me/.nvm/versions/node/v20.20.0/bin
+    @HOME@        the home folder, e.g. /Users/me
+    @ORCHI_SETTINGS@  a line of its own: when ORCHI_SETTINGS is set while rendering, it
+                  becomes an ORCHI_SETTINGS entry with that path, so the job reads the
+                  same settings, and so the same switchboard folder, as the dry run.
+                  When it is not set, the line goes and the job reads
+                  ~/.config/orchi/settings.json.
+
+  The watcher has no terminal, so ORCHI_HERDR=app tells bin/herdr it means the Herdr
+  app, and the launcher in ~/.local/libexec/orchi-app comes first on PATH so `herdr`
+  reaches bin/herdr at all. A launch agent's default PATH is /usr/bin:/bin:/usr/sbin:/sbin,
+  so PATH also adds ~/.local/bin for hc and herdr-app, which need nothing else from the
+  environment, and /opt/homebrew/bin for what bin/herdr-adapter runs on and the banners.
+  The script runs on /usr/bin/python3 (3.9). It runs with the default state directory, so
+  @STATE_DIR@ here only places the stdout and stderr logs.
+
+  switchboard-health-ctl fills the placeholders itself. By hand, the same plist goes in
+  @STATE_DIR@ and is loaded with launchctl bootstrap gui/$(id -u) <that plist>.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>orchi.switchboard-health</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/bin/python3</string>
+		<string>@ORCHI@/bin/switchboard-health</string>
+		<string>--once</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>ORCHI_HERDR</key>
+		<string>app</string>
+@ORCHI_SETTINGS@
+		<key>PATH</key>
+		<string>@HOME@/.local/libexec/orchi-app:@HOME@/.local/bin:/opt/homebrew/bin:@CLAUDE_BIN@:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+	<key>StartInterval</key>
+	<integer>300</integer>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>@STATE_DIR@/health.out.log</string>
+	<key>StandardErrorPath</key>
+	<string>@STATE_DIR@/health.err.log</string>
+</dict>
+</plist>

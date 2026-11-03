@@ -1,0 +1,1 @@
+../../wails/e2e/healer-hook.sh

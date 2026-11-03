@@ -1,0 +1,5 @@
+{
+    "global": {
+        "ctrl-shift-j": "panel-buttons.swap"
+    }
+}

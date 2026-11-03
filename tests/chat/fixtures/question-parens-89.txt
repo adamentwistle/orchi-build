@@ -1,0 +1,24 @@
+❯ Use the AskUserQuestion tool to ask exactly one question: 'Soup or salad?' with header
+  'Food', options Soup (Hot), Salad (Cold). Say nothing before calling the tool.
+
+⏺ User declined to answer questions
+  ⎿  · Soup or salad? (Soup (Hot) / Salad (Cold))
+
+✻ Crunched for 1s · done 17:43
+
+❯ Use the AskUserQuestion tool to ask exactly one question: 'Soup or salad?' with header
+  'Food', options Soup (Hot), Salad (Cold). Say nothing before calling the tool.
+─────────────────────────────────────────────────────────────────────────────────────────
+ ☐ Food
+
+Soup or salad?
+
+❯ 1. Soup (Hot)
+     Hot soup
+  2. Salad (Cold)
+     Cold salad
+  3. Type something.
+─────────────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel

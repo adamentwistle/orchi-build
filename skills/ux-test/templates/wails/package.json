@@ -1,0 +1,7 @@
+{
+  "name": "__NAME__-e2e",
+  "private": true,
+  "devDependencies": {
+    "@playwright/test": "__PW_PIN__"
+  }
+}

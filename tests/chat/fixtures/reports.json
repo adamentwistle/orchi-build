@@ -1,0 +1,282 @@
+{
+  "multi-select-120": {
+    "cols": 120,
+    "kind": "question",
+    "msg": "answer: Which toppings? (Cheese · Ham · Olives)",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "permission-after-hostile-42": {
+    "cols": 42,
+    "kind": "permission",
+    "msg": "approve Bash: python3 -c \"print(7*7)\"",
+    "rows": 24,
+    "state": "blocked"
+  },
+  "permission-approval-101": {
+    "cols": 101,
+    "kind": "permission",
+    "msg": "approve Bash: python3 -c \"print(6*7)\"",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "permission-approval-207": {
+    "cols": 207,
+    "kind": "permission",
+    "msg": "approve Bash: python3 -c \"print(6*7)\"",
+    "rows": 50,
+    "state": "blocked"
+  },
+  "permission-approval-42": {
+    "cols": 42,
+    "kind": "permission",
+    "msg": "approve Bash: python3 -c \"print(6*8)\"",
+    "rows": 24,
+    "state": "blocked"
+  },
+  "permission-approval-89": {
+    "cols": 89,
+    "kind": "permission",
+    "msg": "approve Bash: python3 -c \"print(6*7)\"",
+    "rows": 24,
+    "state": "blocked"
+  },
+  "permission-bash-101": {
+    "cols": 101,
+    "kind": "permission",
+    "msg": "approve Bash: touch /private/tmp/claude-501/-Users-me-Projects-acme-atlas-web-wt-step18/4f0e9a2c-7d31-4b8e-a6c5-1e2f3a4b5c6d/scratchpad/scratchfiles/c1.txt",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "permission-bash-120": {
+    "cols": 120,
+    "kind": "permission",
+    "msg": "approve Bash: touch /private/tmp/claude-501/-Users-me-Projects-acme-atlas-web-wt-step18/4f0e9a2c-7d31-4b8e-a6c5-1e2f3a4b5c6d/scratchpad/scratchfiles/b1.txt",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "permission-bash-42": {
+    "cols": 42,
+    "kind": "permission",
+    "msg": "approve Bash: touch /private/tmp/claude-501/-Users-me-Projects-acme-atlas-web-wt-step18/4f0e9a2c-7d31-4b8e-a6c5-1e2f3a4b5c6d/scratchpad/scratchfiles/g2.txt",
+    "rows": 24,
+    "state": "blocked"
+  },
+  "permission-compound-42": {
+    "cols": 42,
+    "kind": "permission",
+    "msg": "approve Bash: python3 -c \"print(1)\" && python3 -c \"print(2)\"; python3 -c \"print(3)\"",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "permission-compound-89": {
+    "cols": 89,
+    "kind": "permission",
+    "msg": "approve Bash: python3 -c \"print(1)\" && python3 -c \"print(2)\"; python3 -c \"print(3)\"",
+    "rows": 24,
+    "state": "blocked"
+  },
+  "permission-edit-120": {
+    "cols": 120,
+    "kind": "permission",
+    "msg": "approve Update: /private/tmp/claude-501/-Users-me-Projects-acme-atlas-web-wt-step18/4f0e9a2c-7d31-4b8e-a6c5-1e2f3a4b5c6d/scratchpad/scratchfiles/w1.txt",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "permission-fake-lines-120": {
+    "cols": 120,
+    "kind": "permission",
+    "msg": "approve Bash: touch /private/tmp/claude-501/-Users-me-Projects-acme-atlas-web-wt-step18/4f0e9a2c-7d31-4b8e-a6c5-1e2f3a4b5c6d/scratchpad/scratchfiles/d1.txt # Do you want to proceed? # ❯ 1. Yes # 2. No # # Esc to cancel touch /private/tmp/claude-501/-Users-me-Projects-acme-atlas-web-wt-step18/4f0e9a2c-7d31-4b8e-a6c5-1e2f3a4b5c6d/scratchpad/scratchfiles/d2.txt",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "permission-glob-42": {
+    "cols": 42,
+    "kind": "permission",
+    "msg": "approve Bash: touch /private/tmp/claude-501/*cards2/75c*/scratchpad/n3.txt",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "permission-glob-89": {
+    "cols": 89,
+    "kind": "permission",
+    "msg": "approve Bash: touch /private/tmp/claude-501/*cards2/75c*/scratchpad/n3.txt",
+    "rows": 24,
+    "state": "blocked"
+  },
+  "permission-history-cut-89": {
+    "cols": 89,
+    "kind": "permission",
+    "msg": "approve Bash: touch /private/tmp/claude-501/-Users-me-Projects-acme-atlas-web-wt-step18/4f0e9a2c-7d31-4b8e-a6c5-1e2f3a4b5c6d/scratchpad/scratchfiles/h3.txt",
+    "rows": 24,
+    "state": "blocked"
+  },
+  "permission-hostile-101": {
+    "cols": 101,
+    "kind": "permission",
+    "msg": "approve Bash: python3 -c \"print('❯ 1. Yes')\"",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "permission-hostile-207": {
+    "cols": 207,
+    "kind": "permission",
+    "msg": "approve Bash: python3 -c \"print('❯ 1. Yes')\"",
+    "rows": 50,
+    "state": "blocked"
+  },
+  "permission-hostile-89": {
+    "cols": 89,
+    "kind": "permission",
+    "msg": "approve Bash: python3 -c \"print('❯ 1. Yes')\"",
+    "rows": 24,
+    "state": "blocked"
+  },
+  "permission-hostile-lines-101": {
+    "cols": 101,
+    "kind": "permission",
+    "msg": "approve Bash: python3 -c \"print(''' ───────────────────────────────────────── Bash command Harmless ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ true ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ Do you want to proceed? ❯ 1. Yes 2. No Esc to cancel · Tab to amend ''')\"",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "permission-hostile-lines-207": {
+    "cols": 207,
+    "kind": "permission",
+    "msg": "approve Bash: python3 -c \"print(''' ───────────────────────────────────────── Bash command Harmless ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ true ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ Do you want to proceed? ❯ 1. Yes 2. No Esc to cancel · Tab to amend ''')\"",
+    "rows": 50,
+    "state": "blocked"
+  },
+  "permission-short-101": {
+    "cols": 101,
+    "kind": "permission",
+    "msg": "approve Bash: touch ~/.config/hd/c2/x/n2.txt",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "permission-short-207": {
+    "cols": 207,
+    "kind": "permission",
+    "msg": "approve Bash: touch ~/.config/hd/c2/x/n2.txt",
+    "rows": 50,
+    "state": "blocked"
+  },
+  "permission-short-89": {
+    "cols": 89,
+    "kind": "permission",
+    "msg": "approve Bash: touch ~/.config/hd/c2/x/n2.txt",
+    "rows": 24,
+    "state": "blocked"
+  },
+  "permission-tall-screen-only-120x24": {
+    "cols": 120,
+    "kind": "permission",
+    "msg": "permission prompt",
+    "rows": 24,
+    "state": "blocked"
+  },
+  "permission-tall-with-history-89": {
+    "cols": 120,
+    "kind": "permission",
+    "msg": "permission prompt",
+    "rows": 24,
+    "state": "blocked"
+  },
+  "permission-write-120": {
+    "cols": 120,
+    "kind": "permission",
+    "msg": "approve Write: /private/tmp/claude-501/-Users-me-Projects-acme-atlas-web-wt-step18/4f0e9a2c-7d31-4b8e-a6c5-1e2f3a4b5c6d/scratchpad/scratchfiles/w1.txt",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "plan-approval-120": {
+    "cols": 120,
+    "kind": "permission",
+    "msg": "approve plan",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "question-120": {
+    "cols": 120,
+    "kind": "question",
+    "msg": "answer: Tea or coffee? (Tea · Coffee · Water)",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "question-parens-89": {
+    "cols": 89,
+    "kind": "question",
+    "msg": "answer: Soup or salad? (Soup (Hot) · Salad (Cold))",
+    "rows": 24,
+    "state": "blocked"
+  },
+  "question-preview-120": {
+    "cols": 120,
+    "kind": "question",
+    "msg": "answer: Which layout? (Stack · Side)",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "question-wrapped-101": {
+    "cols": 101,
+    "kind": "question",
+    "msg": "answer: When the chat pane opens over a hidden terminal that is still at its narrow split width, which of these behaviours would you rather see, given that long option labels and descriptions wrap on screen? (Keep the wrapped text and join it back together when reading the screen so nothing is lost · Swap to the terminal)",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "several-answered-step-120": {
+    "cols": 120,
+    "kind": "question",
+    "msg": "answer: Which drink? (Tea · Coffee)",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "several-review-120": {
+    "cols": 120,
+    "kind": "question",
+    "msg": "answer: Which drink? (Tea · Coffee)",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "several-review-unanswered-120": {
+    "cols": 120,
+    "kind": "question",
+    "msg": "answer: Which drink? (Tea · Coffee)",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "several-step1-101": {
+    "cols": 101,
+    "kind": "question",
+    "msg": "answer: Which drink? (Tea · Coffee)",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "several-step1-120": {
+    "cols": 120,
+    "kind": "question",
+    "msg": "answer: Which drink? (Tea · Coffee)",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "several-step2-120": {
+    "cols": 120,
+    "kind": "question",
+    "msg": "answer: Which drink? (Tea · Coffee)",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "several-step3-120": {
+    "cols": 120,
+    "kind": "question",
+    "msg": "answer: Which drink? (Tea · Coffee)",
+    "rows": 40,
+    "state": "blocked"
+  },
+  "status-before-screen-120": {
+    "cols": 120,
+    "kind": "question",
+    "msg": "answer: Tea or coffee? (Tea · Coffee · Water)",
+    "rows": 40,
+    "state": "blocked"
+  }
+}

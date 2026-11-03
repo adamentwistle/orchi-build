@@ -1,0 +1,28 @@
+You are currently using your subscription to power your Claude Code usage
+
+Current week (all models): 44% used · resets Sep 21 at 9am (Europe/Paris)
+Current week (Fable): 6% used · resets Sep 21 at 9am (Europe/Paris)
+
+What's contributing to your usage?
+Approximate · sessions on this machine only · shares overlap
+
+Last 24h · 3812 requests · 141 sessions
+  68%  Give "general-purpose" subagents a cheaper model
+  66%  Start fresh when you switch tasks · run /clear
+  61%  Run fewer sessions at once · up to 19 at once
+  24%  Turn off skills you don't use · 15k tokens per request
+  17%  Stop sessions you no longer need · some ran 7 hours or more
+  Top skills: /go 4%, /test-design 3%, /benchmark-suite 2%, /superpowers:writing-plans 1%, /wrap 1%, /data-safety 1%, /pickup 1%, /pr-drafter 1%, +5 more
+  Top subagents: general-purpose 19%, Explore 3%, long-runner 2%, fanout 1%, code-reviewer 1%
+  Top plugins: superpowers 2%
+  Top MCP servers: claude.ai Calendar 1%, plugin:playwright:playwright 1%
+
+Last 7d · 15206 requests · 598 sessions
+  71%  Start fresh when you switch tasks · run /clear
+  70%  Give "general-purpose" subagents a cheaper model
+  58%  Run fewer sessions at once · up to 27 at once
+  21%  Turn off MCP servers you don't use · 31k tokens per request
+  Top skills: /pr-drafter 6%, /go 3%, /herdr 2%, /test-design 2%, /bugbot 1%, /pickup 1%, /review 1%, /wrap 1%, +2 more
+  Top subagents: general-purpose 15%, long-runner 2%, fanout 1%, bugbot 1%, pr-drafter 1%, Explore 1%
+  Top plugins: superpowers 1%
+  Top MCP servers: plugin:playwright:playwright 2%, claude.ai Calendar 1%

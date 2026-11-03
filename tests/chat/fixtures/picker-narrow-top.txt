@@ -1,0 +1,22 @@
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+   Select model
+   Switch between Claude models. Your
+   pick becomes the default for new
+   sessions. For other/previous model
+   names, specify with --model.
+
+     1. Default (recomme…  Opus 5.5 ·
+                           Best for
+                           everyday,
+                           complex
+                           tasks
+   ❯ 2. Opus               Opus 5.5 ·
+                           Best for
+                           everyday,
+                           complex
+                           tasks
+   ↓ 3. Fable              Fable 5.1 ·
+                           Most capable
+                           for your
+                           hardest and
+                           longest-runn ↓

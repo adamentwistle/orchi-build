@@ -1,0 +1,24 @@
+
+⏺ OK
+
+✻ Cogitated for 1s · done 18:11
+
+❯ /model
+  ⎿  Set model to Sonnet 5.5 for this
+     session only
+
+❯ /model
+  ⎿  Set model to Haiku 5.5 for this
+     session only with high effort
+                  Z                   [-]
+          ▐█████▌z
+▁▁▁      ▝▜█████▛▘
+↑ 2 more
+
+──────────────────────────────────────────
+❯ 
+──────────────────────────────────────────
+   5hr:  ░░░░░░░░░░ 0%  2hr 47m  ...
+   model:  Haiku 5.5  -  high  co...
+   dir:  ~/Projects/acme/atlas-web...
+  ⏵⏵ auto mode on (shift+tab to cycle) ·

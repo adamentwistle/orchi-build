@@ -1,0 +1,22 @@
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+   Select model
+   Switch between Claude models. Your
+   pick becomes the default for new
+   sessions. For other/previous model
+   names, specify with --model.
+
+   ↑ 3. Fable              Fable 5.1 ·
+                           Most capable
+                           for your
+                           hardest and
+                           longest-runn
+                           ing tasks
+     4. Sonnet             Sonnet 5.5 ·
+                           Efficient
+                           for routine
+                           tasks
+   ❯ 5. Haiku ✔            Haiku 5.5 ·
+                           Fastest for
+                           quick
+                           answers
+                                        ↓

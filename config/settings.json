@@ -1,0 +1,6 @@
+{
+  "theme": { "light": "orchi-light", "dark": "orchi-dark" },
+  "font": "Geist Mono",
+  "ui_font": "Geist",
+  "sounds": { "enabled": true, "done": "sounds/done.mp3", "blocked": "sounds/needs-you.mp3" }
+}

@@ -1,0 +1,40 @@
+  /private/tmp/claude-501/-Users-me-Projects-acme-atlas-web-wt-step18/4f0e9a2c-7d31-4b8e-a6c5-1e2f3a
+  4b5c6d/scratchpad/scratchfiles/c1.txt
+
+  Ran 1 shell command
+  ⎿  Interrupted · What should Claude do instead?
+
+✻ Brewed for 33s · done 15:53
+
+❯ Use the AskUserQuestion tool once, with one question and say nothing first. Question text: 'When
+  the chat pane opens over a hidden terminal that is still at its narrow split width, which of these
+  behaviours would you rather see, given that long option labels and descriptions wrap on screen?'.
+  Header 'Width'. Options: label 'Keep the wrapped text and join it back together when reading the
+  screen so nothing is lost' with description 'This keeps the words exactly as Claude Code printed
+  them, including anything that runs over the end of a line in a narrow terminal'; label 'Swap to
+  the terminal' with description 'Short'.
+
+⏺ User answered Claude's questions:
+  ⎿  · When the chat pane opens over a hidden terminal that is still at its narrow split width, which
+     of these behaviours would you rather see, given that long option labels and descriptions wrap
+     on screen? → Swap to the terminal
+
+❯ Use the AskUserQuestion tool once, with exactly two questions in one call. Say nothing first.
+  Question 1: 'Which drink?', header 'Drink', options Tea (Hot leaves), Coffee (Roasted beans).
+  Question 2: 'Which snack?', header 'Snack', options Toast (Warm bread), Fruit (Fresh).
+  ⎿  UserPromptSubmit hook [bash "${CLAUDE_PLUGIN_ROOT}/scripts/user-prompt-hook.sh"] timed out after
+     30s — output discarded. Raise the hook's "timeout" to allow more time.
+─────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☐ Drink  ☐ Snack  ✔ Submit  →
+
+Which drink?
+
+❯ 1. Tea
+     Hot leaves
+  2. Coffee
+     Roasted beans
+  3. Type something.
+─────────────────────────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel

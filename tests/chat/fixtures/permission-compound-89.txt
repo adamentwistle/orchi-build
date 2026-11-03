@@ -1,0 +1,24 @@
+
+❯ Run this exact bash command with the Bash tool and do nothing else: python3 -c
+  "print(1)" && python3 -c "print(2)"; python3 -c "print(3)"
+
+⏺ Running three python3 print commands in sequence
+  ⎿  $ python3 -c "print(1)" && python3 -c "print(2)"; python3 -c "print(3)"
+
+─────────────────────────────────────────────────────────────────────────────────────────
+ Bash command
+ Tip: auto mode handles these prompts for you — choose "switch to auto mode" below
+ Run three python3 print commands in sequence
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ python3 -c "print(1)" && python3 -c "print(2)"; python3 -c "print(3)"
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ This command requires approval
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, and don't ask again for "python3 -c \"print(1)\"", "python3 -c \"print(2)\"",
+      and "python3 -c \"print(3)\"" commands in /Users/me/Projects/acme/atlas-web
+   3. Yes, and switch to auto mode · auto mode handles these prompts for you
+   4. No
+
+ Esc to cancel · Tab to amend

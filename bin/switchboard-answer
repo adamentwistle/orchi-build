@@ -1,0 +1,269 @@
+#!/usr/bin/env python3
+"""Relay Adam's answer or delegation to an orchestrator and record it.
+
+Usage: switchboard-answer REPO PANE ID ANSWER
+       switchboard-answer --board FILE PANE ID ANSWER
+       switchboard-answer --grant REPO PANE WORDS --scope SCOPE
+       switchboard-answer --close REPO ID WHY
+       switchboard-answer --close --board FILE ID WHY
+       switchboard-answer --finish REPO WHY
+
+The first form sends "SWITCHBOARD ANSWER <id>: <answer>" to the pane with
+`herdr agent prompt`, then appends "ANSWERED <id>: <answer> (<date>)" to
+REPO/.legwork/switchboard.md. It refuses, sending and writing nothing, when
+ID is not an open DECISION or ACTION in that file: no such entry, already
+ANSWERED, or replaced. Open is decided by switchboard-wait's own parser.
+
+--board does the same on FILE, for a planner's board
+(<claude_dir>/switchboard/planning/<session>.md), which lives outside any
+repo. FILE must exist.
+
+--grant records a delegation: it appends
+  ## <project>-gN GRANT <date>
+  Adam: "<words>"
+  Scope: <scope>
+to the file (N is one more than the GRANT entries already there, project
+comes from the ids of the existing entries, else the repo directory name)
+and sends "SWITCHBOARD GRANT <project>-gN: <words> (Scope: <scope>)" to the
+pane.
+
+--close marks an open DECISION or ACTION as settled: a later entry, or Adam,
+shows it no longer needs an answer. It appends
+"ANSWERED <id>: closed by the switchboard: <why> (<date>)" and sends nothing,
+so it needs no pane and the orchestrator hears nothing. It refuses what the
+first form refuses.
+
+--finish ends a run on Adam's word, for a run that will never write its own
+DONE. It closes every entry still open, as "ANSWERED <id>: closed by Adam: run
+finished (<date>)", then appends "## <project>-<n> DONE <date>" with WHY under
+it, n being one more than the highest number in the file. It sends nothing. A
+board that already ends in a DONE with nothing open is left as it is.
+
+The answer, words and scope are single arguments passed through byte for
+byte: quotes, colons and spaces are kept. A newline (or carriage return) is
+refused, because it would submit the prompt early and split the file line.
+The date is "%F %H:%M", local time.
+
+If herdr fails (including a missing herdr or a 30 s timeout) nothing is
+written. The send comes first; the write follows only on success.
+
+Exit 0 done, 1 refused or failed, 2 bad arguments.
+"""
+import fcntl
+import importlib.machinery
+import importlib.util
+import os
+import re
+import subprocess
+import sys
+import time
+
+HERDR_TIMEOUT = 30
+HERE = os.path.dirname(os.path.realpath(__file__))
+
+
+def load_wait():
+    """switchboard-wait's module, for its parser, so both agree on what is open."""
+    loader = importlib.machinery.SourceFileLoader(
+        "switchboard_wait", os.path.join(HERE, "switchboard-wait"))
+    spec = importlib.util.spec_from_loader("switchboard_wait", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def fail(msg, code=1):
+    print(f"switchboard-answer: {msg}", file=sys.stderr)
+    return code
+
+
+def bad_text(label, text):
+    """An error message when text cannot go on one line, else None."""
+    if not text.strip():
+        return f"{label} is empty"
+    if "\n" in text or "\r" in text:
+        return f"{label} has a newline; send it as one line"
+    return None
+
+
+def send(pane, text):
+    """None when herdr took the prompt, else why not."""
+    try:
+        done = subprocess.run(["herdr", "agent", "prompt", pane, text],
+                              capture_output=True, text=True, timeout=HERDR_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        return f"herdr timed out after {HERDR_TIMEOUT} s"
+    except OSError as e:
+        return f"could not run herdr: {e}"
+    if done.returncode != 0:
+        detail = (done.stderr or done.stdout).strip()
+        return f"herdr failed (exit {done.returncode}) {detail}".strip()
+    return None
+
+
+def append(path, text):
+    """Append text, starting a new line first if the file does not end in one."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    lead = ""
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            if f.tell():
+                f.seek(-1, os.SEEK_END)
+                lead = "" if f.read(1) == b"\n" else "\n"
+    except OSError:
+        pass
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(lead + text)
+
+
+def stamp():
+    return time.strftime("%F %H:%M")
+
+
+def locked(repo):
+    """Hold a per-repo lock so two relays cannot both pass the open check."""
+    os.makedirs(os.path.join(repo, ".legwork"), exist_ok=True)
+    f = open(os.path.join(repo, ".legwork", "switchboard-answer.lock"), "a")
+    fcntl.flock(f, fcntl.LOCK_EX)
+    return f
+
+
+def locked_board(path):
+    """As locked(), for a board with no .legwork beside it. Answers only append, so
+    the file itself can hold the lock."""
+    f = open(path, "a")
+    fcntl.flock(f, fcntl.LOCK_EX)
+    return f
+
+
+def is_open(path, ident):
+    """Whether ident is an open DECISION or ACTION on the board, by the wait's own parser."""
+    wait = load_wait()
+    entries, answered = wait.parse(path)
+    return ident in {entries[i][0] for i in wait.reportable(entries, answered, -1, False)
+                     if entries[i][1] in wait.ASKS}
+
+
+def answer(path, hold, pane, ident, text):
+    """Relay an answer on the board at path, with hold() held for the check and the write."""
+    err = bad_text("answer", text)
+    if err:
+        return fail(err, 2)
+    with hold():
+        if not is_open(path, ident):
+            return fail(f"{ident} is not an open DECISION or ACTION in {path}")
+        err = send(pane, f"SWITCHBOARD ANSWER {ident}: {text}")
+        if err:
+            return fail(err)
+        append(path, f"ANSWERED {ident}: {text} ({stamp()})\n")
+    return 0
+
+
+def close(path, hold, ident, why):
+    """Mark an entry on the board at path settled. Nothing goes to any pane."""
+    err = bad_text("reason", why)
+    if err:
+        return fail(err, 2)
+    with hold():
+        if not is_open(path, ident):
+            return fail(f"{ident} is not an open DECISION or ACTION in {path}")
+        append(path, f"ANSWERED {ident}: closed by the switchboard: {why} ({stamp()})\n")
+    return 0
+
+
+NUMBERED = re.compile(r"^## \S+?-(\d+) ", re.M)
+
+
+def finish(repo, why):
+    """Close what's open on the repo's board and end its run. Nothing goes to any pane."""
+    err = bad_text("reason", why)
+    if err:
+        return fail(err, 2)
+    wait = load_wait()
+    path = os.path.join(repo, ".legwork", "switchboard.md")
+    with locked(repo):
+        entries, answered = wait.parse(path)
+        still = [entries[i][0] for i in wait.reportable(entries, answered, -1, False)
+                 if entries[i][1] in wait.ASKS]
+        if not still and entries and entries[-1][1] == "DONE":
+            return 0
+        for ident in still:
+            append(path, f"ANSWERED {ident}: closed by Adam: run finished ({stamp()})\n")
+        try:
+            with open(path, encoding="utf-8", errors="replace") as f:
+                numbers = [int(n) for n in NUMBERED.findall(f.read())]
+        except OSError:
+            numbers = []
+        project = (entries[0][0].rpartition("-")[0] if entries else "") \
+            or os.path.basename(repo)
+        append(path, f"\n## {project}-{max(numbers, default=0) + 1} DONE {stamp()}\n{why}\n\n")
+    return 0
+
+
+GRANT = re.compile(r"^## \S+ GRANT\b", re.M)
+
+
+def grant(repo, pane, words, scope):
+    for label, text in (("words", words), ("scope", scope)):
+        err = bad_text(label, text)
+        if err:
+            return fail(err, 2)
+    wait = load_wait()
+    path = os.path.join(repo, ".legwork", "switchboard.md")
+    with locked(repo):
+        try:
+            with open(path, encoding="utf-8", errors="replace") as f:
+                count = len(GRANT.findall(f.read()))
+        except OSError:
+            count = 0
+        entries = wait.parse(path)[0]
+        project = (entries[0][0].rpartition("-")[0] if entries else "") \
+            or os.path.basename(repo)
+        ident = f"{project}-g{count + 1}"
+        err = send(pane, f"SWITCHBOARD GRANT {ident}: {words} (Scope: {scope})")
+        if err:
+            return fail(err)
+        append(path, f'## {ident} GRANT {stamp()}\nAdam: "{words}"\nScope: {scope}\n\n')
+    return 0
+
+
+def main(argv):
+    if argv[:1] == ["--grant"]:
+        if len(argv) != 6 or argv[4] != "--scope":
+            return fail("usage: switchboard-answer --grant REPO PANE WORDS --scope SCOPE", 2)
+        return grant(os.path.abspath(os.path.expanduser(argv[1])), argv[2], argv[3], argv[5])
+    if argv[:1] == ["--finish"]:
+        if len(argv) != 3:
+            return fail("usage: switchboard-answer --finish REPO WHY", 2)
+        return finish(os.path.abspath(os.path.expanduser(argv[1])), argv[2])
+    if argv[:2] == ["--close", "--board"]:
+        if len(argv) != 5:
+            return fail("usage: switchboard-answer --close --board FILE ID WHY", 2)
+        board = os.path.abspath(os.path.expanduser(argv[2]))
+        if not os.path.isfile(board):
+            return fail(f"no board at {board}")
+        return close(board, lambda: locked_board(board), argv[3], argv[4])
+    if argv[:1] == ["--close"]:
+        if len(argv) != 4:
+            return fail("usage: switchboard-answer --close REPO ID WHY", 2)
+        repo = os.path.abspath(os.path.expanduser(argv[1]))
+        return close(os.path.join(repo, ".legwork", "switchboard.md"), lambda: locked(repo),
+                     argv[2], argv[3])
+    if argv[:1] == ["--board"]:
+        if len(argv) != 5:
+            return fail("usage: switchboard-answer --board FILE PANE ID ANSWER", 2)
+        board = os.path.abspath(os.path.expanduser(argv[1]))
+        if not os.path.isfile(board):
+            return fail(f"no board at {board}")
+        return answer(board, lambda: locked_board(board), argv[2], argv[3], argv[4])
+    if len(argv) != 4 or argv[0].startswith("--"):
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+    repo = os.path.abspath(os.path.expanduser(argv[0]))
+    return answer(os.path.join(repo, ".legwork", "switchboard.md"), lambda: locked(repo),
+                  argv[1], argv[2], argv[3])
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
