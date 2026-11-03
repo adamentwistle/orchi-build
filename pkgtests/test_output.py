@@ -6,7 +6,7 @@ import re
 import subprocess
 import sys
 
-from engine_help import DRIVER, child_env, home, in_terminal  # noqa: F401
+from engine_help import DRIVER, child_env, home, in_terminal, tools  # noqa: F401
 from orchi import engine, screen, store
 
 SGR = re.compile(r"\x1b\[([0-9;]*)m")
@@ -134,22 +134,28 @@ def run_orchi(*argv):
                           timeout=30)
 
 
-def test_bare_orchi_in_a_terminal(home):
+def test_bare_orchi_in_a_terminal(home, tools):
     code, shown = in_terminal(orchi(), child_env())
     assert code == 0, shown
-    assert lines_of(shown) == ["✓  Orchi files", "✓  Settings folder  created", "✓  Settings",
-                               "Changed: Settings folder."]
+    lines = lines_of(shown)
+    assert lines[:3] == ["✓  Orchi files", "✓  Settings folder  created", "✓  Settings"]
+    assert [line.split()[1] for line in lines[3:-1]] == ["Themes", "Mods", "Layout", "Keys", "Sounds", "App",
+                                                         "Launcher", "Browser"]
+    assert lines[-1] == ("Changed: Settings folder, Themes, Mods, Layout, Keys, Sounds, App settings, Launcher, "
+                         "Browser pane.")
 
 
-def test_doctor_in_a_terminal_under_no_color_piped_and_with_json(home):
+def test_doctor_in_a_terminal_under_no_color_piped_and_with_json(home, tools):
     code, shown = in_terminal(orchi("doctor"), child_env())
     assert code == 1, shown
-    assert lines_of(shown) == ["✓  Orchi files", "!  Settings folder  missing", "✓  Settings",
-                               "Run orchi to fix: Settings folder."]
+    lines = lines_of(shown)
+    assert lines[:3] == ["✓  Orchi files", "!  Settings folder  missing", "✓  Settings"]
+    assert lines[-1] == ("Run orchi to fix: Settings folder, Themes, Mods, Layout, Keys, Sounds, App settings, "
+                         "Launcher, Browser pane.")
 
     code, shown = in_terminal(orchi("doctor"), child_env(NO_COLOR="1"))
     assert code == 1 and "\x1b" not in shown
-    assert shown.splitlines()[-1] == "Run orchi to fix: Settings folder."
+    assert shown.splitlines()[-1].startswith("Run orchi to fix: Settings folder, Themes")
 
     done = run_orchi("doctor")
     assert done.returncode == 1 and "\x1b" not in done.stdout
@@ -159,16 +165,21 @@ def test_doctor_in_a_terminal_under_no_color_piped_and_with_json(home):
     assert done.returncode == 1
     data = json.loads(done.stdout)
     assert [(s["name"], s["status"]) for s in data["steps"]] == [
-        ("Orchi files", "ok"), ("Settings folder", "needs-fix"), ("Settings", "ok")]
+        ("Orchi files", "ok"), ("Settings folder", "needs-fix"), ("Settings", "ok"), ("Themes", "needs-fix"),
+        ("Mods", "needs-fix"), ("Layout", "needs-fix"), ("Keys", "needs-fix"), ("Sounds", "needs-fix"),
+        ("App settings", "needs-fix"), ("Launcher", "needs-fix"), ("Browser pane", "needs-fix")]
 
 
-def test_bare_orchi_piped_and_with_json(home):
+def test_bare_orchi_piped_and_with_json(home, tools):
     done = run_orchi("--json")
     assert done.returncode == 0, done.stderr
-    assert json.loads(done.stdout)["changed"] == ["Settings folder"]
+    assert json.loads(done.stdout)["changed"] == [
+        "Settings folder", "Themes", "Mods", "Layout", "Keys", "Sounds", "App settings", "Launcher", "Browser pane"]
     done = run_orchi()
     assert done.returncode == 0
-    assert done.stdout.splitlines() == ["✓  Orchi files", "✓  Settings folder", "✓  Settings", "All set."]
+    lines = done.stdout.splitlines()
+    assert lines[:3] == ["✓  Orchi files", "✓  Settings folder", "✓  Settings"]
+    assert lines[-1] == "All set." and len(lines) == 12
 
 
 def test_output_that_breaks_off_still_exits_with_the_run_code(home, tmp_path):

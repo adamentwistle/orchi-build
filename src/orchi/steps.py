@@ -1,7 +1,7 @@
 """The steps bare `orchi` and `orchi doctor` run, in order. Each is one thing Orchi checks and can fix."""
 import os
 
-from orchi import paths, settings
+from orchi import herdr, paths, settings
 from orchi.engine import Step, broken, needs_fix, ok
 
 
@@ -47,4 +47,4 @@ class Settings(Step):
 
 
 def steps():
-    return [OrchiFiles(), SettingsFolder(), Settings()]
+    return [OrchiFiles(), SettingsFolder(), Settings(), *herdr.steps()]

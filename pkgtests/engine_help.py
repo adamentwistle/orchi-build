@@ -32,6 +32,18 @@ def home(tmp_path, monkeypatch):
     return folder
 
 
+@pytest.fixture
+def tools(home, tmp_path, monkeypatch):
+    """A node and an agent-browser that will do, first on PATH, so the browser pane step doesn't depend on this Mac."""
+    folder = tmp_path / "tools"
+    folder.mkdir()
+    for name, text in (("node", "#!/bin/sh\necho 22\n"), ("agent-browser", "#!/bin/sh\nexit 0\n")):
+        (folder / name).write_text(text)
+        (folder / name).chmod(0o755)
+    monkeypatch.setenv("PATH", f"{folder}{os.pathsep}{os.environ['PATH']}")
+    return folder
+
+
 def snapshot(root):
     """Every path under root with what is there: a file's bytes, a link's target, or that it is a folder, and its
     modification time, so any write, even of the same bytes, shows."""

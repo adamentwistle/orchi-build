@@ -19,7 +19,7 @@ def skill(name):
 
 
 def test_the_link_loop_names_every_skill_once():
-    # herdr-browser is the one left out: scripts/install-browser.sh copies it into each profile.
+    # herdr-browser is the one left out: the Browser pane step of orchi copies it into each profile.
     text = SETUP.read_text()
     loop = re.search(r"^for s in (.+); do .*\$O/skills/\$s", text, re.M).group(1).split()
     names = {p.name for p in SKILLS.iterdir() if p.is_dir()}

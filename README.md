@@ -50,8 +50,9 @@ keychain's generic password under the service `orchi-linear`. Until setup moves 
 ## Use it
 
 ```bash
-scripts/install.sh            # put the themes, mods, layout, keys and sounds into Herdr
 uv tool install .             # install the `orchi` command from this checkout
+orchi                         # put the themes, mods, layout, keys, sounds and browser pane into Herdr
+orchi doctor                  # check them and change nothing
 orchi tickets                 # the open tickets of every chosen source; --json for agents
 orchi tickets show ENG-12     # one ticket by its reference
 scripts/herdr-dev             # run a private Herdr for testing

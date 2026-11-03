@@ -47,6 +47,7 @@ def scratch_env(base):
         UV_NO_CONFIG="1",
     )
     env.pop("ORCHI_SETTINGS", None)
+    env.pop("CLAUDE_CONFIG_DIR", None)
     return env
 
 

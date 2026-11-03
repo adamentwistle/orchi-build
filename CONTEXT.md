@@ -29,3 +29,7 @@
   Orchi panel, the chat pane, usage-guard and switchboard-wait read it.
 - **usage-watch**: the launch agent that reads Claude Code's own login from the keychain and keeps the usage cache fresh.
   See `docs/usage-watch.md`.
+- **Content**: the themes, mods, layout, keys, sounds, config and browser files Orchi ships as package data
+  (`orchi.paths.data_dir()`). The Herdr steps copy it into Herdr's app home.
+- **Private window**: a Herdr whose app home is not `~/.config/herdr-app`, such as one from `scripts/herdr-dev`. It
+  shares `~/.local` with the real one, so Orchi leaves the launcher, the browser command and the skill alone there.

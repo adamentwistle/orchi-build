@@ -204,7 +204,7 @@ def test_on_without_the_launcher_is_an_error_and_loads_nothing(ctl):
     rc, _, err = ctl.run("on")
     assert rc == 1
     assert "launcher" in err
-    assert "run scripts/install.sh in your Orchi checkout" in err
+    assert "run orchi to write it" in err
     assert "herdr-build" not in err
     assert not [c for c in ctl.calls() if c[0] == "bootstrap"]
 

@@ -4,7 +4,7 @@ A step has a name, a check and, when Orchi can make the change itself, a fix. Th
 needs a fix (and what), or broken (and why). Bare `orchi` checks each step in order, fixes what needs it and checks
 again; `orchi doctor` only checks. Both exit non-zero while anything is still wrong.
 
-A fix makes its changes through the Context it is given: write, link, folder and ask. Those record what Orchi
+A fix makes its changes through the Context it is given: write, link, folder, remove and ask. Those record what Orchi
 creates, so uninstall removes only that, and back up anything that was already there before changing it. A step
 that changes things another way names them in touches(), and they are backed up before its fix starts.
 
@@ -134,6 +134,24 @@ class Context:
             with store_mod.shielded():
                 folder.mkdir()
                 self.store.own(folder, "folder", self.step.name)
+
+    def remove(self, path):
+        """Take away a file or link Orchi made and that is still what Orchi made, or a folder Orchi made that is
+        empty. Anything else stays, whoever it belongs to. Returns whether it went."""
+        path = store_mod.full(path)
+        self.handled.add(path)
+        if not os.path.lexists(path):
+            self.store.disown(path)
+            return False
+        if not self.store.owns(path):
+            return False
+        folder = store_mod.kind(path) == "folder"
+        if folder and os.listdir(path):
+            return False
+        with store_mod.shielded():
+            os.rmdir(path) if folder else os.unlink(path)
+            self.store.disown(path)
+        return True
 
     def ask(self, question, choices):
         return self.screen.ask(question, choices)

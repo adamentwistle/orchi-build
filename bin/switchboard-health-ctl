@@ -131,7 +131,7 @@ def cmd_on(state_dir):
         print("could not find claude on PATH or under ~/.nvm/versions/node/*/bin", file=sys.stderr)
         return 1
     if not os.access(os.path.join(app_bin(), "herdr"), os.X_OK):
-        print(f"no herdr launcher in {app_bin()}: run scripts/install.sh in your Orchi checkout to write it",
+        print(f"no herdr launcher in {app_bin()}: run orchi to write it",
               file=sys.stderr)
         return 1
     os.makedirs(state_dir, exist_ok=True)

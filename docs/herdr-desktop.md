@@ -54,7 +54,6 @@ herdr-app shot /path/to/file.png                  # saves the last window frame
 - A key reaches a mod with the action `<mod>.<command>`, delivered to `nextCommand()`. `herdr-app do <mod>.<command>` reaches it too, which tests a mod's logic with no press. The comment in `gpui-kit.d.ts` shows a colon, which is out of date.
 - `hc run -- claude` skips `~/.zshrc`, so the session has no `CLAUDE_CONFIG_DIR` and uses the default profile. Start it with `zsh -ic 'claude ...'`.
 - `cliclick` presses aren't reliable on the tab bar. They need a held press (`dd:`, about 90 ms, `du:`), and there are stretches when none land even though a hand press works. A key sent with `cliclick kd:ctrl,shift t:j` missed too, so use a real `CGEvent` for keys.
-- `scripts/install.sh` deletes what's in a folder it copies to, so don't give a mod here the name of one installed from somewhere else.
 - `list` can't be scrolled from code: `track_scroll` is ignored, with only a line in the log. Use `v_virtual_list` and tell it the heights, and both come from `gpui-base`, not `gpui-kit`, as `TextView` does. Neither list's rows can hold a handler, so anything pressable has to be its own item.
 - An exception in a list's row function blanks the list and leaves `herdr-app status` at `"errors": []`. Look in the log, which for a private window is `~/.config/hd/<slug>/window.log`.
 - `on_size_change` is in window pixels. `.h()`, `.pt()` and, on 0.1.12, a virtual list's sizes are in the app's own, scaled by `settings().zoom`. On 0.1.10 the list's sizes were window pixels.

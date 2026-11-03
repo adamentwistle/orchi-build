@@ -1,20 +1,22 @@
 #!/bin/zsh
 # A private Herdr for testing: its own window, app home and core, apart from yours.
-#   herdr-dev up <slug> [repo]     make it, install mods from repo (default: cwd), open the window, give focus back
-#   herdr-dev install <slug> [repo]  copy mods into it again
+#   herdr-dev up <slug> [repo]     make it, run orchi from repo (default: cwd) into it, open the window, give focus back
+#   herdr-dev install <slug> [repo]  run orchi into it again
 #   herdr-dev run <slug> <cmd...>  run a command against it: herdr-app ..., hc ...
 #   herdr-dev session <slug> [folder]  throwaway Haiku session in a new space, prints its address
 #   herdr-dev shot <slug> <file> [--front]  frame of its window; --front reopens it in front first, so a window
 #                                  covered by another app draws, then gives focus back (core and sessions stay)
 #   herdr-dev restart <slug>       quit and reopen the window, core and sessions stay
 #   herdr-dev down <slug>          end its sessions, window and core
-# An install that would lose files stops (see scripts/install.sh); HERDR_INSTALL_FORCE=1 herdr-dev up ... goes on.
+# orchi never deletes a file it didn't put there, and keeps its own records and backups in the window's home.
 # It never touches ~/.config/herdr-app or the default core. Your own app gets focus back after any open.
 set -u
 cmd=$1; slug=$2; shift 2
 home=$HOME/.config/hd/$slug
 [[ $slug == default || -z $slug ]] && { echo "bad slug"; exit 2; }
 inenv() { env -u CLAUDE_CODE_CHILD_SESSION -u HC_TERMINAL_SOCKET -u HC_TERMINAL_ID -u HC_SCOPE HC_SESSION="d$slug" HERDR_APP_HOME="$home" HERDR_TELEMETRY=0 "$@"; }
+# orchi from the repo being tested, with its own records, backups and settings file in this window's home, never yours.
+orchi() { inenv env PYTHONPATH="$1/src" ORCHI_STATE="$home/orchi-state" ORCHI_SETTINGS="$home/orchi-settings.json" python3 -m orchi; }
 frontid() { lsappinfo info -only bundleID "$(lsappinfo front)" | sed -n 's/.*bundleID="\(.*\)".*/\1/p' | head -1; }
 openwin() {
   local f=$(frontid)
@@ -29,11 +31,11 @@ case $cmd in
     if [[ ! -f $home/window.json ]]; then i=$(( $(print -n $slug | cksum | cut -d" " -f1) % 8 )); print "{\"state\":\"windowed\",\"bounds\":[$((120+70*i)),$((60+45*i)),1280,820]}" > "$home/window.json"; fi
     openwin
     # Quiet when it works; a failed install would otherwise show as a blank layout.
-    out=$(inenv "$repo/scripts/install.sh" 2>&1); rc=$?
-    (( rc )) && { print -r -- "$out" | grep -Ev '^(linked|copied|wrote|updated) ' >&2; echo "install failed (exit $rc)" >&2; exit $rc; }
+    out=$(orchi "$repo" 2>&1); rc=$?
+    (( rc )) && { print -r -- "$out" >&2; echo "install failed (exit $rc)" >&2; exit $rc; }
     inenv herdr-app do layout.switch '{"name":"main-linear"}' >/dev/null
     inenv herdr-app status | grep -E '"layout"|"errors"' ;;
-  install) out=$(inenv "${1:-$PWD}/scripts/install.sh" 2>&1); rc=$?
+  install) out=$(orchi "${1:-$PWD}" 2>&1); rc=$?
     (( rc )) && { print -r -- "$out" >&2; echo "install failed (exit $rc)" >&2; exit $rc; }
     print -r -- "$out" | tail -1 ;;
   run) inenv "$@" ;;
