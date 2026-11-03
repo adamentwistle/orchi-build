@@ -118,12 +118,19 @@ def test_a_file_with_every_value_good_has_nothing_to_say():
     assert lines({
         "claude_dir": "~/.claude-alt", "orchi_dir": "~/orchi-build", "legwork_dir": "~/legwork",
         "worker_limit": 6, "usage_guard_percent": 95, "sources": ["legwork", "github", "linear", "markdown"],
-        "github": {"own_owners": ["me"], "repos": ["me/dots"]},
+        "github": {"own_owners": ["me"], "repos": ["me/dots"], "command": "gh-personal"},
         "linear": {"teams": ["ENG"], "projects": ["P-1"], "repos": {"ENG": "~/dev/app"}, "legwork_projects": {"P-1": "atlas"}},
         "markdown": {"paths": ["~/notes/tasks.md", "~/notes/todo"]},
     }) == []
     assert lines({}) == []
     assert lines({"worker_limit": 7.0}) == []
+
+
+def test_a_github_command_that_is_not_one_word_is_named():
+    assert lines({"github": {"command": "gh --repo x"}}) == ['github.command: "gh --repo x" is not one command name or path']
+    assert lines({"github": {"command": ""}}) == ['github.command: "" is not one command name or path']
+    assert lines({"github": {"command": "~/bin/gh-personal"}}) == []
+    assert lines({"github": {"command": "./gh-personal"}}) == ['github.command: "./gh-personal" is not one command name or path']
 
 
 def test_validate_reads_the_settings_file_when_given_no_text(tmp_path, monkeypatch):

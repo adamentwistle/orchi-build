@@ -1,5 +1,6 @@
 // Pure rules for the review screen. No Herdr imports, so `node --test` can load this file.
-import { ISSUE_ID, folderProblem, projectProblems } from "./sessions.js";
+import { folderProblem, projectProblems } from "./sessions.js";
+import { isLinearKey } from "./refs.js";
 import { NAME } from "./switchboard.js";
 
 export const MODELS = ["Fable", "Opus", "Sonnet", "Haiku"];
@@ -42,7 +43,7 @@ export function sessionProblems(tickets, projectOf, context = {}) {
   const { inSession = new Map(), busy, trust = null, planning = null, folderOf = (p) => p.repo, held, requested } = context;
   const problems = [], seen = new Set();
   for (const ticket of tickets) {
-    if (!ISSUE_ID.test(ticket.identifier)) { problems.push("A ticket has an ID the panel can't use"); continue; }
+    if (!isLinearKey(ticket.identifier)) { problems.push("A ticket has an ID the panel can't use"); continue; }
     if (inSession.has(ticket.identifier)) problems.push(`${ticket.identifier} is already in a session`);
     const project = projectOf(ticket);
     if (!project) { problems.push(`${ticket.identifier} has no legwork project`); continue; }

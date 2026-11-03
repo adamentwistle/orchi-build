@@ -42,6 +42,14 @@ const owner = (v) => lower(trim(v)) || null;
 const repo = (v) => { const t = lower(trim(v)); return /^[a-z0-9-]+\/[a-z0-9._-]+$/.test(t) ? t : null; };
 const team = (v) => upper(trim(v)) || null;
 const text = (v) => trim(v) || null;
+// A command as one word: a name on PATH, or a path from / or ~/, ~ expanded. Spaces would make it a command line, and a
+// path from the working folder would run a different program from each folder.
+const command = (home, v) => {
+  const t = trim(v);
+  if (!t || /[\s\u0000-\u001f\u007f-\u009f]/.test(t)) return null;
+  const c = /^~(\/|$)/.test(t) ? expand(home, t) : t;
+  return c.includes("/") && !c.startsWith("/") ? null : c;
+};
 // A source is one of the schema's names, exactly, as the schema's enum has it.
 const source = (v) => (SOURCES.includes(v) ? v : null);
 
@@ -64,6 +72,7 @@ export function resolveSettings({ settings, orchi, linear } = {}, home) {
     github: {
       own_owners: first(list(at(gh, "own_owners"), owner), []),
       repos: first(list(at(gh, "repos"), repo), []),
+      command: first(has(gh, "command") ? command(home, gh.command) : null, "gh"),
     },
     linear: {
       teams: first(list(at(ln, "teams"), team), list(l.teams, team), []),

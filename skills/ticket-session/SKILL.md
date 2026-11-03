@@ -98,7 +98,8 @@ order, a model per item, and machine changes marked orchestrator-only under
   to the Start line only when their words say to merge. If they don't make it
   clear, ask.
 - `choices.extra` goes into the plan as they wrote it.
-- Name every ticket id on its item, so `/wrap` can move it.
+- Name every ticket on its item by its reference, such as `linear:ENG-1`, so
+  `/wrap` can move it.
 
 Write a `## Roadmap N` section into each project's tracker, newest first,
 one item per PR, with run rules and a "Needs you" list. Don't touch `## Next
@@ -115,12 +116,14 @@ spacing exactly:
 ## <session>-p1 PLAN 2026-10-30 22:40
 Project: <legwork file>
 Repo: <absolute path>
-Tickets: ENG-1, ENG-2
+Tickets: linear:ENG-1, linear:ENG-2
 Start: /fanout <project> --only "<items>" [--merge] [--workers <model>:<effort>]
 ## <session>-ready READY 2026-10-30 22:41
 ```
 
-`<items>` are the names of the items in the roadmap you just wrote. The
+`Tickets:` lists ticket references, as `orchi tickets` writes them; a bare
+`ENG-1` is Linear's. `<items>` are the names of the items in the roadmap you
+just wrote. The
 Start line is one line. The brackets mark what is optional and don't go in
 the file.
 

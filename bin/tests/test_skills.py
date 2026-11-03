@@ -61,7 +61,7 @@ def test_protocol_action_has_the_fields_the_panel_reads():
 def test_ticket_session_board_formats_match_the_contract():
     body = skill("ticket-session")
     assert ("## <session>-p1 PLAN 2026-10-30 22:40\nProject: <legwork file>\n"
-            "Repo: <absolute path>\nTickets: ENG-1, ENG-2\n"
+            "Repo: <absolute path>\nTickets: linear:ENG-1, linear:ENG-2\n"
             'Start: /fanout <project> --only "<items>" [--merge] [--workers <model>:<effort>]\n'
             "## <session>-ready READY 2026-10-30 22:41\n") in body
     assert "printf 'start %s\\n'" in body

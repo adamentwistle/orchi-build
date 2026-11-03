@@ -1,0 +1,14 @@
+{
+  "data": {
+    "issues": {
+      "nodes": [
+        {
+          "identifier": "ENG-12", "title": "Fix the login page", "url": "https://linear.app/acme/issue/ENG-12/fix-the-login-page",
+          "updatedAt": "2026-10-30T09:15:00.000Z", "state": { "name": "In Progress", "type": "started" },
+          "project": { "name": "Login" }, "labels": { "nodes": [{ "name": "Bug" }] }
+        }
+      ],
+      "pageInfo": { "hasNextPage": true, "endCursor": "cursor-1" }
+    }
+  }
+}

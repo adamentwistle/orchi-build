@@ -8,7 +8,7 @@
     "worker_limit": 6,
     "usage_guard_percent": 95,
     "sources": ["legwork"],
-    "github": { "own_owners": [], "repos": [] },
+    "github": { "own_owners": [], "repos": [], "command": "gh" },
     "linear": { "teams": [], "projects": [], "repos": {}, "legwork_projects": {} },
     "markdown": { "paths": [] }
   },
@@ -75,7 +75,7 @@
         "worker_limit": 12,
         "usage_guard_percent": 90,
         "sources": ["legwork", "linear", "markdown"],
-        "github": { "own_owners": ["acme-labs", "me"], "repos": ["acme-labs/app", "me/dots"] },
+        "github": { "own_owners": ["acme-labs", "me"], "repos": ["acme-labs/app", "me/dots"], "command": "gh" },
         "linear": { "teams": ["ENG", "OPS"], "projects": ["P-12", "P-7"], "repos": { "ENG": "/home/me/dev/app", "OPS": "/srv/ops" }, "legwork_projects": { "P-12": "atlas" } },
         "markdown": { "paths": ["/home/me/notes/tasks.md", "/home/me/notes/todo"] }
       }
@@ -153,7 +153,7 @@
       "name": "only A to Z change case, so the readers never lean on their Unicode tables",
       "files": { "settings": { "github": { "own_owners": ["\u00c0B", "\ua7ce", "\u0130X"], "repos": ["\u212a/x", "Me/Dots"] }, "linear": { "teams": ["\u00fc1", "\u0131x"], "repos": { "\u00fcng": "/u" } } } },
       "expected": {
-        "github": { "own_owners": ["\u00c0b", "\ua7ce", "\u0130x"], "repos": ["me/dots"] },
+        "github": { "own_owners": ["\u00c0b", "\ua7ce", "\u0130x"], "repos": ["me/dots"], "command": "gh" },
         "linear": { "teams": ["\u00fc1", "\u0131X"], "projects": [], "repos": { "\u00fcNG": "/u" }, "legwork_projects": {} }
       }
     },
@@ -200,6 +200,16 @@
       "name": "keys named like built-ins",
       "files": { "settings": { "linear": { "repos": { "__proto__": "/x", "constructor": "/c" }, "legwork_projects": { "__proto__": "p", "toString": "t" } } } },
       "expected": { "linear": { "teams": [], "projects": [], "repos": { "__PROTO__": "/x", "CONSTRUCTOR": "/c" }, "legwork_projects": { "__proto__": "p", "toString": "t" } } }
-    }
+    },
+    { "name": "github.command names the gh command", "files": { "settings": { "github": { "command": " gh-personal " } } }, "expected": { "github": { "own_owners": [], "repos": [], "command": "gh-personal" } } },
+    { "name": "github.command can be a path from ~/", "files": { "settings": { "github": { "command": "~/bin/gh-personal" } } }, "expected": { "github": { "own_owners": [], "repos": [], "command": "/home/me/bin/gh-personal" } } },
+    { "name": "a github.command that isn't one word reads as gh", "files": { "settings": { "github": { "command": "gh --repo x" } } }, "expected": {} },
+    { "name": "a blank github.command reads as gh", "files": { "settings": { "github": { "command": "  " } } }, "expected": {} },
+    { "name": "a github.command with a control character reads as gh", "files": { "settings": { "github": { "command": "gh\u0007" } } }, "expected": {} },
+    { "name": "a github.command that isn't text reads as gh", "files": { "settings": { "github": { "command": 5 } } }, "expected": {} },
+    { "name": "a github.command path from the working folder reads as gh", "files": { "settings": { "github": { "command": "./gh-personal" } } }, "expected": {} },
+    { "name": "a github.command path under a folder name reads as gh", "files": { "settings": { "github": { "command": "bin/gh" } } }, "expected": {} },
+    { "name": "a github.command from another user's home reads as gh", "files": { "settings": { "github": { "command": "~other/gh" } } }, "expected": {} },
+    { "name": "a github.command from / is kept", "files": { "settings": { "github": { "command": "/opt/gh/bin/gh" } } }, "expected": { "github": { "own_owners": [], "repos": [], "command": "/opt/gh/bin/gh" } } }
   ]
 }

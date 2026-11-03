@@ -20,11 +20,12 @@ SOURCES = ("legwork", "github", "linear", "markdown")
 WORKER_LIMIT = (1, 50, 6)
 USAGE_GUARD_PERCENT = (1, 100, 95)
 ORCHI_DIR = "~/orchi-build"
+GH_COMMAND = "gh"
 CLAUDE_DIR = "~/.claude"
 
 KEYS = ("claude_dir", "orchi_dir", "legwork_dir", "worker_limit", "usage_guard_percent", "sources",
         "github", "linear", "markdown")
-GROUPS = {"github": ("own_owners", "repos"), "linear": ("teams", "projects", "repos", "legwork_projects"),
+GROUPS = {"github": ("own_owners", "repos", "command"), "linear": ("teams", "projects", "repos", "legwork_projects"),
           "markdown": ("paths",)}
 
 # What JavaScript's trim() takes off, so both readers see the same value.
@@ -166,6 +167,16 @@ def _folder(value, home):
     return path if path and path.startswith("/") else None
 
 
+def _command(value, home):
+    """A command as one word: a name on PATH, or a path from / or ~/, ~ expanded. Spaces would make it a command line,
+    and a path from the working folder would run a different program from each folder."""
+    text = _trim(value)
+    if not text or any(c in SPACE or ord(c) < 0x20 or 0x7f <= ord(c) <= 0x9f for c in text):
+        return None
+    text = _expand(text, home) if text == "~" or text.startswith("~/") else text
+    return None if "/" in text and not text.startswith("/") else text
+
+
 def _whole(value, low, high):
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
@@ -270,6 +281,14 @@ def _resolve(s, orchi, linear, home, bad):
         _unknown(value, GROUPS[key], f"{key}.", bad)
         return value
 
+    def command(key, g):
+        if key not in g:
+            return None
+        got = _command(g[key], home)
+        if got is None:
+            bad(f"github.{key}", f"{_show(g[key])} is not one command name or path")
+        return got
+
     def listed(g, gkey, key, item, why):
         return _list(g[key], f"{gkey}.{key}", bad, item, why) if key in g else None
 
@@ -305,6 +324,7 @@ def _resolve(s, orchi, linear, home, bad):
     out["github"] = {
         "own_owners": _first(listed(g, "github", "own_owners", owner, "is not a GitHub owner"), []),
         "repos": _first(listed(g, "github", "repos", repo, "is not owner/repo"), []),
+        "command": _first(command("command", g), GH_COMMAND),
     }
     ln = group("linear")
     out["linear"] = {

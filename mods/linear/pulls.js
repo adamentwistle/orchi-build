@@ -4,8 +4,8 @@
 // Only ids reach a runner's task: the ticket's ID, a state id from the team's list, and a pull url built here from the
 // repo's own git remote and the PR number in the run's fanout state. Nothing a ticket says is read for this.
 import { PULL_URL } from "./updates.js";
+import { linearKey } from "./refs.js";
 
-const ISSUE_ID = /^[A-Z][A-Z0-9]*-\d+$/;
 const OWNER_REPO = /^[A-Za-z0-9][\w.-]{0,99}\/[\w.-]{1,100}$/;
 const DONE_TYPES = ["completed", "canceled"];
 
@@ -27,7 +27,7 @@ export function pullNumber(cell, repo) {
 // The ticket a worker's pull request is for. A run on one ticket is that ticket. A run on several needs exactly one of
 // them named in the worker's slug, such as `eng-12-fix`, or it isn't linked at all.
 export function ticketOf(slug, tickets) {
-  const ids = tickets.filter((id) => ISSUE_ID.test(id));
+  const ids = [...new Set(tickets.map(linearKey).filter(Boolean))];
   if (ids.length === 1) return ids[0];
   const named = ids.filter((id) => new RegExp(`(^|[^a-z0-9])${id.toLowerCase()}($|[^0-9])`).test(String(slug ?? "").toLowerCase()));
   return named.length === 1 ? named[0] : null;

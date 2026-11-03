@@ -4,7 +4,11 @@
   command, all in this repo.
 - **Legwork**: the tracker Orchi works from. A folder of project files, each with a next prompt and a log.
 - **Ticket source**: a place work items come from. Legwork, GitHub, Linear or Markdown in the first release.
-- **Ticket reference**: `<source>:<id>`, one ticket written as text.
+- **Ticket**: one work item from a ticket source, in the same shape whatever its source: its reference, source, id,
+  title, state, whether it is open, url, when it was updated, the project or repo it belongs to, its labels, and its
+  body when it is read on its own. `orchi tickets` lists them; see `docs/adr/0004-tickets-read-side.md`.
+- **Ticket reference**: `<source>:<id>`, one ticket written as text: `linear:ENG-12`, `gh:owner/repo#12`,
+  `legwork:<project>` or `md:<file>#<anchor>`. A bare `ENG-12` is Linear's.
 - **Step**: one thing `orchi` checks and can fix, such as Herdr, the themes or the ticket sources.
 - **Private home**: a throwaway Herdr and Claude home for tests, never a real one.
 - **Check**: the part of a step that looks and changes nothing. It says ok, needs a fix, or broken.

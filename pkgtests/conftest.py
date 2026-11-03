@@ -64,3 +64,27 @@ def find_uv():
 @pytest.fixture(scope="session")
 def uv():
     return find_uv()
+
+
+# The seams where orchi tickets meets the world, as they really are. Every test gets fakes in their place that fail
+# the test if it reaches one, so no test runs gh, asks Linear or reads the keychain; a test that wants one installs
+# its own fake. The top conftest also stops the security binary and any socket off this computer.
+from orchi.tickets import github as _github, keychain as _keychain, linear as _linear  # noqa: E402
+
+REAL = {"keychain.find_password": _keychain.find_password, "linear.post": _linear.post, "github.run": _github.run}
+
+
+@pytest.fixture(autouse=True)
+def no_real_seams(monkeypatch):
+    def keychain(service):
+        raise AssertionError("a test reached the keychain: fake orchi.tickets.keychain.find_password")
+
+    def post(query, variables, key):
+        raise AssertionError("a test reached the network through Linear: fake orchi.tickets.linear.post")
+
+    def gh(argv):
+        raise AssertionError("a test ran gh: fake orchi.tickets.github.run")
+
+    monkeypatch.setattr(_keychain, "find_password", keychain)
+    monkeypatch.setattr(_linear, "post", post)
+    monkeypatch.setattr(_github, "run", gh)

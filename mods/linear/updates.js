@@ -1,6 +1,7 @@
 // Pure rules for staged ticket changes and the runner that sends them to Linear.
 // No Herdr imports, so `node --test` can load this file.
 import { linearProjectOf } from "./legwork.js";
+import { isLinearKey } from "./refs.js";
 
 const LINEAR_READS = ["get_issue", "list_issues", "list_comments", "get_document", "list_documents", "get_attachment", "extract_images", "get_diff", "get_diff_threads", "list_diffs", "get_project", "list_projects", "get_status_updates", "list_customer_needs", "get_notifications"]
   .map((tool) => `mcp__claude_ai_Linear__${tool}`);
@@ -14,7 +15,6 @@ export const PROJECT_RUNNER = { ...RUNNER_BASE, flags: ["--disallowedTools", ["m
 
 // What may reach a runner's task. Anyone who can edit Linear can write ticket text, so a task is built
 // from these shapes only: never a title, a description or a comment.
-const ISSUE_ID = /^[A-Z][A-Z0-9]*-\d+$/;
 const STATE_ID = /^[\w-]+$/;
 const LINEAR_PROJECT = /^[\w-]+$/;
 const TRACKER_PATH = /^projects\/[\w-]+\.md$/;
@@ -75,7 +75,7 @@ export function pickSteps(project, issue, { dir, map = {}, projects }) {
 export function updateLines(issues, staged, statesFor, stepsFor, links = {}) {
   const lines = [];
   for (const issue of issues) {
-    if (!ISSUE_ID.test(issue.identifier)) continue;
+    if (!isLinearKey(issue.identifier)) continue;
     const state = staged[issue.identifier];
     if (state && STATE_ID.test(state.id) && statesFor(issue).some((s) => s.id === state.id && s.name === state.name)) lines.push(`${issue.identifier}: set the status to state id ${state.id}.`);
     for (const link of Array.isArray(links[issue.identifier]) ? links[issue.identifier] : []) {
@@ -97,6 +97,6 @@ Use the Linear save_issue tool for Linear, with its links field for a link, and 
 // Null for a name that isn't a plain project name.
 export function projectTask(name, identifiers) {
   const clean = name.trim();
-  if (!PROJECT_NAME.test(clean) || !identifiers.every((id) => ISSUE_ID.test(id))) return null;
+  if (!PROJECT_NAME.test(clean) || !identifiers.every(isLinearKey)) return null;
   return `/add ${clean}. Category work. Put ${identifiers.join(", ")} on its linear: line and don't create a new Linear issue. Ask me only for what you can't work out.`;
 }

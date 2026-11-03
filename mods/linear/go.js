@@ -1,6 +1,7 @@
 // What Go starts, built only from shape-checked parts. No Herdr imports, so `node --test` can load this file.
 // Ticket text never comes in here: a title or a description can't reach a command, a task, a label or the brief.
-import { ABSOLUTE, ISSUE_ID, stamp } from "./sessions.js";
+import { ABSOLUTE, stamp } from "./sessions.js";
+import { isLinearKey } from "./refs.js";
 import { NAME, claudeChoice } from "./switchboard.js";
 import { projectFolder } from "./legwork.js";
 import { PR_SUGGESTION } from "./review.js";
@@ -32,7 +33,7 @@ export function goPlan({ session, tickets, projectOf, choices, created, home }) 
     const project = projectOf(issue);
     return { id: issue.identifier, project: project?.file, repo: project ? projectFolder(project, home) : null };
   });
-  if (!task || !NAME.test(session) || !rows.length || rows.some((r) => !ISSUE_ID.test(r.id) || !NAME.test(r.project ?? "") || !ABSOLUTE.test(r.repo ?? ""))) return null;
+  if (!task || !NAME.test(session) || !rows.length || rows.some((r) => !isLinearKey(r.id) || !NAME.test(r.project ?? "") || !ABSOLUTE.test(r.repo ?? ""))) return null;
   const ids = rows.map((r) => r.id);
   return {
     brief: { session, created: stamp(created), tickets: rows, choices: { ...choices, prs: choices.prs.trim() || PR_SUGGESTION } },

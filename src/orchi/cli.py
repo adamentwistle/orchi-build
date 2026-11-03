@@ -1,17 +1,20 @@
 """The `orchi` command.
 
-Commands are entries in COMMANDS: a name, a one-line help text and a handler that
-takes the parsed arguments and returns an exit code. Adding `update`, `uninstall`
-or `tickets` means adding an entry (and any options to its parser), and a global
-option such as `--json` goes on the parser from build_parser().
+Commands are entries in COMMANDS: a name, a one-line help text, a handler that
+takes the parsed arguments and returns an exit code, and optionally a function that
+adds the command's own options to its parser. Adding `update` or `uninstall` means
+adding an entry, and a global option such as `--json` goes on the parser from
+build_parser(). `--json` also goes on every command's parser, so it works before or
+after the command.
 """
 import argparse
 import sys
 from collections import namedtuple
 
 from orchi import __version__, engine
+from orchi.tickets import cli as tickets
 
-Command = namedtuple("Command", "help handler")
+Command = namedtuple("Command", "help handler options", defaults=(None,))
 
 
 def _steps(fix):
@@ -27,6 +30,7 @@ DEFAULT = Command("set up or fix everything", _steps(fix=True))
 
 COMMANDS = {
     "doctor": Command("check everything and change nothing", _steps(fix=False)),
+    "tickets": Command("list the tickets of every chosen source", tickets.run, tickets.configure),
 }
 
 
@@ -38,10 +42,15 @@ def build_parser():
         "With no command it sets up or fixes; `doctor` only checks.",
     )
     parser.add_argument("--version", action="version", version="orchi %s" % __version__)
-    parser.add_argument("--json", action="store_true", help="print one JSON object instead of lines")
+    json_help = "print one JSON object instead of lines"
+    parser.add_argument("--json", action="store_true", help=json_help)
     sub = parser.add_subparsers(dest="command", metavar="command")
     for name, command in COMMANDS.items():
-        sub.add_parser(name, help=command.help, description=command.help, allow_abbrev=False)
+        parser_of = sub.add_parser(name, help=command.help, description=command.help, allow_abbrev=False)
+        # SUPPRESS leaves the value alone unless it is given here, so `orchi --json doctor` keeps it.
+        parser_of.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help=json_help)
+        if command.options:
+            command.options(parser_of)
     return parser
 
 

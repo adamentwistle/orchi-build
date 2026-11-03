@@ -69,3 +69,43 @@ def test_abbreviations_are_not_accepted(argv):
 def test_importing_the_main_module_does_not_run_the_cli():
     import importlib
     importlib.import_module("orchi.__main__")
+
+
+@pytest.mark.parametrize("argv, fix", [(["--json", "doctor"], False), (["doctor", "--json"], False),
+                                       (["--json"], True), (["doctor"], False), ([], True)])
+def test_json_works_before_or_after_doctor(argv, fix, monkeypatch):
+    seen = {}
+    monkeypatch.setattr(engine, "main", lambda fix, as_json: seen.update(fix=fix, as_json=as_json) or 0)
+    assert cli.main(argv) == 0
+    assert seen == {"fix": fix, "as_json": "--json" in argv}
+
+
+@pytest.mark.parametrize("argv", [
+    ["--json", "tickets"], ["tickets", "--json"],
+    ["--json", "tickets", "show", "md:~/todo.md#ship"], ["tickets", "--json", "show", "md:~/todo.md#ship"],
+    ["tickets", "show", "md:~/todo.md#ship", "--json"], ["tickets", "show", "--json", "md:~/todo.md#ship"],
+])
+def test_json_works_before_or_after_tickets_and_show(argv, tmp_path, monkeypatch, capsys):
+    import json
+    import os
+    from pathlib import Path
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / "todo.md").write_text("- [ ] Ship\n")
+    Path(os.environ["ORCHI_SETTINGS"]).parent.mkdir(parents=True, exist_ok=True)
+    Path(os.environ["ORCHI_SETTINGS"]).write_text(json.dumps({"sources": ["markdown"], "markdown": {"paths": ["~/todo.md"]}}))
+    assert cli.main(argv) == 0
+    got = json.loads(capsys.readouterr().out)
+    assert (got["tickets"][0] if "show" not in argv else got)["ref"] == "md:~/todo.md#ship"
+
+
+@pytest.mark.parametrize("argv", [["tickets"], ["tickets", "show", "md:~/todo.md#ship"]])
+def test_without_json_tickets_print_plain_lines(argv, tmp_path, monkeypatch, capsys):
+    import json
+    import os
+    from pathlib import Path
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / "todo.md").write_text("- [ ] Ship\n")
+    Path(os.environ["ORCHI_SETTINGS"]).parent.mkdir(parents=True, exist_ok=True)
+    Path(os.environ["ORCHI_SETTINGS"]).write_text(json.dumps({"sources": ["markdown"], "markdown": {"paths": ["~/todo.md"]}}))
+    assert cli.main(argv) == 0
+    assert not capsys.readouterr().out.startswith("{")

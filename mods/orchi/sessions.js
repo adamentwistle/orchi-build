@@ -3,9 +3,9 @@
 import { parseEntries, field, openItems, answeredItems, latestKind, parseState, parseProgress, parseAgentList, parseItems } from "./parse.js";
 import { NAME, parseLock, holderOf, planningDir, switchboardDir } from "./switchboard.js";
 import { claudeDir } from "./settings.js";
+import { linearKey } from "./refs.js";
 
 
-export const ISSUE_ID = /^[A-Z][A-Z0-9]*-\d+$/;
 export const ABSOLUTE = /^\/[^\u0000-\u001f\u007f-\u009f]*$/;
 const HUMAN = /^(Human action, not a Claude session\.|DECISION NEEDED)/;
 const FINISHED_MS = 24 * 3600 * 1000;
@@ -19,12 +19,15 @@ const pad = (n) => String(n).padStart(2, "0");
 export const stamp = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 const toMs = (time) => new Date((time ?? "").replace(" ", "T")).getTime();
 
-// The brief Go wrote, or null. Ids and paths are checked here, because they build paths and requests later.
+// The brief Go wrote, or null. Ids and paths are checked here, because they build paths and requests later. A ticket is
+// a Linear reference, held as its bare key.
 export function parseBrief(text, session) {
   let brief;
   try { brief = JSON.parse(text); } catch { return null; }
   if (brief?.session !== session || !Array.isArray(brief.tickets)) return null;
-  const tickets = brief.tickets.filter((t) => ISSUE_ID.test(t?.id ?? "") && NAME.test(t?.project ?? "") && ABSOLUTE.test(t?.repo ?? ""));
+  const seen = new Set();
+  const tickets = brief.tickets.filter((t) => linearKey(t?.id) && NAME.test(t?.project ?? "") && ABSOLUTE.test(t?.repo ?? ""))
+    .map((t) => ({ ...t, id: linearKey(t.id) })).filter((t) => !seen.has(t.id) && seen.add(t.id));
   return { session, created: String(brief.created ?? ""), tickets, after: brief.choices?.after === "wait" ? "wait" : "start", choices: brief.choices ?? null };
 }
 
@@ -32,8 +35,8 @@ export function parseBrief(text, session) {
 function planEntry(entry) {
   const project = /^(?:.*\/)?([\w-]+?)(?:\.md)?$/.exec(field(entry.lines, "Project") ?? "")?.[1], repo = field(entry.lines, "Repo");
   if (!NAME.test(project ?? "") || !ABSOLUTE.test(repo ?? "")) return null;
-  const tickets = (field(entry.lines, "Tickets") ?? "").split(",").map((id) => id.trim()).filter((id) => ISSUE_ID.test(id));
-  return { project, repo, tickets };
+  const tickets = (field(entry.lines, "Tickets") ?? "").split(",").map(linearKey).filter(Boolean);
+  return { project, repo, tickets: [...new Set(tickets)] };
 }
 
 export function parseBoard(text) {

@@ -1,0 +1,9 @@
+{
+  "data": {
+    "issue": {
+      "identifier": "ENG-12", "title": "Fix the login page", "url": "https://linear.app/acme/issue/ENG-12/fix-the-login-page",
+      "updatedAt": "2026-10-30T09:15:00.000Z", "description": "The login page loops after a wrong password.",
+      "state": { "name": "In Progress", "type": "started" }, "project": { "name": "Login" }, "labels": { "nodes": [{ "name": "Bug" }] }
+    }
+  }
+}

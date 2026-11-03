@@ -35,21 +35,25 @@ its default holds. `src/orchi/settings.schema.json` is the schema. No secret eve
 | `sources` | The ticket sources planning reads: `legwork`, `github`, `linear`, `markdown` | `["legwork"]` |
 | `github.own_owners` | GitHub users and organisations that are yours | none |
 | `github.repos` | GitHub repos whose issues are tickets, as `owner/repo` | none |
+| `github.command` | The command that runs gh, such as `gh-personal` | `gh` |
 | `linear.teams` | Linear teams to pull in, by key | none, so the issues assigned to you |
 | `linear.projects` | Linear projects to pull in, by id | none |
 | `linear.repos` | The folder each Linear team works in, by team key | none |
 | `linear.legwork_projects` | The legwork project each Linear project belongs to, by Linear project id | none |
 | `markdown.paths` | Markdown task files, or folders of them | none |
 
-Legwork is always a source. Until setup moves them, `workerLimit` in `~/.config/herdr-app/orchi.json`, and `teams`,
-`repos`, `legwork.dir` and `legwork.projects` in `~/.config/herdr-app/linear.json`, count for any of these keys the
-file leaves out.
+Legwork is always a source. The Linear API key is never a setting: it is `LINEAR_API_KEY` when that is set, else the
+keychain's generic password under the service `orchi-linear`. Until setup moves them, `workerLimit` in
+`~/.config/herdr-app/orchi.json`, and `teams`, `repos`, `legwork.dir` and `legwork.projects` in
+`~/.config/herdr-app/linear.json`, count for any of these keys the file leaves out.
 
 ## Use it
 
 ```bash
 scripts/install.sh            # put the themes, mods, layout, keys and sounds into Herdr
 uv tool install .             # install the `orchi` command from this checkout
+orchi tickets                 # the open tickets of every chosen source; --json for agents
+orchi tickets show ENG-12     # one ticket by its reference
 scripts/herdr-dev             # run a private Herdr for testing
 node --test tests/            # the panels' checks
 python3 -m pytest bin/tests   # the scripts' checks

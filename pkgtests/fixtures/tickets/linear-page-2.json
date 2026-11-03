@@ -1,0 +1,14 @@
+{
+  "data": {
+    "issues": {
+      "nodes": [
+        {
+          "identifier": "OPS-3", "title": "Rotate the test certificates", "url": "https://linear.app/acme/issue/OPS-3/rotate-the-test-certificates",
+          "updatedAt": "2026-10-29T17:00:00.000Z", "state": { "name": "Todo", "type": "unstarted" },
+          "project": null, "labels": { "nodes": [] }
+        }
+      ],
+      "pageInfo": { "hasNextPage": false, "endCursor": null }
+    }
+  }
+}

@@ -57,6 +57,12 @@
           "type": "array",
           "items": { "type": "string", "pattern": "^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$" },
           "default": []
+        },
+        "command": {
+          "description": "The command that runs gh, such as gh-personal: a name on PATH, or a path from / or ~/.",
+          "type": "string",
+          "pattern": "^([^\\s/]+|/\\S*|~/\\S*)$",
+          "default": "gh"
         }
       }
     },

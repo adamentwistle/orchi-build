@@ -1,0 +1,5 @@
+{
+  "number": 7, "title": "Export loses folder order", "state": "OPEN", "url": "https://github.com/acme/app/issues/7",
+  "updatedAt": "2026-10-28T12:00:00Z", "labels": [{ "name": "bug", "color": "d73a4a", "description": "" }],
+  "body": "Sibling folders come back by date added."
+}
