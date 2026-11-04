@@ -594,6 +594,30 @@ def test_a_content_change_with_no_window_open_needs_no_reload(mac, home):
     assert code == 0 and states(report)["Herdr reload"] == "ok"
 
 
+def test_a_fresh_window_on_herdrs_own_layout_ends_showing_orchis(mac, home):
+    """A new install lands on Herdr's shipped layout, which has none of Orchi's panels, so setup shows Orchi's."""
+    mac.everything()
+    mac.herdr_running, mac.layout = True, "main"
+    mac.settings(sources=["legwork"], claude_dir="~/.claude")
+    code, report, _ = run_orchi()
+    assert code == 0 and states(report)["Herdr reload"] == "fixed"
+    assert ("herdr-app", "do", "layout.switch", json.dumps({"name": "main-linear"})) in mac.calls
+
+
+def test_a_later_run_keeps_the_layout_the_person_chose(mac, home):
+    mac.everything()
+    mac.herdr_running = True
+    mac.settings(sources=["legwork"], claude_dir="~/.claude")
+    run_orchi()
+    mac.layout = "terminals"
+    from orchi import herdr
+    (herdr.app_home() / "themes" / "orchi-dark.json").unlink()
+    mac.calls.clear()
+    code, report, _ = run_orchi()
+    assert code == 0 and states(report)["Themes"] == "fixed"
+    assert mac.program("herdr-app", "do") == [("herdr-app", "do", "layout.switch", json.dumps({"name": "terminals"}))]
+
+
 # Stopping, retrying and the shape of Linear's answers
 
 def test_ctrl_c_during_an_installer_stops_the_run_and_the_next_run_carries_on(mac, home):
