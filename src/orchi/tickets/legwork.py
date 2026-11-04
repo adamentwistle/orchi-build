@@ -67,7 +67,8 @@ def list_open(s):
     return tickets, problems
 
 
-def show(ref, s):
+def project_file(ref, s):
+    """A project's file and its text, or None when the project isn't there."""
     folder = _folder(s)
     if folder is None:
         raise SourceError("no legwork_dir in settings")
@@ -81,4 +82,14 @@ def show(ref, s):
     text = read(path)
     if text is None:
         raise SourceError(f"{tilde(path)} can't be read")
-    return _ticket(path, text, with_body=True)
+    return path, text
+
+
+def fields(text):
+    """A project file's frontmatter fields and the text after them."""
+    return _split(text)
+
+
+def show(ref, s):
+    got = project_file(ref, s)
+    return None if got is None else _ticket(got[0], got[1], with_body=True)

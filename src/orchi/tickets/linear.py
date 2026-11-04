@@ -189,3 +189,162 @@ def show(ref, s):
         return _ticket(node, body=str(node.get("description") or ""))
     except (AttributeError, TypeError, ValueError):
         raise SourceError(ODD) from None
+
+
+# Writes. Each is one request through post(), so the same fake covers them. A ticket is read for a write with its
+# team's states and projects, because a state or project is set by id.
+
+WRITABLE_QUERY = """query Writable($id: String!) {
+  issue(id: $id) {
+    id identifier state { id name type } project { id name }
+    team { id key states { nodes { id name type position } } projects(first: 250) { nodes { id name } } }
+  }
+}"""
+TEAM_QUERY = """query Team($key: String!) {
+  teams(filter: { key: { eq: $key } }) { nodes { id key states { nodes { id name type position } } } }
+}"""
+COMMENT_MUTATION = """mutation Comment($input: CommentCreateInput!) {
+  commentCreate(input: $input) { success }
+}"""
+UPDATE_MUTATION = """mutation Update($id: String!, $input: IssueUpdateInput!) {
+  issueUpdate(id: $id, input: $input) { success }
+}"""
+CREATE_MUTATION = """mutation Create($input: IssueCreateInput!) {
+  issueCreate(input: $input) { success issue { identifier url } }
+}"""
+
+
+def _nodes(value, need=("name",)):
+    """A connection's nodes, each a dict whose `need` fields are strings, or SourceError."""
+    nodes = value.get("nodes") if isinstance(value, dict) else None
+    if not isinstance(nodes, list) or not all(_has(n, need) for n in nodes):
+        raise SourceError(ODD)
+    return nodes
+
+
+def _has(node, need):
+    return isinstance(node, dict) and all(isinstance(node.get(k), str) for k in need)
+
+
+def writable(key):
+    """An issue with its id, state, project and team (the team's states and projects), or None when it isn't there."""
+    try:
+        answer = post(WRITABLE_QUERY, {"id": key}, api_key())
+    except SourceError as e:
+        if "not found" in str(e).lower():
+            return None
+        raise
+    problem = _errors(answer)
+    if problem:
+        if "not found" in problem.lower():
+            return None
+        raise SourceError(problem)
+    node = _data(answer, "issue")
+    if node is None:
+        return None
+    team = node.get("team") if isinstance(node, dict) else None
+    # Everything a write uses later is checked here, so a write never stops half made on a missing field.
+    if not _has(node, ("id",)) or not _has(node.get("state"), ("id", "name", "type")) \
+            or not _has(team, ("id", "key")) or node.get("project") is not None and not _has(node["project"], ("id",)):
+        raise SourceError(ODD)
+    _nodes(team.get("states"), ("id", "name", "type"))
+    _nodes(team.get("projects") or {"nodes": []}, ("id", "name"))
+    return node
+
+
+def team(key):
+    """A team by its key, with its id and states, or None when there is no such team."""
+    answer = post(TEAM_QUERY, {"key": key}, api_key())
+    problem = _errors(answer)
+    if problem:
+        raise SourceError(problem)
+    teams = _data(answer, "teams")
+    nodes = teams.get("nodes") if isinstance(teams, dict) else None
+    if not isinstance(nodes, list):
+        raise SourceError(ODD)
+    found = [n for n in nodes if isinstance(n, dict) and n.get("key") == key and isinstance(n.get("id"), str)]
+    if not found:
+        return None
+    _nodes(found[0].get("states"), ("id", "name", "type"))
+    return found[0]
+
+
+def states(team_node):
+    return _nodes(team_node.get("states"))
+
+
+def projects(team_node):
+    return _nodes(team_node.get("projects") or {"nodes": []})
+
+
+def _position(state, team_node):
+    here = state.get("position")
+    if here is None:
+        here = next((x.get("position") for x in states(team_node) if x.get("id") == state.get("id")), None)
+    return here if isinstance(here, (int, float)) and not isinstance(here, bool) else None
+
+
+def in_order(team_node):
+    """The team's states in their order on the board; one with no position keeps its place after those with one."""
+    numbered = [(n, s) for n, s in enumerate(states(team_node))]
+    return [s for _n, s in sorted(numbered, key=lambda x: (_position(x[1], team_node) is None,
+                                                         _position(x[1], team_node) or 0, x[0]))]
+
+
+# The kinds of state in their order on every board. Completed and canceled are one level: both are the end.
+LEVELS = {"triage": 0, "backlog": 1, "unstarted": 2, "started": 3, "completed": 4, "canceled": 4}
+
+
+def rank(state, team_node):
+    """Where a state sits on its team's board, to compare: by its kind, then by its place among its team's states."""
+    level = LEVELS.get(state.get("type"), 0)
+    if level == 4:
+        return (4, 0)
+    ids = [x["id"] for x in in_order(team_node)]
+    return (level, ids.index(state["id"]) if state.get("id") in ids else 0)
+
+
+def find_project(team_node, name):
+    """The one team project with this name, whatever its case, or None when none or several have it."""
+    want = name.strip().lower()
+    same = [p for p in projects(team_node) if p["name"].strip().lower() == want]
+    return same[0] if len(same) == 1 else None
+
+
+def find_state(team_node, name):
+    """The team's state with this name, whatever its case, or None."""
+    want = name.strip().lower()
+    return next((s for s in states(team_node) if s["name"].strip().lower() == want), None)
+
+
+def _mutate(query, variables, field):
+    answer = post(query, variables, api_key())
+    problem = _errors(answer)
+    if problem:
+        raise SourceError(problem)
+    done = _data(answer, field)
+    if not isinstance(done, dict) or done.get("success") is not True:
+        raise SourceError("Linear didn't make the change")
+    return done
+
+
+def comment(issue_id, body):
+    _mutate(COMMENT_MUTATION, {"input": {"issueId": issue_id, "body": body}}, "commentCreate")
+
+
+def update(issue_id, **fields):
+    """Sets fields such as stateId or projectId on one issue."""
+    _mutate(UPDATE_MUTATION, {"id": issue_id, "input": fields}, "issueUpdate")
+
+
+def create(team_id, title, body=None, state_id=None):
+    """A new issue on the team; gives its reference, or None when Linear made it without naming it."""
+    fields = {"teamId": team_id, "title": title}
+    if body:
+        fields["description"] = body
+    if state_id:
+        fields["stateId"] = state_id
+    done = _mutate(CREATE_MUTATION, {"input": fields}, "issueCreate")
+    # The issue is made by now: an answer that doesn't name it is no reason to call it failed and make it again.
+    key = done["issue"].get("identifier") if isinstance(done.get("issue"), dict) else None
+    return f"linear:{key}" if isinstance(key, str) and refs.KEY.fullmatch(key) else None

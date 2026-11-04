@@ -17,15 +17,25 @@ and legwork's `legwork-tracker`; use those, not copies.
    brings (feedback, a roadmap doc, known gaps, a thread). Look up
    facts yourself; put only decisions to the user.
 
-   Also sweep the ticket sources in `sources` in Orchi's settings, every
-   session, with `orchi tickets` (never a source's own tool): open tickets
-   in every state before done, and for Linear the teams in `linear.teams`.
+   Also sweep the ticket sources, every session, with `orchi tickets`
+   (never a source's own tool). First settle this session's sources: run
+   `orchi tickets --json`, whose `sources` are the ones chosen in Orchi's
+   settings, and show the user all four (legwork, github, linear, markdown)
+   with those ticked. They can untick one or add one, for this session only;
+   settings don't change. Then list tickets with each of the session's
+   sources as a `--source`, such as `orchi tickets --json --source legwork
+   --source linear`; `show` and the writes take a reference instead. The
+   sweep lists open tickets in
+   every state before done, and for Linear the teams in `linear.teams`.
    The sweep is read-only. Show the user a cross-check table, one line per
    ticket with the reason. A picked ticket's reference goes on the roadmap
    item. At the end of the session, propose one batched update for a single
-   yes: picked tickets to Todo in the right project, duplicates closed with a
-   comment. Write tickets, with `orchi tickets`, only after they say yes to
-   that batch, or if their message asks for writes.
+   yes: picked tickets to Todo in the right project
+   (`orchi tickets move <ref> Todo --project <name>`), duplicates closed with
+   a comment (`orchi tickets move <ref> Duplicate --comment "<why>"`, or
+   `closed` on GitHub). Run them with `--yes` only after they say yes to
+   that batch, or if their message asks for writes; without it,
+   `orchi tickets` only prints what it would change.
 
 2. First time on a project with no `## Vision`: run the `legwork-tracker`
    Vision step before grilling. Never run a project on the switchboard

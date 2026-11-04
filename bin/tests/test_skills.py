@@ -187,3 +187,39 @@ def test_planning_names_grilling_and_domain_modeling_by_their_plugin():
     assert "mattpocock-skills:domain-modeling" in skill("roadmap-planning")
     for name, text in orchi_texts():
         assert "/grill-with-docs" not in text, name
+
+
+# Decision 8 and ADR 0005: skills read and write tickets with orchi tickets alone.
+SOURCE_TOOLS = re.compile(
+    r"mcp__\w*(?:linear|github|notion|jira)|\bgh issue\b|\bgh api [^`\n]*/issues|api\.linear\.app|linear\.app/|"
+    r"\b(?:save_issue|list_issues|get_issue|save_comment|list_projects)\b|Linear MCP|Linear's (?:own )?tools?|"
+    r"Linear (?:tool|connector)", re.I)
+
+
+def test_no_skill_or_command_names_a_source_tool():
+    found = [(name, m.group(0)) for name, text in orchi_texts() for m in SOURCE_TOOLS.finditer(text)]
+    assert found == []
+
+
+def test_the_source_tool_check_catches_each_kind():
+    for text in ("use mcp__claude_ai_Linear__save_issue", "`gh issue close 7`", "list_projects in the team",
+                 "the Linear MCP", "Linear's tools", "`gh api repos/x/issues`"):
+        assert SOURCE_TOOLS.search(text), text
+
+
+def test_skills_that_write_tickets_say_how_a_yes_is_given():
+    for name in ("switchboard-protocol", "switchboard", "fanout", "roadmap-planning"):
+        body = skill(name)
+        assert "orchi tickets" in body, name
+        assert "--yes" in body, name
+
+
+def test_a_planning_sweep_opens_with_the_sessions_sources():
+    # Decision 9: the chosen sources ticked, the user unticks or adds one for this session, passed with --source.
+    body = skill("roadmap-planning")
+    assert "`sources`" in body
+    assert "--source" in body
+    assert "this session only" in body
+    assert "ticked" in body
+    # --source is for the list; show and the writes refuse it.
+    assert "on every `orchi tickets` call" not in body

@@ -9,6 +9,12 @@
   body when it is read on its own. `orchi tickets` lists them; see `docs/adr/0004-tickets-read-side.md`.
 - **Ticket reference**: `<source>:<id>`, one ticket written as text: `linear:ENG-12`, `gh:owner/repo#12`,
   `legwork:<project>` or `md:<file>#<anchor>`. A bare `ENG-12` is Linear's.
+- **Write**: a comment, a state change or a new ticket, made by `orchi tickets` on Linear or GitHub only. It is a
+  plan until `--yes` or a yes typed at a terminal; see `docs/adr/0005-tickets-write-side.md`.
+- **Sync**: `orchi tickets sync legwork:<project>`, which moves the Linear issues on a project's `linear:` line the
+  way `/wrap` does.
+- **The session's sources**: the ticket sources one planning session reads, the chosen ones unless the user
+  unticked or added one at its start. They are passed with `--source`; settings don't change.
 - **Step**: one thing `orchi` checks and can fix, such as Herdr, the themes or the ticket sources.
 - **Private home**: a throwaway Herdr and Claude home for tests, never a real one.
 - **Usage cache**: the JSON file of how full each Claude usage window is, `~/.cache/orchi/usage.json`, kept fresh by

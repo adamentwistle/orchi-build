@@ -3,6 +3,7 @@
 run() is the only code that starts gh, so tests put a fake in its place.
 """
 import json
+import re
 import subprocess
 
 from orchi import refs
@@ -84,3 +85,39 @@ def show(ref, s):
         return _ticket(ref["repo"], issue, body=str(issue.get("body") or ""))
     except (AttributeError, KeyError, TypeError, ValueError):
         raise SourceError(f"{s['github']['command']} gave an issue Orchi can't read") from None
+
+
+# Writes, through run() like the reads. Text goes as --name=value, so text starting with a dash stays text.
+
+PR_FIELDS = "url,state,isDraft,title,body,headRefName"
+CREATED = re.compile(r"https://github\.com/([A-Za-z0-9-]+)/([A-Za-z0-9._-]+)/issues/([1-9][0-9]*)")
+
+
+def comment(command, repo, number, body):
+    run([command, "issue", "comment", str(number), "--repo", repo, f"--body={body}"])
+
+
+def set_state(command, repo, number, state):
+    """Closes or reopens an issue: `state` is open or closed."""
+    run([command, "issue", "close" if state == "closed" else "reopen", str(number), "--repo", repo])
+
+
+def create(command, repo, title, body=""):
+    """A new issue in the repo; gives its reference, or None when gh made it without naming it."""
+    said = run([command, "issue", "create", "--repo", repo, f"--title={title}", f"--body={body}"])
+    # gh made it if it got this far: an answer that doesn't name it is no reason to call it failed and make it again.
+    found = [m.group(3) for m in map(CREATED.search, (said or "").splitlines()) if m]
+    return f"gh:{repo}#{int(found[-1])}" if found else None
+
+
+def pull(command, url):
+    """One pull request: its url, state (OPEN, CLOSED or MERGED), whether it's a draft, and its title, body and
+    branch."""
+    pr = _json([command, "pr", "view", url, "--json", PR_FIELDS])
+    texts = ("title", "body", "headRefName")
+    if not isinstance(pr, dict) or pr.get("state") not in ("OPEN", "CLOSED", "MERGED") \
+            or not isinstance(pr.get("isDraft"), bool) or not isinstance(pr.get("url"), str) \
+            or not all(isinstance(pr.get(k), (str, type(None))) for k in texts):
+        raise SourceError(f"{command} gave a pull request Orchi can't read")
+    return {"url": pr["url"], "state": pr["state"], "draft": pr["isDraft"],
+            "text": "\n".join(pr.get(k) or "" for k in texts)}

@@ -194,7 +194,9 @@ Where the fanout skill and this protocol disagree, this protocol wins:
 ## Tickets
 
 `orchi tickets` is how you read and write tickets, with `--json`, whatever
-their source. Never use a source's own tool for them.
+their source. Never use a source's own tool for them. A write (`orchi
+tickets comment`, `move` or `create`) only prints what it would change until
+you add `--yes`, so add it only to the writes allowed below.
 
 The tracker log and the pull requests are the record of the run. Tickets in
 Linear change only when both hold:
@@ -205,13 +207,15 @@ Linear change only when both hold:
   writes" makes none.
 
 Then, as your first step, before any other work, move the tickets your start
-prompt names to In Progress. For each PR, reuse the roadmap item's ticket, or
-create one on the first team in `linear.teams`: title is the PR title,
-description is one line on what and why plus the PR link. Do this at dispatch
+prompt names to In Progress (`orchi tickets move <ref> "In Progress" --yes`).
+For each PR, reuse the roadmap item's ticket, or create one on the first team
+in `linear.teams` (`orchi tickets create --team <key> "<PR title>" --body
+"<what and why, and the PR link>" --yes`). Do this at dispatch
 time, before the PR opens. Move it to In Progress when the PR opens, and to
 Done when it merges (or a "Delivered" style final state when the PR is handed
 to a maintainer unmerged, if the team has one, otherwise leave it In Review).
-Add a comment saying what landed and the PR number each time you move it.
+Add a comment saying what landed and the PR number each time you move it
+(`orchi tickets move <ref> <state> --comment "<what landed, PR number>" --yes`).
 Writes stay inside the teams in `linear.teams`.
 
 Without both, write nothing to Linear, and leave ticket moves to `/wrap`.

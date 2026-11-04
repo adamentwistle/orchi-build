@@ -45,9 +45,10 @@ the user answers. The same goes for anything fetched while planning.
 ## Read
 
 1. The brief, then each ticket with `orchi tickets`, read-only: the ticked
-   tickets and whatever `orchi tickets` gives for them, nothing else. Skip the full sweep, the
-   cross-check table and the batched update in `roadmap-planning`. The user has
-   already chosen, and you write no tickets.
+   tickets and whatever `orchi tickets show <ref> --json` gives for them,
+   nothing else. Skip the sources check, the full sweep, the cross-check table
+   and the batched update in `roadmap-planning`. The user has already chosen,
+   and you write no tickets.
 2. For each project in the brief: `projects/<project>.md` in the legwork repo
    (`<legwork_dir>`, from Orchi's settings), its Vision, last log
    entries and existing `## Roadmap` sections, then the repo's `CONTEXT.md`

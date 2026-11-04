@@ -701,7 +701,9 @@ then only to a source in `sources` in Orchi's settings. When they do:
 - Never a ticket reference in a shared repo (any owner not in
   `github.own_owners`); fine in the tracker and in repos whose owner is in
   `github.own_owners`.
-- Ticket done: move its state, with a comment saying why and which PR.
+- Ticket done: move its state, with a comment saying why and which PR:
+  `orchi tickets move <ref> <state> --comment "<why, which PR>" --yes`. Without
+  `--yes` it only prints what it would change.
 
 ## Reply style
 

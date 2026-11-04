@@ -11,11 +11,15 @@ READERS = {"legwork": legwork, "github": github, "linear": linear, "markdown": m
 SOURCES = tuple(READERS)
 
 
+def chosen(s, sources=None):
+    """The sources one call reads: those given, else the ones settings choose."""
+    return list(s["sources"]) if sources is None else [x for x in SOURCES if x in sources]
+
+
 def list_tickets(s, sources=None):
     """Every open ticket of the sources (the chosen ones when None), and one {source, message} per problem."""
-    chosen = s["sources"] if sources is None else [x for x in SOURCES if x in sources]
     tickets, problems = [], []
-    for name in chosen:
+    for name in chosen(s, sources):
         try:
             got, bad = READERS[name].list_open(s)
         except SourceError as e:

@@ -75,9 +75,9 @@ Claude session.` or `DECISION NEEDED`, stop here and print it. Nothing else
 in this skill overrides that.
 
 Otherwise, before anything below, move every ticket your prompt or `--only`
-items name (a Linear ticket such as `linear:ENG-12`) to In Progress with `orchi
-tickets`, but only when `sources` in Orchi's settings includes `linear` and
-the run allows Linear writes (the switchboard protocol's Tickets section and
+items name (a Linear ticket such as `linear:ENG-12`) to In Progress with
+`orchi tickets move <ref> "In Progress" --yes`, but only when `sources` in
+Orchi's settings includes `linear` and the run allows Linear writes (the switchboard protocol's Tickets section and
 ADR 0003). Tickets from any other source stay as they are. This is the orchestrator's own step, and the first write of the
 run. A ticket that won't move goes in the log, and the run carries on.
 

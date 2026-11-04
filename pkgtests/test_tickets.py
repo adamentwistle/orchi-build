@@ -209,7 +209,7 @@ def test_a_missing_markdown_path_is_a_problem(home, fakes, capsys):
 
 def test_no_legwork_folder_means_no_legwork_tickets(home, fakes, capsys):
     settings()
-    assert run(capsys, "--json")[:2] == (0, json.dumps({"tickets": [], "problems": []}, indent=2) + "\n")
+    assert run(capsys, "--json")[:2] == (0, json.dumps({"tickets": [], "problems": [], "sources": ["legwork"]}, indent=2) + "\n")
 
 
 # show

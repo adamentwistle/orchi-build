@@ -55,12 +55,15 @@ orchi                         # put the themes, mods, layout, keys, sounds and b
 orchi doctor                  # check them and change nothing
 orchi tickets                 # the open tickets of every chosen source; --json for agents
 orchi tickets show ENG-12     # one ticket by its reference
+orchi tickets move ENG-12 Done --comment "Merged"   # a write: asks first, or --yes; --dry-run to only look
+orchi tickets sync legwork:birch --dry-run          # what /wrap's Linear sync would change
 scripts/herdr-dev             # run a private Herdr for testing
 node --test tests/            # the panels' checks
 python3 -m pytest bin/tests   # the scripts' checks
 ```
 
-See `docs/setup.md` for the switchboard.
+See `docs/setup.md` for the switchboard, and `docs/legwork-sync.md` for the line that hands legwork's Linear sync to
+`orchi tickets sync`.
 
 ## Licence
 
