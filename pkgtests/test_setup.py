@@ -604,6 +604,20 @@ def test_a_fresh_window_on_herdrs_own_layout_ends_showing_orchis(mac, home):
     assert ("herdr-app", "do", "layout.switch", json.dumps({"name": "main-linear"})) in mac.calls
 
 
+def test_a_fresh_install_whose_switch_failed_shows_orchis_layout_on_the_retry(mac, home):
+    mac.everything()
+    mac.herdr_running, mac.layout = True, "main"
+    mac.settings(sources=["legwork"], claude_dir="~/.claude")
+    mac.install_fails.add("switch")
+    code, report, _ = run_orchi()
+    assert states(report)["Herdr reload"] == "broken"
+    mac.install_fails.clear()
+    mac.calls.clear()
+    code, report, _ = run_orchi()
+    assert code == 0 and states(report)["Herdr reload"] == "fixed"
+    assert mac.program("herdr-app", "do") == [("herdr-app", "do", "layout.switch", json.dumps({"name": "main-linear"}))]
+
+
 def test_a_later_run_keeps_the_layout_the_person_chose(mac, home):
     mac.everything()
     mac.herdr_running = True
