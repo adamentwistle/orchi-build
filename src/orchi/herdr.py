@@ -278,9 +278,14 @@ class Mods(Files):
         return None
 
 
+# Orchi's layout, layouts/main-linear.json, the one that holds its panels.
+LAYOUT = "main-linear"
+
+
 class Layout(Files):
     """The layout is in Herdr's layouts folder. One that holds a mod Orchi's lacks is replaced only on a yes."""
     name = "Layout"
+    fresh = False
 
     def wanted(self):
         return copies("layouts", app_home() / "layouts", ".json")
@@ -300,6 +305,8 @@ class Layout(Files):
 
     def fix(self, ctx):
         leave = set()
+        # A layout that wasn't there before is a new install, which the reload then shows.
+        self.fresh = not any(os.path.lexists(path) for path in self.wanted())
         for path, want in self.wanted().items():
             lost = self.lost(path, want)
             if lost and ctx.ask(f"Replace {self.label(path)}? It holds {', '.join(lost)}, which Orchi's layout "
@@ -480,7 +487,8 @@ def skill_folders():
 
 class Reload(Step):
     """Herdr shows what the content steps changed. The app reads its files by itself, but a layout is read again only
-    when it is chosen again, so the step chooses the one on screen, then reports the app's errors once."""
+    when it is chosen again, so the step chooses the one on screen, then reports the app's errors once. On a new
+    install the one on screen is Herdr's own, with none of Orchi's panels, so it chooses Orchi's instead."""
     name = "Herdr reload"
 
     def __init__(self, watched):
@@ -501,6 +509,13 @@ class Reload(Step):
         on the next run, so without it a failed reload would never be tried again."""
         return store_mod.state_dir() / "reload-pending"
 
+    def noted(self):
+        """What the pending note says: Orchi's layout name when a new install is still to be shown, else nothing."""
+        try:
+            return self.pending().read_text().strip()
+        except OSError:
+            return ""
+
     def check(self):
         found = self.status()
         if found is None:
@@ -515,11 +530,13 @@ class Reload(Step):
 
     def fix(self, ctx):
         found = self.status() or {}
+        # The note keeps a new install's layout too, so a retry after a failed switch still shows Orchi's.
+        fresh = any(getattr(step, "fresh", False) for step in self.watched) or self.noted() == LAYOUT
         ctx.folder(self.pending().parent)
-        ctx.write(self.pending(), "")
-        if isinstance(found.get("layout"), str):
-            done = ctx.run([system.find("herdr-app"), "do", "layout.switch", json.dumps({"name": found["layout"]})],
-                           timeout=30)
+        ctx.write(self.pending(), LAYOUT if fresh else "")
+        shown = LAYOUT if fresh else found.get("layout")
+        if isinstance(shown, str):
+            done = ctx.run([system.find("herdr-app"), "do", "layout.switch", json.dumps({"name": shown})], timeout=30)
             if done.returncode != 0:
                 raise SetupError(last_line(done.stdout) or "Herdr did not switch the layout")
             system.sleep(2)
