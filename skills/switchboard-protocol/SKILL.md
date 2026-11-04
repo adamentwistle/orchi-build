@@ -46,6 +46,9 @@ into your pane. Decide what you can, and send up only what changes direction.
   seemed to work. A branch you could not delete goes in your `DONE` with the
   error, never "left for the user" without one.
 
+- `gh` in this skill and in fanout means the command `github.command` names in
+  Orchi's settings, such as `gh-personal`. Plain `gh` may be another account.
+
 ## Decide or escalate
 
 Decide it yourself, and log it as `DECIDED`, unless one of these is true.

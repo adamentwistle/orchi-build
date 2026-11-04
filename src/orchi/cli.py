@@ -11,7 +11,7 @@ import argparse
 import sys
 from collections import namedtuple
 
-from orchi import __version__, engine, uninstall, update
+from orchi import __version__, engine, system, uninstall, update
 from orchi.tickets import cli as tickets
 
 Command = namedtuple("Command", "help handler options", defaults=(None,))
@@ -59,4 +59,9 @@ def build_parser():
 def main(argv=None):
     args = build_parser().parse_args(argv)
     command = COMMANDS[args.command] if args.command else DEFAULT
-    return command.handler(args)
+    try:
+        return command.handler(args)
+    except system.Refused as e:
+        # ORCHI_NO_SYSTEM is set (the tests, a scratch-home check): one line, not a traceback.
+        print(f"orchi: {e}", file=sys.stderr)
+        return 1

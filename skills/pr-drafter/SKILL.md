@@ -44,6 +44,10 @@ you sweep must be the file you send. Nothing else you produce matters
 if the ledger is missing the sweep's real output or a verdict word on
 every Verification line.
 
+`gh` here means the command `github.command` names in Orchi's settings,
+such as `gh-personal`. Plain `gh` may be another account that can't see
+the repo.
+
 ## Hard rules
 
 1. The author is the user and nobody else, on the pull request

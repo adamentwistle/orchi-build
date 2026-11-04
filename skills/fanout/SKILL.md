@@ -16,6 +16,9 @@ Building blocks you already have: `/pr-review` (review loop), `/wrap`
 (pane control and the pane-or-subagent table), and `bugbot-wait` in Orchi's `bin/`.
 Do not re-derive any of them.
 
+`gh` here means the command `github.command` names in Orchi's settings, such as `gh-personal`. Plain `gh` may be
+another account that can't see the repo. Allow rules and briefs name that command too.
+
 ## 0. Arguments and flags
 
 `/fanout <project> [--merge] [--low-priority] [--max N] [--only "a, b"] [--workers <model>:<effort>]`

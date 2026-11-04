@@ -41,11 +41,16 @@ for that commit; with --trigger it must have completed after the trigger.
 """
 import argparse
 import datetime as dt
+import functools
 import json
+import os
 import re
 import subprocess
 import sys
 import time
+
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+import orchi_settings  # noqa: E402
 
 # Who Bugbot is, exactly.
 # Reviews and inline comments come from the GitHub App user "cursor[bot]" of
@@ -117,8 +122,20 @@ def pages(raw):
     return [item for page in json.loads(raw) for item in page]
 
 
+@functools.lru_cache(maxsize=None)
+def gh_command():
+    """The command github.command names, such as gh-personal, so a repo only that account sees is reachable. Read once,
+    so a settings edit during a wait can't switch accounts between calls."""
+    return orchi_settings.read()["github"]["command"]
+
+
 def gh(*args):
-    r = subprocess.run(["gh", *args], capture_output=True, text=True)
+    command = gh_command()
+    try:
+        r = subprocess.run([command, *args], capture_output=True, text=True)
+    except OSError as e:
+        print(json.dumps({"state": "ERROR", "gh": f"{command} could not be started: {e.strerror or e}"}))
+        sys.exit(3)
     if r.returncode != 0:
         print(json.dumps({"state": "ERROR", "gh": r.stderr.strip()[:500]}))
         sys.exit(3)

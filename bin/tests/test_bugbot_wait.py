@@ -174,3 +174,58 @@ def test_no_bugbot_found_stops_before_posting(bw):
     assert out["reason"] == ("Bugbot is not enabled on acme/web: no Cursor Bugbot check or review "
                              "on this pull request or the last 20")
     assert [c[:2] for c in bw.calls] == [["api", "graphql"]]
+
+
+def test_it_runs_the_gh_command_orchi_settings_name(tmp_path):
+    # The smoke test's repo was visible only to the account behind gh-personal, and plain gh failed with exit 3.
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    (bindir / "gh").write_text("#!/bin/sh\necho 'Could not resolve to a Repository' >&2\nexit 1\n")
+    (bindir / "gh-other").write_text(STUB)
+    for stub in bindir.iterdir():
+        stub.chmod(0o755)
+    fixture = tmp_path / "gh.json"
+    fixture.write_text(json.dumps({"api graphql": ENABLED, f"api repos/{REPO}/pulls/7/reviews": [[review(BOT)]],
+                                   f"api repos/{REPO}/pulls/7/comments": [[]], "pr view 7": {"headRefOid": HEAD},
+                                   f"api repos/{REPO}/commits/{HEAD}/check-runs": {"check_runs": []}}))
+    settings = tmp_path / "settings.json"
+    settings.write_text(json.dumps({"github": {"command": "gh-other"}}))
+    env = dict(os.environ, PATH=f"{bindir}:{os.environ['PATH']}", GH_FIXTURE=str(fixture),
+               ORCHI_SETTINGS=str(settings), HOME=str(tmp_path))
+    p = subprocess.run([sys.executable, str(SCRIPT), "7", "--repo", REPO, "--after", AFTER, "--timeout", "0"],
+                       capture_output=True, text=True, env=env, timeout=30)
+    assert (p.returncode, json.loads(p.stdout)["state"]) == (0, "CLEAR"), p.stdout
+
+
+def test_a_gh_command_that_is_not_there_is_a_gh_error(tmp_path):
+    # From the review: a missing program crashed with exit 1, which callers read as FINDINGS.
+    settings = tmp_path / "settings.json"
+    settings.write_text(json.dumps({"github": {"command": "gh-not-installed-anywhere"}}))
+    env = dict(os.environ, ORCHI_SETTINGS=str(settings), HOME=str(tmp_path))
+    p = subprocess.run([sys.executable, str(SCRIPT), "7", "--repo", REPO, "--after", AFTER, "--timeout", "0"],
+                       capture_output=True, text=True, env=env, timeout=30)
+    assert p.returncode == 3, p.stderr
+    assert json.loads(p.stdout)["state"] == "ERROR"
+
+
+def test_the_gh_command_is_read_once_for_the_whole_wait(tmp_path):
+    # From the review: a settings edit in the middle of a wait must not switch accounts between calls.
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    settings = tmp_path / "settings.json"
+    settings.write_text(json.dumps({"github": {"command": "gh-other"}}))
+    (bindir / "gh").write_text("#!/bin/sh\necho 'wrong account' >&2\nexit 1\n")
+    (bindir / "gh-other").write_text(STUB.replace(
+        "args = sys.argv[1:]",
+        "args = sys.argv[1:]\nopen(os.environ['ORCHI_SETTINGS'], 'w').write('{\"github\": {\"command\": \"gh\"}}')"))
+    for stub in bindir.iterdir():
+        stub.chmod(0o755)
+    fixture = tmp_path / "gh.json"
+    fixture.write_text(json.dumps({"api graphql": ENABLED, f"api repos/{REPO}/pulls/7/reviews": [[review(BOT)]],
+                                   f"api repos/{REPO}/pulls/7/comments": [[]], "pr view 7": {"headRefOid": HEAD},
+                                   f"api repos/{REPO}/commits/{HEAD}/check-runs": {"check_runs": []}}))
+    env = dict(os.environ, PATH=f"{bindir}:{os.environ['PATH']}", GH_FIXTURE=str(fixture),
+               ORCHI_SETTINGS=str(settings), HOME=str(tmp_path))
+    p = subprocess.run([sys.executable, str(SCRIPT), "7", "--repo", REPO, "--after", AFTER, "--timeout", "0"],
+                       capture_output=True, text=True, env=env, timeout=30)
+    assert (p.returncode, json.loads(p.stdout)["state"]) == (0, "CLEAR"), p.stdout

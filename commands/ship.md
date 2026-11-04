@@ -8,7 +8,7 @@ Project for the tracker: $ARGUMENTS if given, otherwise infer it from the repo.
 Rules that apply to every step: author everything as me. No attribution
 trailer, no co-author line, no mention of Claude or any agent in commits,
 PR bodies or comments. Work lands on a branch through a pull request,
-never by pushing to main.
+never by pushing to main. `gh` here means the command `github.command` names in Orchi's settings, such as `gh-personal`. Plain `gh` may be another account that can't see the repo.
 
 Steps:
 1. `git status --short` and `git diff --stat`. Stage only the files this

@@ -158,8 +158,9 @@ class PlanningSkills(Tool):
 
     def install(self, ctx):
         claude = system.find("claude")
-        # The default profile is the one Claude Code uses when the variable is not set, and setting it would make Claude
-        # Code keep that profile's state in a different file.
+        # The default profile is the one Claude Code uses when the variable is not set. Set to ~/.claude, it makes
+        # Claude Code keep the state in ~/.claude/.claude.json rather than ~/.claude.json. Plugins live in the profile
+        # folder either way, so this runs as a plain `claude` would. Sessions Orchi starts do set it (see FolderTrust).
         env = dict(os.environ)
         if profile() == herdr.home() / ".claude":
             env.pop("CLAUDE_CONFIG_DIR", None)
@@ -175,10 +176,17 @@ class FolderTrust(Step):
     without stopping at it."""
     name = "Folder trust"
 
-    def file(self):
-        # Claude Code keeps the default profile's state in ~/.claude.json, and any other profile's inside the profile.
+    def files(self):
+        # Orchi starts every session with CLAUDE_CONFIG_DIR set to claude_dir when the settings set it, which the Claude
+        # profile step makes sure of outside a private window, and Claude Code then keeps the state in
+        # <claude_dir>/.claude.json. A plain `claude` with no CLAUDE_CONFIG_DIR keeps the default profile's state in
+        # ~/.claude.json instead, so ~/.claude gets both, the inner one only when Claude Code made it: a file holding
+        # nothing but projects would stand in for the state it keeps there.
         here = profile()
-        return herdr.home() / ".claude.json" if here == herdr.home() / ".claude" else here / ".claude.json"
+        own = here / ".claude.json"
+        if here != herdr.home() / ".claude":
+            return [own]
+        return [own, herdr.home() / ".claude.json"] if os.path.exists(own) else [herdr.home() / ".claude.json"]
 
     def folders(self):
         if leave_alone():
@@ -186,37 +194,63 @@ class FolderTrust(Step):
         s = settings.read()
         return [Path(d) for d in (s["orchi_dir"], s["legwork_dir"]) if d and os.path.isdir(d)]
 
-    def projects(self):
-        found = herdr.read_object(self.file(), ".claude.json").get("projects", {})
+    def projects(self, file):
+        """The file's whole config and its projects, from one read, so a write merges into what was read."""
+        name = herdr.label(file, herdr.home())
+        config = herdr.read_object(file, name)
+        found = config.get("projects", {})
         if not isinstance(found, dict):
-            raise ValueError(".claude.json holds projects that are not an object, so Orchi leaves it alone")
-        return found
+            raise ValueError(f"{name} holds projects that are not an object, so Orchi leaves it alone")
+        return config, found
 
-    def untrusted(self):
-        folders = self.folders()
-        if not folders:
-            return []
-        projects = self.projects()
+    @staticmethod
+    def untrusted(folders, projects):
         return [f for f in folders
                 if not (isinstance(projects.get(str(f)), dict) and projects[str(f)].get("hasTrustDialogAccepted") is True)]
 
+    def each(self):
+        """(file, config, projects, untrusted folders, error) per file. A file that can't be read is its own error and
+        never stops another file being trusted."""
+        folders = self.folders()
+        for file in self.files() if folders else []:
+            try:
+                config, projects = self.projects(file)
+            except ValueError as e:
+                yield file, None, None, [], str(e)
+                continue
+            yield file, config, projects, self.untrusted(folders, projects), None
+
     def check(self):
-        found = self.untrusted()
-        return needs_fix(f"not trusted: {', '.join(herdr.label(f) for f in found)}") if found else ok()
+        found, errors = [], []
+        for _, _, _, todo, error in self.each():
+            found += todo
+            errors += [error] if error else []
+        if found:
+            return needs_fix("; ".join([f"not trusted: {', '.join(herdr.label(f) for f in dict.fromkeys(found))}",
+                                        *errors]))
+        if errors:
+            raise ValueError("; ".join(errors))
+        return ok()
 
     def fix(self, ctx):
-        todo = self.untrusted()
-        config = herdr.read_object(self.file(), ".claude.json")
-        projects = self.projects()
-        for folder in todo:
-            entry = projects.get(str(folder))
-            projects[str(folder)] = {**(entry if isinstance(entry, dict) else {}), "hasTrustDialogAccepted": True}
-        config["projects"] = projects
-        # A link stays a link: the file it points at is written.
-        path = Path(os.path.realpath(self.file()))
-        ctx.folder(path.parent)
-        ctx.write(path, json.dumps(config, indent=2, ensure_ascii=False) + "\n", mode=None if path.exists() else 0o600)
-        return f"trusted {len(todo)}"
+        done, errors = set(), []
+        for file, config, projects, todo, error in self.each():
+            errors += [error] if error else []
+            if not todo:
+                continue
+            for folder in todo:
+                entry = projects.get(str(folder))
+                projects[str(folder)] = {**(entry if isinstance(entry, dict) else {}), "hasTrustDialogAccepted": True}
+            config["projects"] = projects
+            # A link stays a link: the file it points at is written.
+            path = Path(os.path.realpath(file))
+            ctx.folder(path.parent)
+            text = json.dumps(config, indent=2, ensure_ascii=False) + "\n"
+            ctx.write(path, text, mode=None if path.exists() else 0o600)
+            done.update(todo)
+        if errors:
+            raise ValueError("; ".join(errors))
+        return f"trusted {len(done)}"
 
 
 def steps():

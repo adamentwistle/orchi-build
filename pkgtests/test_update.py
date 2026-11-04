@@ -457,3 +457,54 @@ def test_a_warning_after_the_bin_folder_does_not_hide_it(computer, capsys, monke
     monkeypatch.setattr(system, "run", run)
     code, out = update(capsys)
     assert code == 0 and computer.program("orchi")
+
+
+# From the smoke test
+
+def test_with_the_system_switched_off_it_says_so_in_one_line_and_changes_nothing(computer, site, capsys, monkeypatch):
+    # The installer check runs orchi in a scratch home with ORCHI_NO_SYSTEM set; update ended in a traceback there.
+    monkeypatch.setenv("ORCHI_NO_SYSTEM", "1")
+    code, out = update(capsys)
+    assert code == 1
+    assert out == ("downloading " + site.url + "/repos/o/r/releases/latest is refused while ORCHI_NO_SYSTEM is set. "
+                   "Nothing changed.\n")
+    assert computer.calls == [] and site.seen == []
+
+
+def test_a_refused_download_of_the_new_version_is_one_line_too(computer, site, capsys, monkeypatch):
+    # From the review: the refusal was caught for the release lookup only.
+    real = system.get
+
+    def get(url, **kw):
+        if "/tarball/" in url:
+            raise system.Refused(f"downloading {url} is refused while ORCHI_NO_SYSTEM is set")
+        return real(url, **kw)
+    monkeypatch.setattr(system, "get", get)
+    code, out = update(capsys)
+    assert code == 1 and out.endswith("is refused while ORCHI_NO_SYSTEM is set. Nothing changed.\n")
+    assert computer.installed == []
+
+
+def test_a_refusal_anywhere_in_a_command_is_one_line(computer, capsys, monkeypatch):
+    # From the review: the steps update starts afterwards can be refused too, and any other command as well.
+    def run(argv, **kw):
+        if os.path.basename(str(argv[0])) == "orchi":
+            raise system.Refused("starting orchi is refused while ORCHI_NO_SYSTEM is set")
+        return computer.run(argv, **kw)
+    monkeypatch.setattr(system, "run", run)
+    code = cli.main(["update"])
+    captured = capsys.readouterr()
+    assert code == 1
+    assert captured.err == "orchi: starting orchi is refused while ORCHI_NO_SYSTEM is set\n"
+
+
+def test_json_still_gives_one_object_when_the_steps_are_refused(computer, capsys, monkeypatch):
+    # From the review: the one-line refusal at the command line left a --json caller with no object.
+    def run(argv, **kw):
+        if os.path.basename(str(argv[0])) == "orchi":
+            raise system.Refused("starting orchi is refused while ORCHI_NO_SYSTEM is set")
+        return computer.run(argv, **kw)
+    monkeypatch.setattr(system, "run", run)
+    code = cli.main(["update", "--json"])
+    got = json.loads(capsys.readouterr().out)
+    assert code == 1 and got["updated"] is True and got["ok"] is False

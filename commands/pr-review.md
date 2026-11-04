@@ -9,6 +9,9 @@ The review is Bugbot when the repo has it, otherwise Claude Code's
 `/code-review` skill. `bugbot-wait` asks GitHub which: Bugbot is enabled
 when it has run or reviewed on any of the repo's last 20 pull requests.
 
+`gh` here means the command `github.command` names in Orchi's settings, such as `gh-personal`. Plain `gh` may be
+another account that can't see the repo.
+
 Bugbot is Cursor's reviewer. It posts a review as login `cursor`; findings
 arrive as inline review comments, a clean run says "found no new issues".
 The poll is a script, not a hand-rolled sleep loop, and it runs in the

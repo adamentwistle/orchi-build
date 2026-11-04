@@ -38,6 +38,9 @@ missing after a yes, and ends with Herdr showing Orchi. These are the answers th
   on one profile. One already set stays.
 - **Folder trust is answered in the file Claude Code keeps it in**, `<claude_dir>/.claude.json`, for the Orchi folder
   and the legwork folder when they exist, after a backup of the file. That is the same answer pressing Yes gives.
+  Sessions Orchi starts have `CLAUDE_CONFIG_DIR` set, so that is the file they read even for `~/.claude`. For
+  `~/.claude`, `~/.claude.json` gets the answer too, because a plain `claude` reads that one, and
+  `~/.claude/.claude.json` only when Claude Code has made it.
 - **A private window leaves shared things alone.** With a Herdr app home that is not the usual one, the launch agent is
   not touched, and the Claude steps do nothing unless the private settings name a `claude_dir` of their own.
 - **The questions are the listed ones.** Which of GitHub, Linear and Markdown to read (legwork is always on), the

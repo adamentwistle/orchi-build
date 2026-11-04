@@ -49,7 +49,9 @@ and legwork's `legwork-tracker`; use those, not copies.
    `Bash(gh pr merge:*)` only on repos whose owner is in `github.own_owners`
    when the roadmap says merge;
    and denies `git push origin main`, `git push --force` and `git push -f`.
-   Add missing rules now, never commit them on shared repos. With the merge
+   `gh` in these rules is the command `github.command` names in Orchi's
+   settings, such as `gh-personal`. Add missing rules now, never commit them
+   on shared repos. If the edit is refused, list the rules under "Needs you". With the merge
    rule in place the orchestrator merges a PR when it judges it ready (gate
    green, review clean); no merge word from the user is needed at the start. An
    orchestrator cannot pass the user's approval on for them, so a missing rule

@@ -156,7 +156,7 @@ What each group is for:
 
 `grep` and `tail` are allowed for any path, because a Bash rule cannot be limited to `*/.legwork/switchboard.md`. They only read. Push notifications use Claude Code's `PushNotification` tool, which needs no rule.
 
-Each project repo's gitignored `.claude/settings.local.json` needs allow rules for `Bash(gh pr create:*)`, `Bash(gh pr edit:*)`, and `Bash(git push origin fanout/*)` style pushes from worktrees, plus `Bash(gh pr merge:*)` only on repos whose owner is in `github.own_owners`, when the roadmap says to merge. Add deny rules for `git push origin main`, `git push --force` and `git push -f`. Without the allow rules the permission classifier stalls a run waiting on an approval; never commit these rules on a shared repo.
+Each project repo's gitignored `.claude/settings.local.json` needs allow rules, with the command `github.command` names in place of `gh` (`gh-personal`, say), for `Bash(gh pr create:*)`, `Bash(gh pr edit:*)`, and `Bash(git push origin fanout/*)` style pushes from worktrees, plus `Bash(gh pr merge:*)` only on repos whose owner is in `github.own_owners`, when the roadmap says to merge. Add deny rules for `git push origin main`, `git push --force` and `git push -f`. Without the allow rules the permission classifier stalls a run waiting on an approval; never commit these rules on a shared repo.
 
 ## The herdr wrapper
 

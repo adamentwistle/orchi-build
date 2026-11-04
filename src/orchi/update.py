@@ -122,6 +122,10 @@ def update(args):
     except Stop as e:
         report["summary"] = str(e)
         return report, 1
+    except system.Refused as e:
+        # ORCHI_NO_SYSTEM is set: any download or install update tries is refused, and it says so in one line.
+        report["summary"] = f"{e}. Nothing changed."
+        return report, 1
     report.update(to=shown, updated=True, summary=f"Updated Orchi from {now} to {shown}.")
     return report, None
 
@@ -134,12 +138,17 @@ def run(args):
     if not args.json:
         _say(report, False)
     # The steps, in the new Orchi, with the terminal: they refresh the content and ask what they need.
-    command = new_orchi(system.find("uv"))
-    if command is None:
+    try:
+        command = new_orchi(system.find("uv"))
+        if command is None:
+            code = 1
+            print("Run orchi to refresh what it installed.", file=sys.stderr)
+        else:
+            code = system.run([command], interactive=True).returncode
+    except system.Refused as e:
+        # Said here rather than by the command line, so --json still gives its one object.
+        print(f"orchi: {e}", file=sys.stderr)
         code = 1
-        print("Run orchi to refresh what it installed.", file=sys.stderr)
-    else:
-        code = system.run([command], interactive=True).returncode
     if args.json:
         # One object, said once the steps are done, so ok says whether they worked.
         report["ok"] = code == 0

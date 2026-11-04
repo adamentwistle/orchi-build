@@ -832,7 +832,21 @@ def test_the_default_profile_keeps_its_trust_in_the_home_claude_json(mac, home):
     assert code == 0, report
     got = json.loads((home / ".claude.json").read_text())
     assert got["numStartups"] == 2 and got["projects"][str(home / "orchi")]["hasTrustDialogAccepted"] is True
-    assert not (home / ".claude" / ".claude.json").exists()
+
+
+def test_sessions_orchi_starts_under_the_default_profile_find_the_folders_trusted(mac, home):
+    # Orchi starts every session with CLAUDE_CONFIG_DIR set to claude_dir, and Claude Code then keeps its state in
+    # <claude_dir>/.claude.json, even when claude_dir is ~/.claude. The smoke test stopped at the trust question here.
+    mac.settings(claude_dir="~/.claude", orchi_dir="~/orchi")
+    (home / "orchi").mkdir()
+    (home / ".claude").mkdir(exist_ok=True)
+    (home / ".claude" / ".claude.json").write_text(json.dumps({"numStartups": 7}))
+    code, report = go(["Folder trust"])
+    assert code == 0, report
+    got = json.loads((home / ".claude" / ".claude.json").read_text())
+    assert got["numStartups"] == 7 and got["projects"][str(home / "orchi")]["hasTrustDialogAccepted"] is True
+    assert json.loads((home / ".claude.json").read_text())["projects"][str(home / "orchi")]["hasTrustDialogAccepted"]
+    assert go(["Folder trust"], fix=False)[0] == 0
 
 
 def test_another_profile_keeps_its_trust_in_its_own_claude_json(mac, home):
@@ -983,3 +997,49 @@ def test_a_no_to_the_house_rules_is_for_that_file_only(mac, home):
     assert code == 0 and "House rules" in [s["name"] for s in report["steps"]]
     assert (other / "house-rules.md").read_text().endswith("\n") and "orchi tickets sync" in (other / "house-rules.md").read_text()
     assert file.read_text() == "# House rules\n"
+
+
+def test_a_broken_claude_json_is_named_by_its_path(mac, home):
+    # From the review: the default profile has two of them, so the error has to say which one.
+    mac.settings(claude_dir="~/.claude", orchi_dir="~/orchi")
+    (home / "orchi").mkdir()
+    (home / ".claude").mkdir(exist_ok=True)
+    (home / ".claude" / ".claude.json").write_text("{not json")
+    code, report = go(["Folder trust"], fix=False)
+    assert code == 1 and "~/.claude/.claude.json is not valid JSON" in detail(report, "Folder trust")
+
+
+def test_the_default_profile_gets_no_inner_claude_json_it_did_not_have(mac, home):
+    # From the review: a stub with only projects in it would stand in for the state Claude Code keeps there.
+    mac.settings(claude_dir="~/.claude", orchi_dir="~/orchi")
+    (home / "orchi").mkdir()
+    code, _ = go(["Folder trust"])
+    assert code == 0
+    assert json.loads((home / ".claude.json").read_text())["projects"][str(home / "orchi")]["hasTrustDialogAccepted"]
+    assert not (home / ".claude" / ".claude.json").exists()
+
+
+def test_a_broken_home_claude_json_still_lets_the_sessions_file_be_trusted(mac, home):
+    # From the review: one bad file blocked the other, so Orchi's sessions still stopped at the question.
+    mac.settings(claude_dir="~/.claude", orchi_dir="~/orchi")
+    (home / "orchi").mkdir()
+    (home / ".claude").mkdir(exist_ok=True)
+    (home / ".claude" / ".claude.json").write_text(json.dumps({"numStartups": 1}))
+    (home / ".claude.json").write_text("{not json")
+    code, report = go(["Folder trust"])
+    assert code == 1 and "~/.claude.json is not valid JSON" in detail(report, "Folder trust")
+    got = json.loads((home / ".claude" / ".claude.json").read_text())
+    assert got["projects"][str(home / "orchi")]["hasTrustDialogAccepted"] is True
+    assert (home / ".claude.json").read_text() == "{not json"
+
+
+def test_a_dangling_inner_claude_json_link_is_left_alone(mac, home, tmp_path):
+    # From the review: a link to a file that has gone broke the step on every run.
+    mac.settings(claude_dir="~/.claude", orchi_dir="~/orchi")
+    (home / "orchi").mkdir()
+    (home / ".claude").mkdir(exist_ok=True)
+    (home / ".claude" / ".claude.json").symlink_to(tmp_path / "gone.json")
+    code, report = go(["Folder trust"])
+    assert code == 0, report
+    assert json.loads((home / ".claude.json").read_text())["projects"][str(home / "orchi")]["hasTrustDialogAccepted"]
+    assert not (tmp_path / "gone.json").exists()
