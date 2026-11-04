@@ -14,14 +14,13 @@ docs/adr/0005-herdr-content-steps.md has the reasons.
 import copy
 import json
 import os
-import shutil
 import subprocess
 from collections import namedtuple
 from pathlib import Path
 
-from orchi import paths, settings
+from orchi import paths, settings, system
 from orchi import store as store_mod
-from orchi.engine import Step, broken, needs_fix, ok
+from orchi.engine import SetupError, Step, broken, last_line, needs_fix, ok
 from orchi.screen import NEEDS_FIX
 
 # Files and folders the app writes into a mod's folder itself, and files that never ship.
@@ -442,23 +441,29 @@ class BrowserPane(Files):
 
 
 def tools():
-    """The node and agent-browser on PATH, and why they won't do, or None."""
-    agent, node = shutil.which("agent-browser"), shutil.which("node")
+    """The node and agent-browser on PATH (or where an installer puts them), and why they won't do, or None."""
+    agent, node = system.find("agent-browser"), system.find("node")
     if not agent:
         return None, None, "agent-browser is not on PATH"
     if not node:
         return None, None, "node is not on PATH"
     agent, node = os.path.abspath(agent), os.path.abspath(node)
-    try:
-        major = subprocess.run([node, "-p", 'process.versions.node.split(".")[0]'], capture_output=True, text=True,
-                               timeout=30).stdout.strip()
-    except (OSError, subprocess.SubprocessError):
-        major = ""
-    if not (major.isascii() and major.isdecimal()):
+    major = node_major(node)
+    if major is None:
         return None, None, f"could not read the version of node at {node}"
-    if int(major) < NODE_MAJOR:
+    if major < NODE_MAJOR:
         return None, None, f"node at {node} is version {major}"
     return node, agent, None
+
+
+def node_major(node):
+    """The major version of the node program at this path, or None when it can't be read."""
+    try:
+        text = subprocess.run([node, "-p", 'process.versions.node.split(".")[0]'], capture_output=True, text=True,
+                              timeout=30).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return int(text) if text.isascii() and text.isdecimal() else None
 
 
 def skill_folders():
@@ -471,6 +476,56 @@ def skill_folders():
             if folder.is_dir() and all(os.path.realpath(folder) != os.path.realpath(f) for f in found):
                 found.append(folder)
     return found or [home() / ".claude"]
+
+
+class Reload(Step):
+    """Herdr shows what the content steps changed. The app reads its files by itself, but a layout is read again only
+    when it is chosen again, so the step chooses the one on screen, then reports the app's errors once."""
+    name = "Herdr reload"
+
+    def __init__(self, watched):
+        self.watched, self.reloaded = watched, False
+
+    def status(self):
+        """The app's status, or None when it isn't installed or isn't running."""
+        app = system.find("herdr-app")
+        if not app:
+            return None
+        done = system.run([app, "status"], timeout=30)
+        if done.returncode != 0:
+            return None
+        return system.json_object(done.stdout)
+
+    def pending(self):
+        """The note in the state folder that a reload was needed and has not worked yet. Content steps are not changed
+        on the next run, so without it a failed reload would never be tried again."""
+        return store_mod.state_dir() / "reload-pending"
+
+    def check(self):
+        found = self.status()
+        if found is None:
+            return ok()
+        if not self.reloaded and (os.path.lexists(self.pending()) or any(step.changed for step in self.watched)):
+            return needs_fix("content changed")
+        errors = [str(e) for e in found.get("errors") or []]
+        if errors:
+            more = f" and {len(errors) - SHOWN} more" if len(errors) > SHOWN else ""
+            return broken(f"Herdr reports {len(errors)}: {'; '.join(errors[:SHOWN])}{more}")
+        return ok()
+
+    def fix(self, ctx):
+        found = self.status() or {}
+        ctx.folder(self.pending().parent)
+        ctx.write(self.pending(), "")
+        if isinstance(found.get("layout"), str):
+            done = ctx.run([system.find("herdr-app"), "do", "layout.switch", json.dumps({"name": found["layout"]})],
+                           timeout=30)
+            if done.returncode != 0:
+                raise SetupError(last_line(done.stdout) or "Herdr did not switch the layout")
+            system.sleep(2)
+        self.reloaded = True
+        ctx.remove(self.pending())
+        return "reloaded"
 
 
 def steps():

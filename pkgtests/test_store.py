@@ -1,6 +1,7 @@
 """The state folder: the lock, the record of runs, ownership records and backups."""
 import json
 import os
+import stat
 import subprocess
 import sys
 
@@ -380,3 +381,28 @@ def test_a_held_back_ctrl_c_is_not_lost_when_sigint_was_left_at_its_default(home
         signal.signal(signal.SIGINT, old)
     assert "carried on" not in done.stdout
     assert done.returncode == -signal.SIGINT
+
+
+def test_a_backup_is_private_whatever_the_original_was(home):
+    original = home / "cfg" / "deep" / "file.json"
+    original.parent.mkdir(parents=True)
+    original.write_text("{}")
+    original.chmod(0o644)
+    (home / "cfg").chmod(0o755)
+    copy = store.Store().backup(original)
+    assert stat.S_IMODE(copy.stat().st_mode) == 0o600
+    here, base = copy.parent, store.state_dir() / "backups"
+    while here != base.parent:
+        assert stat.S_IMODE(here.stat().st_mode) == 0o700, here
+        here = here.parent if here != base else base.parent
+
+
+def test_a_backed_up_folder_is_private_all_through(home):
+    folder = home / "dir"
+    (folder / "sub").mkdir(parents=True)
+    (folder / "sub" / "a").write_text("x")
+    (folder / "b").write_text("y")
+    (folder / "b").chmod(0o666)
+    copy = store.Store().backup(folder)
+    modes = {p.name: stat.S_IMODE(p.stat().st_mode) for p in [copy, copy / "sub", copy / "sub" / "a", copy / "b"]}
+    assert modes == {"dir": 0o700, "sub": 0o700, "a": 0o600, "b": 0o600}

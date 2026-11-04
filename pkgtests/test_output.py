@@ -124,8 +124,9 @@ def test_a_question_with_no_terminal_fails_the_step_instead_of_waiting(home, tmp
 # The real command
 
 def orchi(*argv):
-    """Python's arguments for `orchi argv`."""
-    return ["-m", "orchi", *argv]
+    """Python's arguments for `orchi argv`, with the settings and Herdr steps only: a whole run would start installers,
+    which these tests are not about and which must never run for real."""
+    return [str(DRIVER.with_name("orchi_driver.py")), *argv]
 
 
 def run_orchi(*argv):
@@ -222,3 +223,11 @@ def test_the_spinner_line_is_cleared_even_when_ctrl_c_lands_while_it_stops(monke
     except KeyboardInterrupt:
         pass
     assert out.getvalue().endswith("\r\x1b[2K")
+
+
+def test_the_child_runners_do_not_depend_on_the_machine_they_run_on(home, tools):
+    """On a Linux runner the real command stops at once ("not ready"); the test runners must not."""
+    code = ("import runpy, sys; sys.platform = 'linux'; sys.argv = ['driver', 'doctor']; "
+            f"runpy.run_path({str(DRIVER.with_name('orchi_driver.py'))!r}, run_name='__main__')")
+    done = subprocess.run([sys.executable, "-c", code], env=child_env(), capture_output=True, text=True, timeout=30)
+    assert "not ready" not in done.stdout and done.stdout.splitlines()[0] == "✓  Orchi files", done.stdout + done.stderr

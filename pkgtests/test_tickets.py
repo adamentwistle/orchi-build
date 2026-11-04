@@ -355,6 +355,7 @@ def test_issues_filter_follows_teams_and_projects():
 
 
 def test_find_password_asks_security_for_one_generic_password(monkeypatch):
+    monkeypatch.delenv("ORCHI_NO_SYSTEM")
     calls = []
 
     class Done:

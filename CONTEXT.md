@@ -44,3 +44,7 @@
   (`orchi.paths.data_dir()`). The Herdr steps copy it into Herdr's app home.
 - **Private window**: a Herdr whose app home is not `~/.config/herdr-app`, such as one from `scripts/herdr-dev`. It
   shares `~/.local` with the real one, so Orchi leaves the launcher, the browser command and the skill alone there.
+- **System seam**: `orchi.system` (programs, downloads, platform) and `orchi.tickets.keychain` (the keychain), the only
+  doors setup uses to reach the computer. Tests replace them, and both refuse while `ORCHI_NO_SYSTEM` is set.
+- **Installer**: the maker's own script or command for a tool, such as Homebrew's script or `claude.ai/install.sh`.
+  Setup runs one only after the user says yes to that tool.

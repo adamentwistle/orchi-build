@@ -18,9 +18,20 @@ import sys
 from collections import namedtuple
 
 from orchi import store as store_mod
+from orchi import system
 from orchi.screen import BROKEN, FIXED, NEEDS_FIX, OK, STOPPED, Screen
 
 EXIT_OK, EXIT_WRONG, EXIT_STOPPED = 0, 1, 130
+
+
+class SetupError(Exception):
+    """Something a step can't do, in one plain line."""
+
+
+def last_line(text):
+    """The last line of some output that says anything, or ''."""
+    lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
+    return lines[-1] if lines else ""
 
 
 class Check(namedtuple("Check", "status detail")):
@@ -41,6 +52,8 @@ def broken(why):
 
 class Step:
     name = ""
+    # Set by the engine when a run fixed this step, for a later step that acts on what changed.
+    changed = False
 
     def check(self):
         """ok(), needs_fix(what) or broken(why). Changes nothing."""
@@ -156,6 +169,24 @@ class Context:
     def ask(self, question, choices):
         return self.screen.ask(question, choices)
 
+    def ask_many(self, question, choices):
+        return self.screen.ask_many(question, choices)
+
+    def ask_secret(self, question):
+        return self.screen.ask_secret(question)
+
+    def note(self, text):
+        """Something for the closing line: where a backup is that matters, or how to undo what was done."""
+        if text not in self.store.notes:
+            self.store.notes.append(text)
+
+    def run(self, argv, input=None, timeout=None, env=None, interactive=False):
+        """Start a program through orchi.system. One that uses the terminal gets it to itself."""
+        if not interactive:
+            return system.run(argv, input=input, timeout=timeout, env=env)
+        with self.screen.paused():
+            return system.run(argv, input=input, timeout=timeout, env=env, interactive=True)
+
     def _before_change(self, path):
         """Back up what is at path unless Orchi made it. Returns whether anything was there."""
         self.handled.add(path)
@@ -193,9 +224,20 @@ def _not_started(screen, command, why):
     return EXIT_WRONG
 
 
+NOT_READY = "Orchi is not ready for {} yet."
+PLATFORMS = {"windows": "Windows", "linux": "Linux"}
+
+
 def main(fix, as_json):
     from orchi import steps
-    return run(steps.steps(), fix=fix, screen=Screen(sys.stdout, as_json=as_json), store=store_mod.Store())
+    screen = Screen(sys.stdout, as_json=as_json)
+    where = system.platform()
+    if where != "darwin":
+        # Nothing runs: the steps below are a Mac's.
+        command = "orchi" if fix else "doctor"
+        screen.finish(_report(command, [], False, None, NOT_READY.format(PLATFORMS.get(where, where)), ok=False))
+        return EXIT_WRONG
+    return run(steps.steps(), fix=fix, screen=screen, store=store_mod.Store())
 
 
 def _run(steps, fix, screen, store, command, record):
@@ -230,7 +272,7 @@ def _close(fix, screen, store, command, record, stopped):
     results = record["steps"]
     with store_mod.shielded():
         backup = str(store.backup_dir) if store.backup_dir else None
-        report = _report(command, results, stopped, backup)
+        report = _report(command, results, stopped, backup, notes=store.notes)
         if fix:
             record.update(finished=not stopped, stopped=stopped, ended=store_mod.now(), backup=backup,
                           summary=report["summary"])
@@ -269,6 +311,7 @@ def _one(step, fix, screen, store):
     except Exception as e:
         return BROKEN, _why(e)
     if again.status == OK:
+        step.changed = True
         return FIXED, did or "fixed"
     return BROKEN, again.detail or found.detail
 
@@ -281,7 +324,7 @@ def _checked(step):
     return found
 
 
-def _summary(changed, to_fix, needs_you, stopped, backup):
+def _summary(changed, to_fix, needs_you, stopped, backup, notes=()):
     parts = ["Stopped."] if stopped else []
     if changed:
         parts.append(f"Changed: {', '.join(changed)}.")
@@ -293,10 +336,11 @@ def _summary(changed, to_fix, needs_you, stopped, backup):
         parts.append("All set.")
     if backup:
         parts.append(f"Backup: {backup}")
+    parts.extend(notes)
     return " ".join(parts)
 
 
-def _report(command, results, stopped, backup, summary=None, ok=None):
+def _report(command, results, stopped, backup, summary=None, ok=None, notes=()):
     """The facts of a run: what --json prints, and what the closing line says."""
     def named(status):
         return [r["name"] for r in results if r["status"] == status]
@@ -311,7 +355,7 @@ def _report(command, results, stopped, backup, summary=None, ok=None):
         "to_fix": to_fix,
         "needs_you": needs_you,
         "backup": backup,
-        "summary": summary or _summary(changed, to_fix, needs_you, stopped, backup),
+        "summary": summary or _summary(changed, to_fix, needs_you, stopped, backup, notes),
     }
 
 

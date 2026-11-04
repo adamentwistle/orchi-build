@@ -21,6 +21,9 @@ import time
 from pathlib import Path
 
 STATE_DIR = "~/.local/state/orchi"
+# A backup can hold a secret, so the owner alone reaches it: folders 700, and a copy keeps its owner's access, at least
+# read and write, and nothing for group and other.
+PRIVATE_FOLDER = 0o700
 
 
 def now():
@@ -109,6 +112,8 @@ class Store:
     def __init__(self, root=None):
         self.root = Path(root) if root else state_dir()
         self.backup_dir = None
+        # Things a step wants said in the closing line, such as where a secret was backed up and how to undo a move.
+        self.notes = []
         self._backed_up = {}
         # owned.json, read once: while a run holds the lock, only this Store writes it.
         self._records = None
@@ -237,25 +242,38 @@ class Store:
             if here.is_symlink():
                 raise StoreError(f"{path} can't be backed up: {here} in this run's backup is a link")
             here = here.parent
-        copy.parent.mkdir(parents=True, exist_ok=True)
+        self._private_folders(copy.parent)
         if path.is_symlink():
             os.symlink(os.readlink(path), copy)
         elif path.is_dir():
             # Something inside may already be copied this run, from before it changed: that copy stays.
             shutil.copytree(path, copy, symlinks=True, dirs_exist_ok=True, copy_function=_copy_new)
+            _make_private(copy)
         else:
             shutil.copy2(path, copy)
+            _make_private(copy)
         self._backed_up[str(path)] = copy
         return copy
+
+    def _private_folders(self, folder):
+        """Make folder, and each folder above it inside this run's backup, readable by the owner alone."""
+        here = self.backup_dir
+        for part in folder.relative_to(self.backup_dir).parts:
+            here = here / part
+            if not os.path.lexists(here):
+                here.mkdir()
+                os.chmod(here, PRIVATE_FOLDER)
 
     def _new_backup_dir(self):
         base = self.root / "backups"
         base.mkdir(parents=True, exist_ok=True)
+        os.chmod(base, PRIVATE_FOLDER)
         stamp = time.strftime("%Y-%m-%dT%H-%M-%S")
         for n in range(1, 1000):
             folder = base / (stamp if n == 1 else f"{stamp}-{n}")
             try:
-                folder.mkdir()
+                folder.mkdir(mode=PRIVATE_FOLDER)
+                os.chmod(folder, PRIVATE_FOLDER)
                 return folder
             except FileExistsError:
                 continue
@@ -284,6 +302,24 @@ def _identity(path, kind):
     if kind == "folder":
         return [info.st_dev, info.st_ino]
     return [info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns]
+
+
+def _make_private(copy):
+    """The owner alone reaches a copied file, link-free folder or tree."""
+    def file(path):
+        if not os.path.islink(path):
+            os.chmod(path, (os.lstat(path).st_mode & 0o700) | 0o600)
+
+    if not os.path.isdir(copy) or os.path.islink(copy):
+        return file(copy)
+    for here, folders, names in os.walk(copy):
+        for name in names:
+            file(os.path.join(here, name))
+        for name in folders:
+            if os.path.islink(os.path.join(here, name)):
+                continue
+            os.chmod(os.path.join(here, name), PRIVATE_FOLDER)
+    os.chmod(copy, PRIVATE_FOLDER)
 
 
 def _copy_new(source, destination):

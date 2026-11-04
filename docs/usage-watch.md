@@ -4,8 +4,8 @@ usage-watch keeps the usage cache fresh. Every five minutes it reads Claude Code
 Anthropic's usage endpoint how full each limit is, and writes the answer to one file. Herd, the Orchi panel, the chat
 pane, usage-guard and switchboard-wait read that file. ccstatusline is optional and never a dependency.
 
-`bin/usage-watch` is the script and `launchd/orchi.usage-watch.plist.template` its launch agent. Setup (B11) loads
-the launch agent and adds the doctor step.
+`bin/usage-watch` is the script and `launchd/orchi.usage-watch.plist.template` its launch agent. Setup (`src/orchi/usage.py`)
+loads the launch agent and is the doctor step.
 
 ## Decisions
 

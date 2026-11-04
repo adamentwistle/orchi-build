@@ -31,20 +31,24 @@ def test_uv_tool_install_gives_a_working_orchi(uv, tmp_path):
     assert ran.returncode == 0, ran.stderr
     assert ran.stdout == "orchi 0.1.0\n"
 
-    # The installed copy runs its steps, and finds its own files.
-    doctor = subprocess.run([str(exe), "doctor"], env=env, capture_output=True, text=True, cwd=str(tmp_path))
+    # The installed copy runs its Herdr steps, and finds its own files. Bare `orchi` would start real installers, so
+    # this runs the settings and Herdr steps through the installed package's own interpreter.
+    python = Path(env["UV_TOOL_DIR"]) / "orchi" / "bin" / "python"
+    code = ("import sys; from orchi import cli, herdr, steps, system; system.platform = lambda: 'darwin'; "
+            "steps.steps = lambda: steps.core() + herdr.steps(); "
+            "sys.exit(cli.main(sys.argv[1:]))")
+    doctor = subprocess.run([str(python), "-c", code, "doctor"], env=env, capture_output=True, text=True, cwd=str(tmp_path))
     assert doctor.stdout.splitlines()[0] == "✓  Orchi files", doctor.stdout + doctor.stderr
-    bare = subprocess.run([str(exe)], env=env, capture_output=True, text=True, cwd=str(tmp_path))
+    bare = subprocess.run([str(python), "-c", code], env=env, capture_output=True, text=True, cwd=str(tmp_path))
     assert bare.returncode == 0, bare.stdout + bare.stderr
     # The wheel's content reaches the Herdr home as copies, with nothing linked into the tool's folder.
     app = Path(env["HERDR_APP_HOME"])
     assert (app / "mods" / "herd" / "mod.json").is_file() and (app / "themes" / "orchi-dark.json").is_file()
     assert not [p for p in app.rglob("*") if p.is_symlink()]
-    again = subprocess.run([str(exe)], env=env, capture_output=True, text=True, cwd=str(tmp_path))
+    again = subprocess.run([str(python), "-c", code], env=env, capture_output=True, text=True, cwd=str(tmp_path))
     assert again.returncode == 0 and again.stdout.splitlines()[-1] == "All set.", again.stdout
 
     # The installed copy finds its content inside the package, not in a checkout.
-    python = Path(env["UV_TOOL_DIR"]) / "orchi" / "bin" / "python"
     where = subprocess.run(
         [str(python), "-c", "from orchi.paths import data_dir; print(data_dir())"],
         env=env, capture_output=True, text=True, cwd=str(tmp_path),

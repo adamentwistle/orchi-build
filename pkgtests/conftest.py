@@ -89,3 +89,31 @@ def no_real_seams(monkeypatch):
     monkeypatch.setattr(_keychain, "find_password", keychain)
     monkeypatch.setattr(_linear, "post", post)
     monkeypatch.setattr(_github, "run", gh)
+
+
+# Setup starts programs and downloads pages through orchi.system only. Every test gets versions of them that fail the
+# test, a Mac that is not Linux, and no extra folders to look for tools in, so a test that wants a program, a page or
+# a platform installs its own (pkgtests/mac_help.py has a whole fake Mac). The top conftest also stops the programs
+# that change a Mac (launchctl, brew, xcode-select, npm) if anything starts them another way.
+from orchi import system as _system  # noqa: E402
+
+REAL.update({"system.run": _system.run, "system.fetch": _system.fetch, "system.sleep": _system.sleep,
+             "system.platform": _system.platform})
+
+
+@pytest.fixture(autouse=True)
+def no_real_system(monkeypatch):
+    def run(argv, *a, **kw):
+        raise AssertionError(f"a test started {list(argv)}: fake orchi.system.run")
+
+    def fetch(url, *a, **kw):
+        raise AssertionError(f"a test downloaded {url}: fake orchi.system.fetch")
+
+    def sleep(seconds):
+        raise AssertionError("a test slept: fake orchi.system.sleep")
+
+    monkeypatch.setattr(_system, "run", run)
+    monkeypatch.setattr(_system, "fetch", fetch)
+    monkeypatch.setattr(_system, "sleep", sleep)
+    monkeypatch.setattr(_system, "EXTRA_DIRS", ())
+    monkeypatch.setattr(_system, "platform", lambda: "darwin")

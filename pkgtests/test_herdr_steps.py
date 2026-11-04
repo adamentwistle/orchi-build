@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from engine_help import home, snapshot  # noqa: F401
-from orchi import cli, engine, paths, screen, steps, store
+from orchi import cli, engine, herdr, paths, screen, steps, store
 
 HERDR_STEPS = ["Themes", "Mods", "Layout", "Keys", "Sounds", "App settings", "Launcher", "Browser pane"]
 NOT_SHIPPED = {"gpui-kit.d.ts", "jsconfig.json", ".DS_Store"}
@@ -40,6 +40,8 @@ def box(home, tmp_path, monkeypatch):
     made.tool("node", "#!/bin/sh\necho 22\n")
     made.tool("agent-browser", "#!/bin/sh\nexit 0\n")
     monkeypatch.setenv("PATH", str(bin))
+    # These tests are about the Herdr content steps, so a whole run is the settings steps and those.
+    monkeypatch.setattr(steps, "steps", lambda: steps.core() + herdr.steps())
     return made
 
 
@@ -108,11 +110,13 @@ def moved_copy(tmp_path, monkeypatch, drop=()):
 
 
 def test_the_herdr_steps_come_after_the_settings_steps():
-    assert [s.name for s in steps.steps()][3:] == HERDR_STEPS
+    assert [s.name for s in steps.core() + herdr.steps()][3:] == HERDR_STEPS
+    names = [s.name for s in steps.steps()]
+    assert names[names.index("Themes"):names.index("Themes") + len(HERDR_STEPS)] == HERDR_STEPS
 
 
 def test_every_herdr_step_can_be_fixed():
-    fixable = [s.name for s in steps.steps() if s.can_fix()]
+    fixable = [s.name for s in herdr.steps() if s.can_fix()]
     assert [n for n in fixable if n in HERDR_STEPS] == HERDR_STEPS
 
 

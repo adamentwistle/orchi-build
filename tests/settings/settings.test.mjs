@@ -82,7 +82,9 @@ test("configDirs lists the set profile first, then the default, once each", () =
 
 // The old Herdr-side files are read only by the readers until setup moves them. No mod reads the Linear key: the
 // tickets panel reads tickets through orchi tickets.
-const READERS = new Set(["bin/orchi_settings.py", "src/orchi/settings.py", ...COPIES.map((m) => `mods/${m}/settings.js`)]);
+// src/orchi/sources.py and src/orchi/migrate.py are setup: they find the key still in linear.json and the old values,
+// which setup moves to the keychain and to settings.json.
+const READERS = new Set(["bin/orchi_settings.py", "src/orchi/settings.py", "src/orchi/sources.py", "src/orchi/migrate.py", ...COPIES.map((m) => `mods/${m}/settings.js`)]);
 const OLD = /(?<![\w./-])(orchi|linear)\.json|herdr-app\/(orchi|linear)\.json|appHome\(\)\}\/(orchi|linear)\.json/;
 
 function* files(dir) {

@@ -8,10 +8,16 @@ scripts/build-themes.py), so in Herdr they are Orchi's palette in dark and light
 
 Questions are a numbered list read from /dev/tty, never stdin, so they work under `curl | sh`.
 """
+import contextlib
 import json
 import os
 import sys
 import threading
+
+try:
+    import termios
+except ImportError:  # Windows has none, and setup stops there before it asks anything
+    termios = None
 
 OK, NEEDS_FIX, BROKEN, FIXED, STOPPED = "ok", "needs-fix", "broken", "fixed", "stopped"
 
@@ -49,6 +55,9 @@ class _Tty:
 
     def readline(self):
         return self._in.readline()
+
+    def fileno(self):
+        return self._in.fileno()
 
     def write(self, text):
         self._out.write(text)
@@ -117,30 +126,78 @@ class Screen:
     def ask(self, question, choices):
         """One of choices, picked by number (or typed in full) at the terminal. Raises NoTerminal when there is no
         terminal to ask, and NoAnswer when the terminal closes or gives no usable answer."""
+        with self._asking(question) as tty:
+            tty.write(f"{self._paint('?', MAGENTA)}  {question}\n")
+            for n, choice in enumerate(choices, 1):
+                tty.write(f"   {n}  {choice}\n")
+            for _ in range(TRIES):
+                line = _prompt(tty)
+                if not line:
+                    break
+                picked = _pick(line.strip(), choices)
+                if picked is not None:
+                    return picked
+        raise NoAnswer(f"no answer: {question}")
+
+    def ask_many(self, question, choices):
+        """Any number of choices, picked by their numbers separated by commas; Enter alone picks none. Raises the same
+        as ask()."""
+        with self._asking(question) as tty:
+            tty.write(f"{self._paint('?', MAGENTA)}  {question}\n")
+            for n, choice in enumerate(choices, 1):
+                tty.write(f"   {n}  {choice}\n")
+            for _ in range(TRIES):
+                line = _prompt(tty)
+                if not line:
+                    break
+                picked = _pick_many(line.strip(), choices)
+                if picked is not None:
+                    return picked
+        raise NoAnswer(f"no answer: {question}")
+
+    def ask_secret(self, question):
+        """What the user types at the terminal, which is never shown. Raises NoTerminal when there is no terminal or
+        it can't hide what is typed, and NoAnswer when nothing is typed."""
+        with self._asking(question) as tty:
+            try:
+                saved = termios.tcgetattr(tty.fileno())
+                hidden = list(saved)
+                hidden[3] &= ~termios.ECHO
+                termios.tcsetattr(tty.fileno(), termios.TCSAFLUSH, hidden)
+            except (AttributeError, OSError, ValueError, *((termios.error,) if termios else ())):
+                raise NoTerminal(f"needs a terminal that hides what you type: {question}") from None
+            try:
+                tty.write(f"{self._paint('?', MAGENTA)}  {question}\n>  ")
+                tty.flush()
+                line = tty.readline()
+            finally:
+                termios.tcsetattr(tty.fileno(), termios.TCSAFLUSH, saved)
+                tty.write("\n")
+                tty.flush()
+        if not line.strip():
+            raise NoAnswer(f"no answer: {question}")
+        return line.strip()
+
+    @contextlib.contextmanager
+    def paused(self):
+        """The spinner stopped while something else uses the terminal, and back on afterwards."""
         running = self._spinning[0] if self._spinning else None
         self._stop_spinner()
         try:
+            yield
+        finally:
+            if running:
+                self.running(running)
+
+    @contextlib.contextmanager
+    def _asking(self, question):
+        with self.paused():
             try:
                 tty = open_tty()
             except OSError:
                 raise NoTerminal(f"needs a terminal to answer: {question}") from None
             with tty:
-                tty.write(f"{self._paint('?', MAGENTA)}  {question}\n")
-                for n, choice in enumerate(choices, 1):
-                    tty.write(f"   {n}  {choice}\n")
-                for _ in range(TRIES):
-                    tty.write(">  ")
-                    tty.flush()
-                    line = tty.readline()
-                    if not line:
-                        break
-                    picked = _pick(line.strip(), choices)
-                    if picked is not None:
-                        return picked
-            raise NoAnswer(f"no answer: {question}")
-        finally:
-            if running:
-                self.running(running)
+                yield tty
 
     def _paint(self, text, colour):
         return f"\x1b[{colour}m{text}\x1b[0m" if self.colour and _isatty(self.out) and text else text
@@ -189,6 +246,22 @@ def _send_to_null(stream):
         os.dup2(null, fd)
     finally:
         os.close(null)
+
+
+def _prompt(tty):
+    tty.write(">  ")
+    tty.flush()
+    return tty.readline()
+
+
+def _pick_many(answer, choices):
+    """The choices a line of numbers names, in the order of the list and each once, or None if any is not a number on
+    the list. A blank line is none."""
+    words = [w for w in answer.replace(",", " ").split() if w]
+    if not all(w.isdecimal() and w.isascii() and 1 <= int(w) <= len(choices) for w in words):
+        return None
+    wanted = {int(w) for w in words}
+    return [c for n, c in enumerate(choices, 1) if n in wanted]
 
 
 def _pick(answer, choices):

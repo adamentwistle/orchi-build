@@ -4,7 +4,13 @@ own files. A test that wants settings writes them there or points these elsewher
 
 It sits at the top so pytest loads it before bin/tests and pkgtests, whose tests import pkgtests/conftest.py by name.
 """
+import os
+
 import pytest
+
+# Every child process a test starts inherits this, so none can start a real installer, read the keychain or load a
+# launch agent through orchi.system or orchi.tickets.keychain (the real versions refuse while it is set).
+os.environ["ORCHI_NO_SYSTEM"] = "1"
 
 
 @pytest.fixture(autouse=True)
@@ -40,11 +46,17 @@ def _words(args, shell):
     return [w for a in args for w in os.fsdecode(a).split()]
 
 
+CHANGES_A_MAC = {"launchctl", "brew", "xcode-select", "npm"}
+
+
 class _NoKeychain(subprocess.Popen):
     def __init__(self, args, *rest, **kw):
         words = _words(args, kw.get("shell", False)) + ([os.fsdecode(kw["executable"])] if kw.get("executable") else [])
-        if any(os.path.basename(w) == "security" for w in words):
-            raise AssertionError("a test reached the real security binary: fake orchi.tickets.keychain.find_password")
+        for w in words:
+            if os.path.basename(w) == "security":
+                raise AssertionError("a test reached the real security binary: fake orchi.tickets.keychain.find_password")
+            if os.path.basename(w) in CHANGES_A_MAC:
+                raise AssertionError(f"a test started {os.path.basename(w)}, which changes the Mac: fake orchi.system.run")
         super().__init__(args, *rest, **kw)
 
 

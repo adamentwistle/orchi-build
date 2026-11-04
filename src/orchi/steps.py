@@ -1,7 +1,7 @@
 """The steps bare `orchi` and `orchi doctor` run, in order. Each is one thing Orchi checks and can fix."""
 import os
 
-from orchi import herdr, paths, settings
+from orchi import claude, herdr, migrate, paths, settings, sources, tools, usage
 from orchi.engine import Step, broken, needs_fix, ok
 
 
@@ -46,5 +46,13 @@ class Settings(Step):
         return broken("; ".join(problems)) if problems else ok()
 
 
+def core():
+    """The steps every other step stands on."""
+    return [OrchiFiles(), SettingsFolder(), Settings()]
+
+
 def steps():
-    return [OrchiFiles(), SettingsFolder(), Settings(), *herdr.steps()]
+    """Every step, in the order they run: the tools come first, since the Herdr steps need node and agent-browser, and
+    the Herdr reload is last."""
+    content = herdr.steps()
+    return [*core(), migrate.OldSettings(), *tools.steps(), *claude.steps(), *content, *sources.steps(), *usage.steps(), herdr.Reload(content)]

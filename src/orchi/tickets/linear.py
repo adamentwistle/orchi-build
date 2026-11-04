@@ -35,6 +35,12 @@ ISSUE_QUERY = """query Ticket($id: String!) {
 }""" % FIELDS
 
 
+CHOICES_QUERY = """query Choices {
+  teams(first: 100) { nodes { key name } }
+  projects(first: 250) { nodes { id name } }
+}"""
+
+
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """A redirect is an error: following one would send the key to wherever it points."""
 
@@ -189,6 +195,24 @@ def show(ref, s):
         return _ticket(node, body=str(node.get("description") or ""))
     except (AttributeError, TypeError, ValueError):
         raise SourceError(ODD) from None
+
+
+def choices(key):
+    """The teams and projects this key can see, for setup to offer: ({team key: name}, {project id: name}). Also how
+    setup finds out the key works. Raises SourceError, with Linear's own plain reason for a key it refuses."""
+    answer = post(CHOICES_QUERY, {}, key)
+    problem = _errors(answer)
+    if problem:
+        raise SourceError(problem)
+    out = []
+    for field, ident in (("teams", "key"), ("projects", "id")):
+        nodes = _data(answer, field)
+        nodes = nodes.get("nodes") if isinstance(nodes, dict) else None
+        if not isinstance(nodes, list):
+            raise SourceError(ODD)
+        out.append({str(n[ident]): str(n.get("name") or n[ident]) for n in nodes
+                    if isinstance(n, dict) and isinstance(n.get(ident), str)})
+    return tuple(out)
 
 
 # Writes. Each is one request through post(), so the same fake covers them. A ticket is read for a write with its
