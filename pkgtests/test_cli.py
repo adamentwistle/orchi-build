@@ -12,7 +12,7 @@ def test_version_prints_name_and_number(capsys):
     with pytest.raises(SystemExit) as stop:
         cli.main(["--version"])
     assert stop.value.code == 0
-    assert capsys.readouterr().out == "orchi 0.1.0\n"
+    assert capsys.readouterr().out == "orchi 0.1.1\n"
 
 
 def test_help_exits_zero_and_names_the_command(capsys):
@@ -65,7 +65,7 @@ def test_python_dash_m_orchi_runs_the_same_cli(tmp_path):
         env=env, capture_output=True, text=True, cwd=str(tmp_path),
     )
     assert done.returncode == 0, done.stderr
-    assert done.stdout == "orchi 0.1.0\n"
+    assert done.stdout == "orchi 0.1.1\n"
 
 
 @pytest.mark.parametrize("argv", [["--vers"], ["--he"], ["doc"]])
