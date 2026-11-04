@@ -1,4 +1,4 @@
-"""The package has one version string, 0.1.0 to start."""
+"""The package has one version string."""
 import re
 
 import orchi
@@ -7,7 +7,7 @@ from conftest import ROOT
 
 
 def test_version_is_0_1_0():
-    assert orchi.__version__ == "0.1.0"
+    assert orchi.__version__ == "0.1.1"
 
 
 def test_version_is_a_plain_release_number():

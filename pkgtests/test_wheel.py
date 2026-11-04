@@ -71,7 +71,7 @@ def tracked_content():
 
 
 def test_the_wheel_is_named_for_the_version(wheel):
-    assert wheel.name.startswith("orchi-0.1.0-")
+    assert wheel.name.startswith("orchi-0.1.1-")
 
 
 def test_the_code_is_in_the_wheel(entries):
