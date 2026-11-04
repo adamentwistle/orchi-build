@@ -8,7 +8,9 @@
 // gives it ~/.claude even when claude_dir is unset, for the switchboard, whose files are there, as the watcher does. `exec` and `hc` are passed in for `node --test`.
 import { claudeDir, profileDir } from "./settings.js";
 
-export const claudeArgv = (model, effort, task, flags = []) => ["claude", ...flags, "--model", model, "--effort", effort, task];
+// With no model or effort, Claude Code starts on its own defaults, as Pickup and Go on a legwork ticket do.
+export const claudeArgv = (model, effort, task, flags = []) =>
+  ["claude", ...flags, ...(model ? ["--model", model] : []), ...(effort ? ["--effort", effort] : []), task];
 
 export const appBin = (home) => `${home}/.local/libexec/orchi-app`;
 
@@ -33,7 +35,8 @@ async function nameIt(exec, kind, id, name) {
 }
 
 // `name` is the terminal's unique name, and `labels` its `key=value` labels. `spaceName` names a space this start opens.
-export async function startClaude({ exec, hc, home, orchi }, { model, effort, flags, task, tab, folder, space, spaceName, name, labels = [], pinProfile = false }) {
+// `focus` shows the new tab and its space once it's there, for a start you asked to look at.
+export async function startClaude({ exec, hc, home, orchi }, { model, effort, flags, task, tab, folder, space, spaceName, name, labels = [], pinProfile = false, focus = false }) {
   if (!space) throw new Error("Could not start Claude Code: there's no space on this Mac");
   const profile = pinProfile ? claudeDir(orchi, home()) : profileDir(orchi, home());
   const id = `tb${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
@@ -45,5 +48,9 @@ export async function startClaude({ exec, hc, home, orchi }, { model, effort, fl
   if (r.code !== 0 || !terminal) throw new Error("Could not start Claude Code");
   await nameIt(exec, "tab", id, tab);
   if (spaceName) await nameIt(exec, "space", space, spaceName);
+  if (focus) {
+    await exec("herdr-app", ["do", "space.select", JSON.stringify({ id: space })]).catch(() => null);
+    await exec("herdr-app", ["do", "tab.select", JSON.stringify({ id })]).catch(() => null);
+  }
   return terminal;
 }

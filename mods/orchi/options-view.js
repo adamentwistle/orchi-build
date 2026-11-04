@@ -5,7 +5,7 @@ import { v_flex, h_flex, Input, Textarea } from "gpui-base";
 import { EFFORTS, MODELS, pickEffort, pickModel } from "./options.js";
 import { problemLine, segment } from "./ui.js";
 
-// One model choice, as on the Linear panel's review screen: the name, the effort, five rising bars, then the models.
+// One model choice, as on the tickets panel's review screen: the name, the effort, five rising bars, then the models.
 function modelSelector({ id, name, choice, models, onChange, t }) {
   const auto = choice.effort === "Auto", level = EFFORTS.indexOf(choice.effort);
   const bar = (effort, i) => div().id(`start-effort-${id}-${effort}`).flex_none().w(9).h(16).flex().items_end().justify_center().cursor_pointer()

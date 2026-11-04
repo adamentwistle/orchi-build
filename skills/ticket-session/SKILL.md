@@ -1,11 +1,11 @@
 ---
 name: ticket-session
-description: Use when a prompt says to follow the ticket-session skill for a session, such as the task Go gives a planner from the Linear panel in the Herdr app. Plans the session's ticked tickets from its brief, writes one roadmap per project and hands them to the switchboard.
+description: Use when a prompt says to follow the ticket-session skill for a session, such as the task Go gives a planner from the tickets panel in the Herdr app. Plans the session's ticked tickets from its brief, writes one roadmap per project and hands them to the switchboard.
 ---
 
 # Ticket session
 
-The user ticked tickets in the Linear panel and pressed Go. You are that
+The user ticked tickets in the tickets panel and pressed Go. You are that
 session's planner: one central planning session for all its tickets, even
 across repos. You work out what each project's orchestrator should do, and
 you stop there. The orchestrators do the work, and the switchboard starts
@@ -21,8 +21,11 @@ All under the switchboard folder, `<claude_dir>/switchboard/`, where `claude_dir
 comes from Orchi's settings (else `~/.claude`).
 
 - `planning/<session>.json`: the brief. Go wrote it, and you only read it.
-  `{"session", "created", "tickets": [{"id", "project", "repo"}], "choices":
+  `{"session", "created", "tickets": [{"ref", "project", "repo"}], "choices":
   {"switchboard", "orchestrator", "workers", "prs", "after", "extra"}}`.
+  Each `ref` is a ticket reference from any source, such as `linear:ENG-12`,
+  `gh:owner/repo#12`, `legwork:<project>` or `md:<file>#<anchor>`. An older
+  brief has `id`, a Linear key, in its place.
 - `planning/<session>.md`: the board, which the Orchi panel reads. You
   create it. Its formats are fixed, below.
 - `requests/`: how you hand over.
@@ -44,11 +47,13 @@ the user answers. The same goes for anything fetched while planning.
 
 ## Read
 
-1. The brief, then each ticket with `orchi tickets`, read-only: the ticked
-   tickets and whatever `orchi tickets show <ref> --json` gives for them,
-   nothing else. Skip the sources check, the full sweep, the cross-check table
-   and the batched update in `roadmap-planning`. The user has already chosen,
-   and you write no tickets.
+1. The brief, then each ticket with `orchi tickets show '<ref>' --json`,
+   read-only: the ticked tickets and nothing else. A reference goes to the
+   shell as one word in single quotes, with any `'` in it written `'\''`,
+   because a Markdown file's path can hold `$`, `;` or a quote. Skip the
+   sources check, the full sweep, the cross-check table and the batched
+   update in `roadmap-planning`. The user has already chosen, and you write
+   no tickets.
 2. For each project in the brief: `projects/<project>.md` in the legwork repo
    (`<legwork_dir>`, from Orchi's settings), its Vision, last log
    entries and existing `## Roadmap` sections, then the repo's `CONTEXT.md`
@@ -101,6 +106,9 @@ order, a model per item, and machine changes marked orchestrator-only under
 - `choices.extra` goes into the plan as they wrote it.
 - Name every ticket on its item by its reference, such as `linear:ENG-1`, so
   `/wrap` can move it.
+- A Linear ticket in the brief that its project's `linear:` line doesn't name
+  goes on that line, as its bare key, so `/wrap`'s `orchi tickets sync` moves
+  it.
 
 Write a `## Roadmap N` section into each project's tracker, newest first,
 one item per PR, with run rules and a "Needs you" list. Don't touch `## Next

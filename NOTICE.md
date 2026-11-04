@@ -2,11 +2,11 @@
 
 Orchi is MIT licensed (see LICENSE). These parts come from other projects and keep their own licences.
 
-## The Linear panel
+## The tickets panel
 
-`mods/linear/` (`open.js`, `urls.js`, `mod.json`, `linear.js`, `main.js`), `keys/linear.json` and
-`tests/linear/linear.test.mjs` and `tests/linear/task.test.mjs` started from
-[dantech99/herdr-linear](https://github.com/dantech99/herdr-linear). `linear.js` and `main.js` are much changed.
+`mods/tickets/` (`open.js`, `urls.js`, `mod.json`, `main.js`), `keys/tickets.json` and
+`tests/tickets-panel/task.test.mjs` started from [dantech99/herdr-linear](https://github.com/dantech99/herdr-linear),
+as the Linear panel. `main.js` is much changed, and the panel's own Linear API code is gone.
 
 ```
 MIT License
@@ -50,10 +50,14 @@ These files are changed copies of mods and a layout that ship with the Herdr des
 | `mods/space-agents/main.js` | the shipped `spaces` and `agents` mods | One sidebar list: a Needs you inbox, fleet counts, and each space folding with its agents under it by status |
 | `layouts/main-linear.json` | the shipped `main` layout | Orchi's mods in place of the shipped sidebar and header blocks |
 
-## The Linear mark
+## The Linear and GitHub marks
 
-`mods/linear/linear.svg` is Linear's logo, a trademark of Linear. It is used only to show that a panel or a ticket is
-Linear's. Orchi is not made or endorsed by Linear.
+`mods/tickets/linear.svg` is Linear's logo, a trademark of Linear. `mods/tickets/github.svg` is the GitHub mark, a
+trademark of GitHub, Inc., drawn as GitHub's Octicons draw it (MIT, Copyright (c) GitHub Inc.). Each is used only to show
+that a ticket is that service's, as their logo terms allow. Orchi is not made or endorsed by Linear or GitHub.
+
+`mods/tickets/legwork.svg`, `mods/tickets/markdown.svg` and `mods/tickets/tickets.svg` were drawn for Orchi and are
+under its MIT licence.
 
 ## Sounds
 

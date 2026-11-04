@@ -1,4 +1,4 @@
-// The Linear and Orchi buttons that sit beside the tab bar's Files and Changes buttons, and the chat and terminal toggle.
+// The Tickets and Orchi buttons that sit beside the tab bar's Files and Changes buttons, and the chat and terminal toggle.
 // Looks like `panelButton` in the shipped `tabs` mod, which stays untouched.
 import { View, div, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
@@ -7,7 +7,7 @@ import { SPLIT_MS, splitPending, swapState, swapSteps, tidyPairs } from "./swap.
 import { closeSteps, newPane, openSteps, openedSteps, progressState } from "./progress.js";
 import { herdBlocked, sessionOf } from "./herd-badge.js";
 
-const PANELS = ["files", "changes", "linear", "orchi", "herd"];
+const PANELS = ["files", "changes", "tickets", "orchi", "herd"];
 const PANEL_PX = 368;
 const PAIRS = "chatpane.pairs";
 
@@ -136,7 +136,7 @@ export default class PanelButtons extends View {
           .bg(t.blocked).text_color(t.background).text_size(11).font_semibold().child(String(badge))));
     };
     return h_flex().size_full().min_w(0).pr(10).gap(2).items_center().bg(t.chrome).border_b(1).border_color(t.border)
-      .child(button("linear", "Linear", "mods/linear/linear.svg", 0))
+      .child(button("tickets", "Tickets", "mods/tickets/tickets.svg", 0))
       .child(button("orchi", "Orchi", "mods/orchi/orchi.svg", open))
       .child(button("herd", "Herd", "mods/herd/herd.svg", herdBlocked(terminals(), sessionOf(list))))
       .when(Boolean(swap), (e) => e.child(this.toggle(t, swap)))

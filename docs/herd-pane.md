@@ -1,6 +1,6 @@
 # Herd panel
 
-A side panel beside Linear and Orchi, showing everything the session in view has started. The button sits with theirs in the tab bar, and it carries a red count when someone needs you. `panel-buttons` works that count out from the live terminals on every render, so it's right while the panel is hidden, and before Herdr has started the panel at all. The panel follows the focused session, and a focused worker shows its whole herd from the top. It stays beside a zoomed chat, because it isn't a pane in the tab.
+A side panel beside Tickets and Orchi, showing everything the session in view has started. The button sits with theirs in the tab bar, and it carries a red count when someone needs you. `panel-buttons` works that count out from the live terminals on every render, so it's right while the panel is hidden, and before Herdr has started the panel at all. The panel follows the focused session, and a focused worker shows its whole herd from the top. It stays beside a zoomed chat, because it isn't a pane in the tab.
 
 The arrows at the top right take it to full width, which hides the terminals and lets the panel fill their room. Press them again to go back to the width it had. Opening another panel, or closing Herd, also brings the terminals back. `herdr-app do herd.full` does the same as the arrows.
 

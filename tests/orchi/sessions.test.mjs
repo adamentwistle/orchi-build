@@ -29,7 +29,7 @@ test("a stamp is local YYYY-MM-DD HH:MM", () => {
 
 test("a board reads its plans, READY and answers", () => {
   const b = parseBoard(BOARD);
-  assert.deepEqual(b.plans, [{ project: "atlas", repo: "/r/atlas", tickets: ["ENG-1", "ENG-2"] }, { project: "b", repo: "/r/b", tickets: ["ENG-3"] }]);
+  assert.deepEqual(b.plans, [{ project: "atlas", repo: "/r/atlas", tickets: ["linear:ENG-1", "linear:ENG-2"] }, { project: "b", repo: "/r/b", tickets: ["linear:ENG-3"] }]);
   assert.equal(b.ready, "2026-10-30 22:41");
   assert.equal(b.kept, null);
   assert.deepEqual(b.answered.map((a) => a.id), ["plan-1"]);
@@ -50,13 +50,13 @@ test("a new entry starts its own line", () => {
 
 test("a board can't name a project or repo that isn't the right shape", () => {
   const text = "## s PLAN 2026-10-30 22:40\nProject: ../../etc passwd\nRepo: /r/atlas\nTickets: ENG-1\n## t PLAN 2026-10-30 22:40\nProject: atlas\nRepo: relative\nTickets: ENG-1\n## u PLAN 2026-10-30 22:40\nProject: atlas\nRepo: /r/atlas\nTickets: ENG-1, not a ticket\n";
-  assert.deepEqual(parseBoard(text).plans, [{ project: "atlas", repo: "/r/atlas", tickets: ["ENG-1"] }]);
+  assert.deepEqual(parseBoard(text).plans, [{ project: "atlas", repo: "/r/atlas", tickets: ["linear:ENG-1"] }]);
 });
 
 test("a brief must be for this session, and bad tickets drop out", () => {
   const brief = { session: "s1", created: "2026-10-30 22:00", tickets: [{ id: "ENG-1", project: "atlas", repo: "/r/atlas" }, { id: "bad id", project: "atlas", repo: "/r/atlas" }, { id: "ENG-2", project: "../atlas", repo: "/r/atlas" }, null], choices: { after: "wait" } };
   const read = parseBrief(JSON.stringify(brief), "s1");
-  assert.deepEqual(read.tickets, [{ id: "ENG-1", project: "atlas", repo: "/r/atlas" }]);
+  assert.deepEqual(read.tickets, [{ ref: "linear:ENG-1", project: "atlas", repo: "/r/atlas" }]);
   assert.equal(read.after, "wait");
   assert.equal(parseBrief(JSON.stringify(brief), "s2"), null);
   assert.equal(parseBrief("not json", "s1"), null);
@@ -346,7 +346,7 @@ test("loadWorld finds a live planner by its label", async () => {
   assert.equal(world.sessions.length, 1);
   assert.equal(world.sessions[0].phase, "Planning");
   assert.deepEqual(world.sessions[0].planner, { address: "t9", where: "Atlas / Plan ENG-1", tab: "tb1" });
-  assert.deepEqual(world.sessions[0].tickets, ["ENG-1"]);
+  assert.deepEqual(world.sessions[0].tickets, ["linear:ENG-1"]);
 });
 
 test("loadWorld ignores a planner's old session once it's gone", async () => {

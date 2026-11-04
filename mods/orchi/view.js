@@ -11,6 +11,7 @@ import { decisionButton, pasteable, pauseControl } from "./actions.js";
 import { startSheet } from "./options-view.js";
 import { completeOffered } from "./runs.js";
 import { splitUpdate } from "./update-text.js";
+import { shortRef } from "./refs.js";
 
 const DASH = "-";
 const EFFORT = ["low", "medium", "high", "xhigh", "max"];
@@ -314,7 +315,7 @@ function action(view, d, t) {
   ];
 }
 
-const ticketList = (ids, t) => div().min_w(0).font_family(monoFont()).text_size(12).text_color(t.muted).child(ids.join(", "));
+const ticketList = (refs, t) => div().min_w(0).font_family(monoFont()).text_size(12).text_color(t.muted).child(refs.map(shortRef).join(", "));
 
 // One planner: its tickets, what's been answered and what's open. The open question is answered in Decisions.
 function planningCard(view, s, t) {
@@ -408,7 +409,7 @@ const startButton = (id, starting, problems, onClick, t) => (problems.length || 
 function keptRow(view, s, t) {
   const problems = view.sessionProblems(s, view.frame.rows), age = ageOf(s.board.kept, Date.now());
   return planRow(view, {
-    id: `kept-${s.session}`, title: s.tickets.join(", "), focused: view.frame.focus === s.session, problems,
+    id: `kept-${s.session}`, title: s.tickets.map(shortRef).join(", "), focused: view.frame.focus === s.session, problems,
     sheet: view.startFor?.key === `start:${s.session}` ? startSheet(view, t) : null,
     meta: ["Kept plan", s.board.plans.map((p) => p.project).join(", "), age ? `${age} ago` : null].filter(Boolean).join(" · "),
     buttons: [

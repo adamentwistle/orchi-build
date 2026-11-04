@@ -1,5 +1,5 @@
 // Reaching the one switchboard from a panel: its lock, the requests it reads and starting it when the lock is free.
-// No Herdr imports, so `node --test` can load this file. `mods/linear` and `mods/orchi` carry the same copy.
+// No Herdr imports, so `node --test` can load this file. `mods/tickets` and `mods/orchi` carry the same copy.
 import { sendAside } from "./draft.js";
 import { localSpace, startClaude } from "./launch.js";
 import { orchiDir, switchboardDir } from "./settings.js";

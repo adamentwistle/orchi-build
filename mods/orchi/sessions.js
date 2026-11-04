@@ -1,9 +1,9 @@
 // The sessions Go starts: briefs and boards under the switchboard's planning folder, their phases, and the rules that
-// stop a start. No Herdr imports, so `node --test` can load this file. `mods/linear` and `mods/orchi` carry the same copy.
+// stop a start. No Herdr imports, so `node --test` can load this file. `mods/tickets` and `mods/orchi` carry the same copy.
 import { parseEntries, field, openItems, answeredItems, latestKind, parseState, parseProgress, parseAgentList, parseItems } from "./parse.js";
 import { NAME, parseLock, holderOf, planningDir, switchboardDir } from "./switchboard.js";
 import { claudeDir } from "./settings.js";
-import { linearKey } from "./refs.js";
+import { parseRef, shortRef } from "./refs.js";
 
 
 export const ABSOLUTE = /^\/[^\u0000-\u001f\u007f-\u009f]*$/;
@@ -19,15 +19,18 @@ const pad = (n) => String(n).padStart(2, "0");
 export const stamp = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 const toMs = (time) => new Date((time ?? "").replace(" ", "T")).getTime();
 
+// A ticket reference written out in full, `linear:ENG-12` for `ENG-12`, or null for anything that isn't one.
+const fullRef = (value) => { const r = parseRef(value); return r.error ? null : r.ref; };
+
 // The brief Go wrote, or null. Ids and paths are checked here, because they build paths and requests later. A ticket is
-// a Linear reference, held as its bare key.
+// held by its full reference. A brief from before references held a Linear key as `id`, which still reads.
 export function parseBrief(text, session) {
   let brief;
   try { brief = JSON.parse(text); } catch { return null; }
   if (brief?.session !== session || !Array.isArray(brief.tickets)) return null;
   const seen = new Set();
-  const tickets = brief.tickets.filter((t) => linearKey(t?.id) && NAME.test(t?.project ?? "") && ABSOLUTE.test(t?.repo ?? ""))
-    .map((t) => ({ ...t, id: linearKey(t.id) })).filter((t) => !seen.has(t.id) && seen.add(t.id));
+  const tickets = brief.tickets.map((t) => ({ ref: fullRef(t?.ref ?? t?.id), project: t?.project, repo: t?.repo }))
+    .filter((t) => t.ref && NAME.test(t.project ?? "") && ABSOLUTE.test(t.repo ?? "") && !seen.has(t.ref) && seen.add(t.ref));
   return { session, created: String(brief.created ?? ""), tickets, after: brief.choices?.after === "wait" ? "wait" : "start", choices: brief.choices ?? null };
 }
 
@@ -35,7 +38,7 @@ export function parseBrief(text, session) {
 function planEntry(entry) {
   const project = /^(?:.*\/)?([\w-]+?)(?:\.md)?$/.exec(field(entry.lines, "Project") ?? "")?.[1], repo = field(entry.lines, "Repo");
   if (!NAME.test(project ?? "") || !ABSOLUTE.test(repo ?? "")) return null;
-  const tickets = (field(entry.lines, "Tickets") ?? "").split(",").map(linearKey).filter(Boolean);
+  const tickets = (field(entry.lines, "Tickets") ?? "").split(",").map(fullRef).filter(Boolean);
   return { project, repo, tickets: [...new Set(tickets)] };
 }
 
@@ -114,7 +117,7 @@ export function sessionRows(sessions, now, discarded = []) {
   return rows.sort((a, b) => (b.phase === "Needs you") - (a.phase === "Needs you") || b.created.localeCompare(a.created));
 }
 
-// Ticket ID to the row holding it. A finished run no longer holds its tickets.
+// Ticket reference to the row holding it. A finished run no longer holds its tickets.
 export function ticketSessions(rows) {
   return new Map(rows.filter((r) => r.phase !== "Finished").flatMap((r) => r.tickets.map((id) => [id, r])));
 }
@@ -144,7 +147,7 @@ async function readSessions(io, state, live) {
       return { ...p, ...repoRun(repoBoard, fanout, board.started) };
     }));
     const phase = sessionPhase({ board, planner, runs, paused: state.paused });
-    return phase ? { session, created: brief.created, after: brief.after, tickets: brief.tickets.map((t) => t.id), board, planner, runs, phase } : null;
+    return phase ? { session, created: brief.created, after: brief.after, tickets: brief.tickets.map((t) => t.ref), board, planner, runs, phase } : null;
   }));
   return sessions.filter(Boolean);
 }
@@ -314,7 +317,7 @@ export function folderProblem(trust, folder, label) {
 // Go's rules again for a plan that's about to start. Its own tickets don't count against it.
 export function keptProblems(s, projectOf, rows, context) {
   const others = ticketSessions(rows.filter((r) => r.session !== s.session));
-  const taken = s.tickets.filter((id) => others.has(id)).map((id) => `${id} is already in a session`);
+  const taken = s.tickets.filter((ref) => others.has(ref)).map((ref) => `${shortRef(ref)} is already in a session`);
   if (context.requested?.start?.has(s.session)) taken.push("This plan's start is waiting on the switchboard");
   if (!s.board.plans.length) return [...taken, "This plan names no projects"];
   return [...taken, ...s.board.plans.flatMap((p) => projectProblems(projectOf(p.project) ?? { file: p.project, repo: p.repo }, { ...context, own: s.session }))];

@@ -16,6 +16,7 @@ import { completeProblem, killFailures, liveWorkers, stopTargets } from "./runs.
 import { overrideUntil, startHolds, usageHolds } from "./limits.js";
 import { orchiView } from "./view.js";
 import { WORKER_LIMIT, legworkDir, readSettings, switchboardDir } from "./settings.js";
+import { shortRef } from "./refs.js";
 
 const REFRESH_MS = 15000;
 const LOAD_LIMIT_MS = 60000;
@@ -24,7 +25,7 @@ const DISMISSED_KEY = "orchi.dismissed";
 const PENDING = "orchi.pending";
 const DISCARDED = "orchi.discarded";
 const FOCUS = "orchi.focus";
-const SESSION = "linear.session";
+const SESSION = "tickets.session";
 const STARTING_MS = 120000;
 const PLANNER = { model: "claude-opus-5-5", effort: "high" };
 
@@ -477,7 +478,7 @@ export default class Orchi extends View {
   // Jumps to the planner's terminal, else opens the saved plan in a new tab.
   readSaved(s) {
     if (s.planner) run("agent.focus", { terminal: s.planner.address });
-    else run("tab.new", { name: `Plan ${s.tickets[0] ?? s.session}`, mod: "plan-view", props: { path: planningFile(s.session) } });
+    else run("tab.new", { name: `Plan ${s.tickets[0] ? shortRef(s.tickets[0]) : s.session}`, mod: "plan-view", props: { path: planningFile(s.session) } });
   }
 
   pickPlanProject(file) { this.planFor = file; this.planOpen = false; }

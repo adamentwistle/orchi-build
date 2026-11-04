@@ -1,5 +1,5 @@
 // Setting a half-typed line aside before text goes into a Claude Code session. No Herdr imports, so `node --test`
-// can load this file. `io` needs `hc`. A mod can't import from outside its folder, so `mods/linear`, `mods/orchi`
+// can load this file. `io` needs `hc`. A mod can't import from outside its folder, so `mods/tickets`, `mods/orchi`
 // and `mods/claude-chat` carry the same copy.
 export const SET_ASIDE = "ctrl+s";
 export const STASH_HELD = /›[ \t]*stashed[ \t]*$/m;

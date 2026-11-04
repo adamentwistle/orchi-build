@@ -9,6 +9,11 @@
   body when it is read on its own. `orchi tickets` lists them; see `docs/adr/0004-tickets-read-side.md`.
 - **Ticket reference**: `<source>:<id>`, one ticket written as text: `linear:ENG-12`, `gh:owner/repo#12`,
   `legwork:<project>` or `md:<file>#<anchor>`. A bare `ENG-12` is Linear's.
+- **Tickets panel**: the panel that lists every chosen source's open tickets, read through `orchi tickets --json`.
+  It replaced the Linear panel; see `docs/adr/0006-tickets-panel.md`.
+- **A ticket's project**: the legwork project a ticket belongs to: the user's pick, the project itself for a legwork
+  ticket, the `linear:` line for Linear, the repo's `origin` for GitHub, the repo folder holding a Markdown file.
+- **Category**: a legwork project's `category:` (work, personal or business). A ticket's category is its project's.
 - **Write**: a comment, a state change or a new ticket, made by `orchi tickets` on Linear or GitHub only. It is a
   plan until `--yes` or a yes typed at a terminal; see `docs/adr/0005-tickets-write-side.md`.
 - **Sync**: `orchi tickets sync legwork:<project>`, which moves the Linear issues on a project's `linear:` line the

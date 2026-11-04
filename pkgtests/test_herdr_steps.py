@@ -132,7 +132,7 @@ def test_a_first_run_puts_everything_in_place(box, run):
     assert not list((box.app / "mods").rglob("gpui-kit.d.ts"))
     keys = json.loads((box.app / "keys.json").read_text())
     assert keys["global"]["cmd-shift-u"] == "space-agents.oldest-blocked"
-    assert keys["global"]["ctrl-shift-y"] == "mod.open:linear"
+    assert keys["global"]["ctrl-shift-y"] == "mod.open:tickets"
     assert keys["global"]["ctrl-shift-j"] == "panel-buttons.swap"
     assert json.loads((box.app / "settings.json").read_text()) == json.loads(
         (paths.data_dir() / "config" / "settings.json").read_text())
@@ -782,3 +782,32 @@ def test_an_unreadable_json_file_says_it_cannot_be_read(box, run):
     (box.app / "keys.json").symlink_to(box.app / "nowhere.json")
     code, report = run()
     assert code == 1 and "can't be read" in by_step(report)["Keys"]["detail"]
+
+
+def test_an_install_from_before_the_tickets_panel_moves_to_it_with_no_question(box, run, tmp_path, monkeypatch):
+    """An install with the Linear panel: its folder, its layout block and its key go to the tickets panel's."""
+    real = paths.data_dir()
+    layout = (real / "layouts" / "main-linear.json").read_text()
+    keys = (real / "keys" / "tickets.json").read_text()
+    copy = moved_copy(tmp_path, monkeypatch)
+    shutil.copytree(copy / "mods" / "tickets", copy / "mods" / "linear")
+    (copy / "layouts" / "main-linear.json").write_text(layout.replace('"tickets"', '"linear"'))
+    (copy / "keys" / "tickets.json").unlink()
+    (copy / "keys" / "linear.json").write_text(keys.replace("mod.open:tickets", "mod.open:linear"))
+    shutil.rmtree(copy / "mods" / "tickets")
+    assert run()[0] == 0
+    assert (box.app / "mods" / "linear" / "main.js").exists()
+
+    shutil.rmtree(copy / "mods" / "linear")
+    shutil.copytree(real / "mods" / "tickets", copy / "mods" / "tickets", ignore=shutil.ignore_patterns("__pycache__"))
+    (copy / "layouts" / "main-linear.json").write_text(layout)
+    (copy / "keys" / "linear.json").unlink()
+    (copy / "keys" / "tickets.json").write_text(keys)
+    asked = answering(monkeypatch, "Keep")
+    assert run()[0] == 0 and asked == []
+    assert not (box.app / "mods" / "linear").exists()
+    assert (box.app / "mods" / "tickets" / "main.js").exists()
+    assert '"tickets"' in (box.app / "layouts" / "main-linear.json").read_text()
+    assert '"linear"' not in (box.app / "layouts" / "main-linear.json").read_text()
+    assert json.loads((box.app / "keys.json").read_text())["global"]["ctrl-shift-y"] == "mod.open:tickets"
+    assert run("doctor")[0] == 0

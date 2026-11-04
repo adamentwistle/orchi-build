@@ -1,4 +1,4 @@
-// The Herd panel, in the side panel beside Linear and Orchi. It follows the session in view: a map of everything it has
+// The Herd panel, in the side panel beside Tickets and Orchi. It follows the session in view: a map of everything it has
 // started, and a row per agent saying what it's doing. This file does the reads and holds the state. Working it out is in model.js and score.js, the
 // drawing is in view.js, and herd.py reads the transcripts.
 import { View } from "gpui-kit";

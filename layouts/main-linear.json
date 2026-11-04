@@ -143,10 +143,10 @@
                       }
                     },
                     {
-                      "id": "linear",
+                      "id": "tickets",
                       "type": "block",
                       "content": {
-                        "mod": "linear"
+                        "mod": "tickets"
                       }
                     },
                     {

@@ -1,0 +1,209 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { appBin, claudeArgv, localSpace, startClaude } from "../../mods/tickets/launch.js";
+
+const standIns = (run, renames = [{ code: 0, stdout: "{}" }]) => {
+  const calls = [];
+  const replies = [...renames];
+  return {
+    calls,
+    home: () => "/Users/x",
+    exec: async (command, args) => { calls.push([command, ...args]); return command === "sleep" ? { code: 0 } : replies.shift() ?? { code: 0, stdout: "{}" }; },
+    hc: async (args) => { calls.push(["hc", ...args]); return run; },
+  };
+};
+
+const STARTED = { code: 0, stdout: '{"address":"t9","state":"live"}' };
+const ask = { model: "m", effort: "low", task: "go", tab: "Update", folder: "/l", space: "sp1", labels: ["orchi.plan=s1"] };
+
+test("the task is one argument, whatever it contains", () => {
+  assert.deepEqual(claudeArgv("m", "low", 'a; rm "$x"'), ["claude", "--model", "m", "--effort", "low", 'a; rm "$x"']);
+});
+
+test("flags go first, so a list flag can't swallow the task", () => {
+  assert.deepEqual(claudeArgv("m", "low", "go", ["--tools", "Read"]), ["claude", "--tools", "Read", "--model", "m", "--effort", "low", "go"]);
+});
+
+test("startClaude opens a labelled terminal and names its tab", async () => {
+  const s = standIns(STARTED);
+  assert.equal(await startClaude(s, ask), "t9");
+  const run = s.calls[0];
+  assert.deepEqual(run.slice(0, 3), ["hc", "run", "--json"]);
+  assert.equal(run[run.indexOf("--cwd") + 1], "/l");
+  const labels = run.flatMap((a, i) => (a === "--label" ? [run[i + 1]] : []));
+  assert.equal(labels[0], "herdr.space=sp1");
+  assert.match(labels[1], /^herdr\.tab=tb/);
+  assert.equal(labels[2], "orchi.plan=s1");
+  const [command, action, verb, json] = s.calls[1];
+  assert.deepEqual([command, action, verb], ["herdr-app", "do", "tab.rename"]);
+  assert.deepEqual(JSON.parse(json), { id: labels[1].split("=")[1], name: "Update" });
+});
+
+test("every label in the array reaches the terminal, each its own argument", async () => {
+  const s = standIns(STARTED);
+  await startClaude(s, { ...ask, labels: ["orchi.plan=s1", "orchi.session=s1", "orchi.tickets=ENG-1,ENG-2"] });
+  const run = s.calls[0];
+  const labels = run.flatMap((a, i) => (a === "--label" ? [run[i + 1]] : []));
+  assert.deepEqual(labels.slice(2), ["orchi.plan=s1", "orchi.session=s1", "orchi.tickets=ENG-1,ENG-2"]);
+});
+
+test("no labels is fine", async () => {
+  const s = standIns(STARTED);
+  const { labels: _none, ...rest } = ask;
+  assert.equal(await startClaude(s, rest), "t9");
+  assert.equal(s.calls[0].filter((a) => a === "--label").length, 2);
+});
+
+test("a name reaches hc run, and with none there's no flag", async () => {
+  const named = standIns(STARTED);
+  await startClaude(named, { ...ask, name: "switchboard" });
+  const run = named.calls[0];
+  assert.equal(run[run.indexOf("--name") + 1], "switchboard");
+  assert.ok(run.indexOf("--name") < run.indexOf("--"));
+  const plain = standIns(STARTED);
+  await startClaude(plain, ask);
+  assert.ok(!plain.calls[0].includes("--name"));
+});
+
+test("a space this start opens gets its name, once it exists", async () => {
+  const late = { code: 1, stdout: '{"error":"no space \\"sp1\\""}' };
+  const s = standIns(STARTED, [{ code: 0, stdout: "{}" }, late, { code: 0, stdout: "{}" }]);
+  await startClaude(s, { ...ask, spaceName: "Planning" });
+  const renames = s.calls.filter((c) => c[2] === "space.rename");
+  assert.equal(renames.length, 2);
+  assert.deepEqual(JSON.parse(renames[1][3]), { id: "sp1", name: "Planning" });
+});
+
+test("a space that isn't opened here isn't renamed", async () => {
+  const s = standIns(STARTED);
+  await startClaude(s, ask);
+  assert.ok(!s.calls.some((c) => c[2] === "space.rename"));
+});
+
+test("it never uses tab.new, which moves the window", async () => {
+  const s = standIns(STARTED);
+  await startClaude(s, ask);
+  assert.ok(!s.calls.flat().includes("tab.new"));
+});
+
+test("the session gets the launcher first on PATH, with the task still one argument", async () => {
+  const s = standIns(STARTED);
+  await startClaude(s, { ...ask, task: 'a; rm "$x"' });
+  const run = s.calls[0];
+  const argv = run.slice(run.indexOf("--") + 1);
+  assert.deepEqual(argv.slice(0, 2), ["/bin/zsh", "-ic"]);
+  assert.match(argv[2], /^export PATH="\$1:\$PATH" HERDR_ENV=1; shift; "\$@"; exec zsh -i$/);
+  assert.deepEqual(argv.slice(3), ["zsh", appBin("/Users/x"), "claude", "--model", "m", "--effort", "low", 'a; rm "$x"']);
+});
+
+test("each start gets its own tab id", async () => {
+  const tabs = [];
+  for (let i = 0; i < 2; i++) {
+    const s = standIns(STARTED);
+    await startClaude(s, ask);
+    tabs.push(s.calls[0].find((a) => a.startsWith("herdr.tab=")));
+  }
+  assert.notEqual(tabs[0], tabs[1]);
+});
+
+test("it waits for the tab to appear", async () => {
+  const late = { code: 1, stdout: '{"error":"no tab \\"x\\""}' };
+  const s = standIns(STARTED, [late, late, { code: 0, stdout: "{}" }]);
+  await startClaude(s, ask);
+  assert.equal(s.calls.filter((c) => c[2] === "tab.rename").length, 3);
+  assert.equal(s.calls.filter((c) => c[0] === "sleep").length, 2);
+});
+
+test("a tab that never takes its name still returns the running session", async () => {
+  const s = standIns(STARTED, Array(50).fill({ code: 1, stdout: "no tab" }));
+  assert.equal(await startClaude(s, ask), "t9");
+  assert.equal(s.calls.filter((c) => c[2] === "tab.rename").length, 20);
+});
+
+test("a failed start throws and names nothing", async () => {
+  for (const reply of [{ code: 1, stdout: "" }, { code: 0, stdout: "not json" }, { code: 0, stdout: "{}" }]) {
+    const s = standIns(reply);
+    await assert.rejects(startClaude(s, ask));
+    assert.equal(s.calls.length, 1);
+  }
+});
+
+test("no space on this Mac starts nothing", async () => {
+  const s = standIns(STARTED);
+  await assert.rejects(startClaude(s, { ...ask, space: null }));
+  assert.equal(s.calls.length, 0);
+});
+
+test("the space is the folder's, else the shown one, and never another machine's", () => {
+  const list = [
+    { id: "win", folder: "/l", machine: "win", active: true },
+    { id: "a", folder: "/a", machine: null, active: false },
+    { id: "b", folder: "/l", machine: null, active: false },
+    { id: "c", folder: "/c", machine: null, active: true },
+  ];
+  assert.equal(localSpace(list, "/l"), "b");
+  assert.equal(localSpace(list, "/none"), "c");
+  assert.equal(localSpace(list.map((s) => ({ ...s, active: false })), "/none"), "a");
+  assert.equal(localSpace([list[0]], "/l"), null);
+});
+
+test("the tickets and Orchi panels start sessions with the same launch.js", () => {
+  const read = (m) => readFileSync(new URL(`../../mods/${m}/launch.js`, import.meta.url), "utf8");
+  assert.equal(read("tickets"), read("orchi"));
+});
+
+const argvOf = (s) => { const run = s.calls[0]; return run.slice(run.indexOf("--") + 1); };
+
+test("a session runs under the profile the settings set, so it is the one the panels read", async () => {
+  const s = { ...standIns(STARTED), orchi: { claude_dir: "/Users/x/.claude-alt", orchi_dir: "/Users/x/orchi-build" } };
+  await startClaude(s, { ...ask, task: 'a; rm "$x"' });
+  // Exported by the shell, not put in front with env, so a `claude` function in ~/.zshrc still runs.
+  assert.match(argvOf(s)[2], /^export PATH="\$1:\$PATH" HERDR_ENV=1 CLAUDE_CONFIG_DIR="\$2"; shift 2; "\$@"; exec zsh -i$/);
+  assert.deepEqual(argvOf(s).slice(3), ["zsh", appBin("/Users/x"), "/Users/x/.claude-alt", "claude", "--model", "m", "--effort", "low", 'a; rm "$x"']);
+});
+
+test("a profile folder with spaces or quotes stays one argument", async () => {
+  const s = { ...standIns(STARTED), orchi: { claude_dir: `/Users/x/my "profile"; rm` } };
+  await startClaude(s, ask);
+  assert.equal(argvOf(s)[5], `/Users/x/my "profile"; rm`);
+});
+
+test("the switchboard is pinned to ~/.claude when the settings set no profile, as the watcher does", async () => {
+  const s = { ...standIns(STARTED), orchi: {} };
+  await startClaude(s, { ...ask, pinProfile: true });
+  assert.equal(argvOf(s)[5], "/Users/x/.claude");
+  const set = { ...standIns(STARTED), orchi: { claude_dir: "/p" } };
+  await startClaude(set, { ...ask, pinProfile: true });
+  assert.equal(argvOf(set)[5], "/p");
+});
+
+test("with no profile in the settings the session keeps the shell's own", async () => {
+  for (const orchi of [undefined, {}, { claude_dir: null }, { claude_dir: "  " }]) {
+    const s = { ...standIns(STARTED), orchi };
+    await startClaude(s, ask);
+    assert.deepEqual(argvOf(s).slice(3, 6), ["zsh", appBin("/Users/x"), "claude"]);
+    assert.ok(!argvOf(s).some((a) => a.includes("CLAUDE_CONFIG_DIR")));
+    assert.match(argvOf(s)[2], /; shift; /);
+  }
+});
+
+test("with no model or effort, claude starts on its own defaults, as Pickup and Go do", () => {
+  assert.deepEqual(claudeArgv(null, null, "/go x"), ["claude", "/go x"]);
+  assert.deepEqual(claudeArgv("opus", "high", "t", ["--x"]), ["claude", "--x", "--model", "opus", "--effort", "high", "t"]);
+});
+
+test("a focused start shows the new tab's space and then the tab, once the tab has its name", async () => {
+  const calls = [];
+  const exec = async (cmd, args) => { calls.push([cmd, ...args]); return { code: 0, stdout: "" }; };
+  const hc = async () => ({ code: 0, stdout: JSON.stringify({ address: "t9" }) });
+  const t = await startClaude({ exec, hc, home: () => "/Users/a", orchi: {} },
+    { model: null, effort: null, task: "/pickup atlas", tab: "atlas", folder: "/src/atlas", space: "sp1", spaceName: "atlas", focus: true });
+  assert.equal(t, "t9");
+  assert.deepEqual(calls.map((c) => c.slice(0, 3).join(" ")).slice(-2), ["herdr-app do space.select", "herdr-app do tab.select"]);
+  assert.deepEqual(JSON.parse(calls.at(-2)[3]), { id: "sp1" });
+  const quiet = [];
+  await startClaude({ exec: async (c, a) => { quiet.push(a[1]); return { code: 0, stdout: "" }; }, hc, home: () => "/Users/a", orchi: {} },
+    { model: "opus", effort: "high", task: "t", tab: "T", folder: "/x", space: "sp1" });
+  assert.equal(quiet.includes("space.select"), false);
+});

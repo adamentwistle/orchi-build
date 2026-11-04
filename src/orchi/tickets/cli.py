@@ -1,4 +1,4 @@
-"""`orchi tickets`, `show`, and the writes `comment`, `move`, `create` and `sync`: plain lines, or JSON with --json.
+"""`orchi tickets`, `show`, `states`, and the writes `comment`, `move`, `create` and `sync`: plain lines, or JSON with --json.
 
 A write prints its plan and makes it only with --yes, or after a yes typed at a terminal (ADR 0005).
 """
@@ -8,7 +8,7 @@ import re
 import sys
 
 from orchi import refs, settings
-from orchi.tickets import SOURCES, SourceError, chosen, list_tickets, show, sync, writes
+from orchi.tickets import SOURCES, SourceError, chosen, linear, list_tickets, show, sync, writes
 from orchi.tickets.files import unreadable
 
 CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
@@ -21,6 +21,9 @@ def configure(parser):
     sub = parser.add_subparsers(dest="action", metavar="action")
     one = _action(sub, "show", "one ticket by its reference")
     one.add_argument("ref", help="linear:ENG-12, gh:owner/repo#12, legwork:<project> or md:<file>#<anchor>")
+
+    listed = _action(sub, "states", "the states a Linear ticket can move to, in board order")
+    listed.add_argument("ref", help="linear:ENG-12")
 
     said = _write(sub, "comment", "comment on a Linear or GitHub ticket")
     said.add_argument("ref", help="linear:ENG-12 or gh:owner/repo#12")
@@ -113,6 +116,32 @@ def _show(args, s):
     if got["body"]:
         print()
         print(_plain(got["body"], lines=True))
+    return 0
+
+
+def _states(args, s):
+    try:
+        ref = refs.parse(args.ref)
+    except refs.RefError as e:
+        print(f"{json.dumps(args.ref)} is not a ticket reference: {e}", file=sys.stderr)
+        return 2
+    if ref["source"] != "linear":
+        print(f"orchi tickets states: {ref['ref']} is not a Linear issue", file=sys.stderr)
+        return 2
+    try:
+        node = linear.writable(ref["key"])
+    except SourceError as e:
+        print(f"{ref['ref']}: {_plain(e)}", file=sys.stderr)
+        return 1
+    if node is None:
+        print(f"{ref['ref']} was not found", file=sys.stderr)
+        return 1
+    states = [{"name": x["name"], "type": x["type"]} for x in linear.in_order(node["team"])]
+    if getattr(args, "json", False):
+        _dump({"ref": ref["ref"], "state": node["state"]["name"], "states": states})
+    else:
+        for state in states:
+            print(_plain(state["name"]))
     return 0
 
 
@@ -221,7 +250,7 @@ def _sync(args, s):
     return _planned(args, fill)
 
 
-ACTIONS = {"show": _show, "comment": _comment, "move": _move, "create": _create, "sync": _sync}
+ACTIONS = {"show": _show, "states": _states, "comment": _comment, "move": _move, "create": _create, "sync": _sync}
 
 
 def run(args):

@@ -699,3 +699,40 @@ def test_the_list_names_the_sources_it_read(home, fakes, capsys):
     assert code == 0 and json.loads(out)["sources"] == ["legwork", "markdown"]
     code, out, _ = run(capsys, "--json", "--source", "markdown")
     assert json.loads(out)["sources"] == ["markdown"]
+
+
+# The states a Linear ticket can move to, for the tickets panel's Status. A read: nothing is written.
+
+def test_states_lists_a_linear_tickets_team_states_in_board_order(home, fakes, capsys):
+    gh, ln = fakes
+    settings()
+    code, out, err = run(capsys, "states", "ENG-15", "--json")
+    assert (code, err) == (0, "")
+    assert json.loads(out) == {"ref": "linear:ENG-15", "state": "In Review",
+                               "states": [{"name": name, "type": kind} for name, kind in STATES]}
+    code, out, _ = run(capsys, "states", "linear:ENG-12")
+    assert code == 0 and out.splitlines() == [name for name, _ in STATES]
+    assert ln.writes == []
+
+
+def test_states_is_for_linear_tickets_only(home, fakes, capsys):
+    settings()
+    code, out, err = run(capsys, "states", "gh:acme/app#7", "--json")
+    assert (code, out) == (2, "")
+    assert err == "orchi tickets states: gh:acme/app#7 is not a Linear issue\n"
+    assert run(capsys, "states", "nope")[0] == 2
+
+
+def test_states_of_a_ticket_that_is_not_there(home, fakes, capsys):
+    settings()
+    assert run(capsys, "states", "ENG-99", "--json")[0::2] == (1, "linear:ENG-99 was not found\n")
+
+
+def test_states_says_when_linear_cannot_be_read(home, fakes, capsys, monkeypatch):
+    settings()
+
+    def down(*_):
+        raise linear.SourceError("Linear can't be reached")
+
+    monkeypatch.setattr(linear, "post", down)
+    assert run(capsys, "states", "ENG-12")[0::2] == (1, "linear:ENG-12: Linear can't be reached\n")

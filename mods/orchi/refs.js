@@ -49,8 +49,22 @@ export function parseRef(value) {
   return { error: `${prefix} is not a ticket source: use linear, gh, legwork or md` };
 }
 
+// A reference written out in full, exactly as orchi tickets writes it: the only shape that reaches a command, a label
+// or a brief.
+export const isRef = (value) => typeof value === "string" && parseRef(value).ref === value;
+
 // The bare key of a Linear reference, `ENG-12` for `linear:ENG-12` or `ENG-12`, or null for anything else.
 export const linearKey = (value) => { const r = parseRef(value); return r.source === "linear" ? r.key : null; };
 
 // Only a bare Linear key, exactly as written: the shape that may reach a Linear request or a runner's task.
 export const isLinearKey = (value) => typeof value === "string" && linearKey(value) === value;
+
+// A reference as a panel shows it beside its source's logo: `ENG-12`, `app#12` (the repo's name), the legwork project,
+// or the Markdown task's anchor. Anything that isn't a reference comes back as it was.
+export function shortRef(value) {
+  const r = parseRef(value);
+  if (r.error) return String(value ?? "");
+  if (r.source === "linear") return r.key;
+  if (r.source === "github") return `${r.repo.split("/")[1]}#${r.number}`;
+  return r.source === "legwork" ? r.project : r.anchor;
+}

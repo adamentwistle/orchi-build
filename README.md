@@ -10,7 +10,7 @@ agents and answers for you when they need a decision.
 | --- | --- |
 | `themes/`, `scripts/build-themes.py` | Orchi's dark and light themes, and the script that builds them from its palette |
 | `config/` | The Herdr settings that go with them, and the browser's entry in the + menu |
-| `mods/` | The panels: chat, Herd, progress, Linear, Orchi, the sidebar list and chrome, plan view |
+| `mods/` | The panels: chat, Herd, progress, Tickets, Orchi, the sidebar list and chrome, plan view |
 | `layouts/`, `keys/` | The layout that holds the panels, and their keys |
 | `sounds/` | The alert sounds, with their sources |
 | `browser/` | The browser pane agents drive |
@@ -55,6 +55,7 @@ orchi                         # put the themes, mods, layout, keys, sounds and b
 orchi doctor                  # check them and change nothing
 orchi tickets                 # the open tickets of every chosen source; --json for agents
 orchi tickets show ENG-12     # one ticket by its reference
+orchi tickets states ENG-12   # the states a Linear ticket can move to, in board order
 orchi tickets move ENG-12 Done --comment "Merged"   # a write: asks first, or --yes; --dry-run to only look
 orchi tickets sync legwork:birch --dry-run          # what /wrap's Linear sync would change
 scripts/herdr-dev             # run a private Herdr for testing

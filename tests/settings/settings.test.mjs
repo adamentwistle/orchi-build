@@ -5,7 +5,7 @@ import {
   resolveSettings, readSettings, settingsFile, oldFile, claudeDir, profileDir, orchiDir, legworkDir, switchboardDir, configDirs,
 } from "../../mods/orchi/settings.js";
 
-const COPIES = ["claude-chat", "herd", "orch-pane", "linear", "orchi"];
+const COPIES = ["claude-chat", "herd", "orch-pane", "tickets", "orchi"];
 const root = new URL("../../", import.meta.url);
 const { home: HOME, defaults, cases } = JSON.parse(readFileSync(new URL("tests/settings/fixtures.json", root), "utf8"));
 const text = (v) => (v === undefined ? null : typeof v === "string" ? v : JSON.stringify(v));
@@ -80,9 +80,9 @@ test("configDirs lists the set profile first, then the default, once each", () =
   assert.deepEqual(configDirs({ claude_dir: "~/.claude" }, "/h"), ["/h/.claude"]);
 });
 
-// The old Herdr-side files are read only by the readers until setup moves them. The Linear panel still reads the API
-// key out of linear.json itself, in mods/linear/linear.js, because the key never passes through settings.
-const READERS = new Set(["bin/orchi_settings.py", "src/orchi/settings.py", "mods/linear/linear.js", ...COPIES.map((m) => `mods/${m}/settings.js`)]);
+// The old Herdr-side files are read only by the readers until setup moves them. No mod reads the Linear key: the
+// tickets panel reads tickets through orchi tickets.
+const READERS = new Set(["bin/orchi_settings.py", "src/orchi/settings.py", ...COPIES.map((m) => `mods/${m}/settings.js`)]);
 const OLD = /(?<![\w./-])(orchi|linear)\.json|herdr-app\/(orchi|linear)\.json|appHome\(\)\}\/(orchi|linear)\.json/;
 
 function* files(dir) {

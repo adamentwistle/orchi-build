@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parseRef, linearKey, isLinearKey } from "../../mods/orchi/refs.js";
 
-const COPIES = ["linear", "orchi"];
+const COPIES = ["tickets", "orchi"];
 const root = new URL("../../", import.meta.url);
 const { cases } = JSON.parse(readFileSync(new URL("tests/tickets/refs.json", root), "utf8"));
 
@@ -41,8 +41,8 @@ test("isLinearKey takes only a bare key, exactly as written", () => {
 });
 
 test("no mod keeps its own copy of the old ID check", () => {
-  for (const m of ["linear", "orchi"]) {
-    for (const f of ["sessions.js", "pulls.js", "updates.js", "go.js", "review.js"]) {
+  for (const m of COPIES) {
+    for (const f of ["sessions.js", "go.js", "review.js", "tickets.js", "data.js", "legwork.js"]) {
       let text;
       try { text = readFileSync(new URL(`mods/${m}/${f}`, root), "utf8"); } catch { continue; }
       assert.ok(!text.includes("ISSUE_ID"), `mods/${m}/${f}`);
@@ -51,26 +51,33 @@ test("no mod keeps its own copy of the old ID check", () => {
   }
 });
 
-for (const m of ["linear", "orchi"]) {
-  test(`mods/${m}: a board or brief may name a Linear ticket by its reference, and the panel holds the bare key`, async () => {
+for (const m of COPIES) {
+  test(`mods/${m}: a board or brief may name a Linear ticket by its key or its reference, and the panel holds the reference`, async () => {
     const { parseBoard, parseBrief } = await import(`../../mods/${m}/sessions.js`);
     const board = "## s1-p1 PLAN 2026-10-30 22:40\nProject: atlas\nRepo: /r/atlas\nTickets: linear:ENG-1, ENG-2, gh:acme/app#3, eng-4\nStart: /fanout atlas\n";
-    assert.deepEqual(parseBoard(board).plans, [{ project: "atlas", repo: "/r/atlas", tickets: ["ENG-1", "ENG-2"] }]);
+    assert.deepEqual(parseBoard(board).plans, [{ project: "atlas", repo: "/r/atlas", tickets: ["linear:ENG-1", "linear:ENG-2", "gh:acme/app#3"] }]);
     const brief = JSON.stringify({ session: "s1", created: "x", tickets: [
-      { id: "linear:ENG-1", project: "atlas", repo: "/r/atlas" }, { id: "ENG-2", project: "atlas", repo: "/r/atlas" }, { id: "nope", project: "atlas", repo: "/r/atlas" },
+      { id: "linear:ENG-1", project: "atlas", repo: "/r/atlas" }, { ref: "ENG-2", project: "atlas", repo: "/r/atlas" }, { id: "nope", project: "atlas", repo: "/r/atlas" },
     ] });
-    assert.deepEqual(parseBrief(brief, "s1").tickets.map((t) => t.id), ["ENG-1", "ENG-2"]);
+    assert.deepEqual(parseBrief(brief, "s1").tickets.map((t) => t.ref), ["linear:ENG-1", "linear:ENG-2"]);
   });
 }
 
-for (const m of ["linear", "orchi"]) {
+for (const m of COPIES) {
   test(`mods/${m}: a ticket named twice, by reference and by key, is held once`, async () => {
     const { parseBoard, parseBrief } = await import(`../../mods/${m}/sessions.js`);
     const board = "## s1-p1 PLAN 2026-10-30 22:40\nProject: atlas\nRepo: /r/atlas\nTickets: linear:ENG-1, ENG-1, ENG-2\nStart: /fanout atlas\n";
-    assert.deepEqual(parseBoard(board).plans[0].tickets, ["ENG-1", "ENG-2"]);
+    assert.deepEqual(parseBoard(board).plans[0].tickets, ["linear:ENG-1", "linear:ENG-2"]);
     const brief = JSON.stringify({ session: "s1", created: "x", tickets: [
-      { id: "linear:ENG-1", project: "atlas", repo: "/r/atlas" }, { id: "ENG-1", project: "atlas", repo: "/r/atlas" },
+      { ref: "linear:ENG-1", project: "atlas", repo: "/r/atlas" }, { id: "ENG-1", project: "atlas", repo: "/r/atlas" },
     ] });
-    assert.deepEqual(parseBrief(brief, "s1").tickets.map((t) => t.id), ["ENG-1"]);
+    assert.deepEqual(parseBrief(brief, "s1").tickets.map((t) => t.ref), ["linear:ENG-1"]);
   });
 }
+
+test("isRef takes only a reference written out in full, as orchi tickets writes it", async () => {
+  const { isRef } = await import("../../mods/orchi/refs.js");
+  assert.equal(isRef("linear:ENG-12"), true);
+  assert.equal(isRef("gh:acme/app#7"), true);
+  for (const bad of ["ENG-12", "gh:Acme/App#7", " linear:ENG-12", "legwork:../x", null, 12]) assert.equal(isRef(bad), false, String(bad));
+});
