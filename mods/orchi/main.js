@@ -159,7 +159,8 @@ export default class Orchi extends View {
       for (;;) { await watchFolder(dir); this.refresh(cx); }
     });
     cx.spawn(async (cx) => {
-      for (;;) if ((await nextCommand()) === "script" && testing(appHome())) { await this.runScript(cx); cx.notify(); }
+      // A step that throws ends that script, not the loop, so the next script still runs.
+      for (;;) if ((await nextCommand()) === "script" && testing(appHome())) { await this.runScript(cx).catch(() => {}); cx.notify(); }
     });
   }
 
