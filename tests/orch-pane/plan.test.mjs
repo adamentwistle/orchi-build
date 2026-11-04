@@ -24,6 +24,11 @@ test("the fanout state gives the run, its count and its rows", () => {
   assert.deepEqual(plan.items[3], { slug: "r13-settings (item 1)", name: "r13-settings", item: "1", route: "subagent", model: "Opus", effort: "high", state: "open, Bugbot CLEAR on a1b2c3d4, no reviewer", pr: "42" });
 });
 
+test("a PR written as #14 keeps its number bare, so the row draws one #", () => {
+  const plan = parseFanout("| slug | route | model | state | PR |\n|---|---|---|---|---|\n| a | pane closed | sonnet high | merged | #14 |\n");
+  assert.equal(plan.items[0].pr, "14");
+});
+
 test("no fanout state is an empty plan, not a failure", () => {
   assert.deepEqual(parseFanout(""), { title: null, started: null, progress: null, items: [] });
 });

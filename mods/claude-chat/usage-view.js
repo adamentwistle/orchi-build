@@ -64,29 +64,20 @@ function meter(m, i, t, s) {
       .child(div().absolute().top(0).left(0).h(8).rounded(2).bg(color).opacity(0.32).w(s.entered ? `${landingBar(m)}%` : "0%").transition("width", { ...MOTION.bar, delay }))
       .child(div().absolute().top(0).left(0).h(8).rounded(2).bg(color).w(s.entered ? `${Math.min(100, m.used)}%` : "0%").transition("width", { ...MOTION.bar, delay })))
     .child(h_flex().justify_between().gap(8).text_size(12).text_color(t.dim)
-      .child(div().child(landing(m) == null ? "Too early to project" : `On pace for ${landing(m)}%`))
-      .child(div().child(`Resets in ${m.resetIn}`)));
-}
-
-function key(t, color) {
-  const swatch = (opacity) => div().w(12).h(8).rounded(2).bg(color).opacity(opacity);
-  return h_flex().gap(14).mt(9).text_size(12).text_color(t.dim)
-    .child(h_flex().gap(6).items_center().child(swatch(1)).child("Used"))
-    .child(h_flex().gap(6).items_center().child(swatch(0.32)).child("Where you'll land at this rate"));
+      .child(div().child(`↻ ${m.resetIn}`))
+      .child(div().child(`→ ${landing(m) == null ? "-" : `${landing(m)}%`}`)));
 }
 
 function limits(t, s) {
-  if (!s.meters.length) return div().flex_none().text_size(12.5).text_color(t.dim).child("The limits aren't available right now.");
+  if (!s.meters.length) return div().flex_none().text_size(12.5).text_color(t.dim).child("Limits unavailable");
   return v_flex().flex_none()
-    .child(h_flex().gap(20).children(s.meters.map((m, i) => meter(m, i, t, s).when(true, fadeIn(s, 40 + i * 40)))))
-    .child(key(t, t[s.meters[0].tone] ?? t.done));
+    .child(h_flex().gap(20).children(s.meters.map((m, i) => meter(m, i, t, s).when(true, fadeIn(s, 40 + i * 40)))));
 }
 
 // ---- What's using it ----
 
-const loadingLine = (t, text) => h_flex().gap(7).items_center().text_size(12.5).text_color(t.dim)
-  .child(div().loop("opacity", { from: 0.4, to: 1, period: 900 }).child("·"))
-  .child(div().child(text));
+const loadingLine = (t) => h_flex().gap(7).items_center().text_size(12.5).text_color(t.dim)
+  .child(div().loop("opacity", { from: 0.4, to: 1, period: 900 }).child("·"));
 
 function adviceRow(a, i, t, s) {
   return v_flex().py(4).child(h_flex().gap(8).items_start().text_size(12.5).line_height("18px")
@@ -113,13 +104,9 @@ function topList(top, t, s) {
 
 function using(t, s, cb) {
   const d = s.detail;
-  if (d.status === "loading") return loadingLine(t, "Reading what's contributing");
-  if (d.status === "untrusted") return v_flex().gap(4).text_size(12.5)
-    .child(div().text_color(t.foreground).child("Claude Code doesn't trust this folder yet."))
-    .child(div().text_color(t.dim).child("What's contributing comes from starting Claude Code there, so it waits until the terminal has accepted the folder."));
-  if (d.status === "error") return v_flex().gap(4).text_size(12.5)
-    .child(div().text_color(t.foreground).child("Couldn't read what's contributing."))
-    .child(div().text_color(t.dim).child("Refresh to try again. The limits above are still current."));
+  if (d.status === "loading") return loadingLine(t);
+  if (d.status === "untrusted") return div().text_size(12.5).text_color(t.foreground).child("Folder not trusted");
+  if (d.status === "error") return div().text_size(12.5).text_color(t.foreground).child("Couldn't read");
   const ranges = d.data.ranges, r = ranges.find((x) => x.label === s.range) ?? ranges[0];
   const items = ranges.map((x) => ({ id: x.label, label: x.label }));
   return v_flex().gap(12)
@@ -164,9 +151,7 @@ function heat(v, t, s) {
         .children(DAYS.map((d) => div().h(cell).flex().items_center().child(d))))
       .child(div().relative().w(width).h(height).flex_none()
         .opacity(s.entered ? 1 : 0).transition("opacity", { duration: 260, easing: "ease-out" })
-        .children(painted.map(([color, path]) => window.paint_path(path, color).absolute().top(0).left(0).w(width).h(height)))))
-    .child(h_flex().gap(5).justify_end().items_center().mt(7).text_size(11.5).text_color(t.dim)
-      .child("Less").children([1, 2, 3, 4].map((l) => div().size(10).rounded(2.5).bg(colors[l]))).child("More"));
+        .children(painted.map(([color, path]) => window.paint_path(path, color).absolute().top(0).left(0).w(width).h(height)))));
 }
 
 const figure = (label, value, unit, first, t) => v_flex().flex_1().min_w(0).when(!first, (e) => e.pl(16).border_l(1).border_color(t.border))
@@ -175,9 +160,7 @@ const figure = (label, value, unit, first, t) => v_flex().flex_1().min_w(0).when
     .when(Boolean(unit), (e) => e.child(div().flex_none().text_size(12.5).text_color(t.dim).child(unit))));
 
 function stats(t, s, cb) {
-  if (!s.stats) return v_flex().gap(4).text_size(12.5)
-    .child(div().text_color(t.foreground).child("Stats aren't available."))
-    .child(div().text_color(t.dim).child("Claude Code hasn't written stats-cache.json yet."));
+  if (!s.stats) return div().text_size(12.5).text_color(t.foreground).child("No stats");
   const v = s.stats[s.statsRange] ?? s.stats.all, f = v, n = (x) => x.toLocaleString("en-GB");
   return v_flex().gap(13)
     .child(h_flex().items_center().justify_between().gap(10).min_h(30)
@@ -191,8 +174,7 @@ function stats(t, s, cb) {
       .child(h_flex().gap(0)
         .child(figure("Active days", String(f.activeDays), `/${f.span}`, true, t)).child(figure("Longest streak", String(f.longestStreak), " days", false, t))
         .child(figure("Current streak", String(f.currentStreak), " days", false, t)).child(figure("Most active day", dayLabel(f.topDay), "", false, t))))
-    .child(div().text_size(12).text_color(t.dim).child(`Input ${compact(v.totals.input)} · Output ${compact(v.totals.output)} · Cache read ${compact(v.totals.cacheRead)} · Cache write ${compact(v.totals.cacheWrite)}`))
-    .when(Boolean(v.albumRatio), (e) => e.child(div().text_size(12.5).text_color(t.accent).child(`Your longest session is about ${v.albumRatio}x longer than listening to Abbey Road`)));
+    .child(div().text_size(12).text_color(t.dim).child(`Input ${compact(v.totals.input)} · Output ${compact(v.totals.output)} · Cache read ${compact(v.totals.cacheRead)} · Cache write ${compact(v.totals.cacheWrite)}`));
 }
 
 // ---- the panel ----

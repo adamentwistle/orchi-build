@@ -2,6 +2,7 @@
 // its name, folder and status from its terminal. No Herdr imports, so `node --test` can load this file.
 const CHAT = "claude-chat";
 const PROGRESS = "orch-pane";
+const PLAN = "plan-view";
 // What claude-chat publishes under this key: { [terminal address]: count } of what landed while the chat wasn't showing.
 // A mod can't import from another mod's folder, so the key is repeated here and a test keeps the two equal.
 export const UNSEEN_KEY = "chat.unseen";
@@ -17,6 +18,7 @@ export const unseenLabel = (count) => (count > 0 ? `${count > 99 ? "99+" : count
 // terminal in the chat's place.
 export function headerFacts(pane, all, pairs, unseen = {}) {
   if (pane.mod === PROGRESS) return { chat: false, name: "Orchestrator progress", cwd: null, program: null, status: null, unseen: 0 };
+  if (pane.mod === PLAN) return { chat: false, name: "Plan", cwd: null, program: null, status: null, unseen: 0 };
   if (pane.mod !== CHAT) {
     const name = ((pane.program?.agent || pane.program?.shell) && pane.program.name) || pane.title || pane.program?.name || "shell";
     const paired = Boolean(pane.terminal) && Object.values(pairs ?? {}).includes(pane.terminal);

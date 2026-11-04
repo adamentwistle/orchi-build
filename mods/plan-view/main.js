@@ -6,12 +6,12 @@ import { planOf } from "./roadmap.js";
 
 export default class PlanView extends View {
   init(_props, cx) {
-    this.plan = null; this.note = "Loading…";
+    this.plan = null; this.note = null;
     cx.spawn(async (cx) => {
       const path = props()?.path;
       const text = path ? await readTextFile(path).catch(() => null) : null;
       this.plan = text ? planOf(text) : null;
-      this.note = this.plan ? null : "This project has no plan to show.";
+      this.note = this.plan ? null : "No plan";
       cx.notify();
     });
   }
@@ -22,6 +22,6 @@ export default class PlanView extends View {
       .child(this.plan
         ? div().max_w(760).child(TextView.markdown("plan", this.plan).selectable(true)
           .on_link_click((url) => { if (/^https:\/\//.test(url)) exec("open", ["--", url]).catch(() => {}); }))
-        : div().text_color(t.dim).child(this.note));
+        : div().text_color(t.dim).when(Boolean(this.note), (e) => e.child(this.note)));
   }
 }

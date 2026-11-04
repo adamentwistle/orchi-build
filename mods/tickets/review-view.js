@@ -98,15 +98,15 @@ function instructionsCard(view, t) {
       .child(role("switchboard", "Switchboard", MODELS))
       .child(role("orchestrator", "Orchestrator", MODELS))
       .child(role("workers", "Workers", ["Auto", ...MODELS]))
-      .child(v_flex().flex_none().gap(6).child(label("How should this session handle PRs"))
+      .child(v_flex().flex_none().gap(6).child(label("Pull requests"))
         .child(field(t).child(Input.new(view.prsInput).h_full().flex_1().text_size(13).text_color(t.foreground))))
-      .child(v_flex().flex_none().gap(6).child(label("When planning finishes"))
+      .child(v_flex().flex_none().gap(6).child(label("After planning"))
         .child(segment({
           id: "after", value: s.after, t,
-          items: [{ id: "start", label: "Start orchestrators" }, { id: "wait", label: "Wait for me" }],
+          items: [{ id: "start", label: "Start" }, { id: "wait", label: "Wait" }],
           onPick: (after, cx) => view.setSession({ after }, cx),
         })))
-      .child(v_flex().flex_1().min_h(72).gap(6).child(label("Extra instructions"))
+      .child(v_flex().flex_1().min_h(72).gap(6).child(label("Instructions"))
         .child(div().flex_1().min_h(0).p(8).rounded(8).border_1().border_color(t.border).bg(t.background)
           .child(Textarea.new(view.extraInput).size_full().text_size(13).text_color(t.foreground))))));
 }

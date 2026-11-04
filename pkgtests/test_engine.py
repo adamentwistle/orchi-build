@@ -53,7 +53,8 @@ def run(steps, fix, as_json=False):
 
 
 def closing(output):
-    return output.rstrip("\n").splitlines()[-1]
+    """The closing lines: everything after the blank line under the steps."""
+    return output.rstrip("\n").split("\n\n")[-1]
 
 
 # The step model
@@ -230,7 +231,7 @@ def test_a_file_is_backed_up_before_it_changes_and_the_closing_line_names_the_ba
     backups = list((store.state_dir() / "backups").iterdir())
     assert len(backups) == 1
     assert (backups[0] / str(home / "a").lstrip("/")).read_text() == "yours"
-    assert closing(out) == f"Changed: First file. Backup: {backups[0]}"
+    assert closing(out) == f"Changed: First file.\nBackup: {backups[0]}"
 
 
 def test_backups_are_taken_before_the_fix_starts(home):
@@ -488,7 +489,7 @@ def test_json_gives_the_same_facts_as_the_lines(home):
     assert data["needs_you"] == ["Bad"]
     assert data["to_fix"] == []
     assert data["backup"] and os.path.isdir(data["backup"])
-    assert data["summary"] == f"Changed: First file, Third file. Needs you: Bad. Backup: {data['backup']}"
+    assert data["summary"] == f"Changed: First file, Third file. Needs you: Bad.\nBackup: {data['backup']}"
 
 
 def test_json_for_doctor(home):
@@ -610,7 +611,7 @@ def test_ctrl_c_while_a_line_is_shown_still_ends_with_the_record_and_closing_lin
     last = store.Store().last_run()
     assert last["stopped"] and not last["finished"]
     assert [(s["name"], s["status"]) for s in last["steps"]] == [("First file", "fixed")]
-    assert closing(out.getvalue()) == f"Stopped. Changed: First file. Backup: {last['backup']}"
+    assert closing(out.getvalue()) == f"Stopped. Changed: First file.\nBackup: {last['backup']}"
     assert not (home / "later").exists()
 
 

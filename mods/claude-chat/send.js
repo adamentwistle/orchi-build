@@ -24,19 +24,19 @@ const PULL_POLLS = 14;
 const CLEAR_TRIES = 3;
 
 export const NOTES = {
-  blocked: "A dialog is open in the terminal, so this hasn't gone.",
-  stashed: "The terminal is holding a stashed line. Send or clear it there first.",
-  gone: "Claude Code isn't running in this terminal.",
-  failed: "That didn't send.",
-  stuck: "It's in the terminal's prompt, but it didn't send.",
-  idle: "Nothing is running.",
-  waiting: "Claude Code hasn't taken the queue yet. With no tool running, it goes in when the turn ends.",
-  draft: "The terminal's prompt has text in it. Clear it there first.",
-  nothing: "Nothing is queued now.",
-  unreadable: "Can't read the terminal's prompt.",
-  terminal: "The queue is in the terminal's prompt.",
-  image: "A queued image can only be changed in the terminal.",
-  split: "Couldn't tell the queued messages apart, so they're all back in here.",
+  blocked: "A dialog is open in the terminal",
+  stashed: "A stashed line is in the terminal",
+  gone: "Claude Code isn't running",
+  failed: "Not sent",
+  stuck: "In the terminal's prompt, not sent",
+  idle: "Nothing running",
+  waiting: "Still queued in the terminal",
+  draft: "The terminal's prompt has text",
+  nothing: "Nothing queued",
+  unreadable: "Can't read the terminal's prompt",
+  terminal: "The queue is in the terminal's prompt",
+  image: "Queued images change in the terminal",
+  split: "Queue moved back here",
 };
 
 const refuse = (reason) => ({ ok: false, reason, note: NOTES[reason] });

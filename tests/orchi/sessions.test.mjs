@@ -139,9 +139,9 @@ test("a row says where it runs, how long and what's going on", () => {
   const started = board({ started: "2026-10-30 23:00", plans: [{ project: "atlas" }, { project: "b" }] });
   const runs = [run({ progress: { done: 2, total: 5 } }), run({ progress: { done: 1, total: 2 } })];
   const [running] = sessionRows([row({ phase: "Running", board: started, runs })], NOW);
-  assert.deepEqual([running.dot, running.where, running.detail], ["working", "orch-atlas, orch-b", "3 of 7 tasks done"]);
+  assert.deepEqual([running.dot, running.where, running.detail], ["working", "orch-atlas, orch-b", "3 of 7"]);
   const [needs] = sessionRows([row({ phase: "Needs you", board: board({ open: [{}] }) })], NOW);
-  assert.deepEqual([needs.dot, needs.detail], ["blocked", "1 open question. Press to open it."]);
+  assert.deepEqual([needs.dot, needs.detail], ["blocked", "1 open question"]);
   const [kept] = sessionRows([row({ board: board({ kept: "x" }) })], NOW);
   assert.equal(kept.detail, "Kept for later");
 });

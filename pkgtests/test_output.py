@@ -77,7 +77,7 @@ def test_no_color_in_a_terminal_is_plain_text(home, tmp_path):
     assert code == 0, shown
     assert "\x1b" not in shown and "\r" not in shown
     assert not SPINNER & set(shown)
-    assert shown.splitlines() == ["✓  Slow", "✓  First file   fixed", "✓  Second file  fixed",
+    assert shown.splitlines() == ["✓  Slow", "✓  First file   fixed", "✓  Second file  fixed", "",
                                   "Changed: First file, Second file."]
 
 
@@ -92,7 +92,7 @@ def test_piped_output_is_plain_text(home, tmp_path):
                           capture_output=True, text=True, timeout=30)
     assert done.returncode == 0, done.stderr
     assert "\x1b" not in done.stdout and "\r" not in done.stdout
-    assert done.stdout.splitlines() == ["✓  Slow", "✓  First file   fixed", "✓  Second file  fixed",
+    assert done.stdout.splitlines() == ["✓  Slow", "✓  First file   fixed", "✓  Second file  fixed", "",
                                         "Changed: First file, Second file."]
 
 
@@ -118,7 +118,34 @@ def test_a_question_with_no_terminal_fails_the_step_instead_of_waiting(home, tmp
     done = subprocess.run([sys.executable, str(DRIVER), "ask"], env=child_env(DRIVE_DIR=str(tmp_path)),
                           stdin=subprocess.PIPE, capture_output=True, text=True, timeout=20, start_new_session=True)
     assert done.returncode == 1
-    assert done.stdout.splitlines() == ["✗  Theme  needs a terminal to answer: Which theme", "Needs you: Theme."]
+    assert done.stdout.splitlines() == ["✗  Theme  needs a terminal to answer: Which theme", "",
+                                         "Needs you: Theme."]
+
+
+# The closing lines
+
+def test_the_closing_line_stands_apart_from_the_steps(home):
+    out = io.StringIO()
+
+    class Bad(engine.Step):
+        name = "Bad"
+
+        def check(self):
+            return engine.broken("no disk")
+
+    engine.run([Bad()], fix=True, screen=screen.Screen(out), store=store.Store())
+    assert out.getvalue().splitlines() == ["✗  Bad  no disk", "", "Needs you: Bad."]
+
+
+def test_the_backup_and_each_note_have_a_line_of_their_own():
+    summary = engine._summary(["Themes"], [], [], False, "/b/1", notes=["Undo: cp a b", "Delete the backup."])
+    assert summary.splitlines() == ["Changed: Themes.", "Backup: /b/1", "Undo: cp a b", "Delete the backup."]
+
+
+def test_a_closing_line_with_no_steps_above_it_has_no_gap():
+    out = io.StringIO()
+    screen.Screen(out).finish({"summary": "Nothing to remove."})
+    assert out.getvalue() == "Nothing to remove.\n"
 
 
 # The real command
@@ -180,7 +207,7 @@ def test_bare_orchi_piped_and_with_json(home, tools):
     assert done.returncode == 0
     lines = done.stdout.splitlines()
     assert lines[:3] == ["✓  Orchi files", "✓  Settings folder", "✓  Settings"]
-    assert lines[-1] == "All set." and len(lines) == 12
+    assert lines[-2:] == ["", "All set."] and len(lines) == 13
 
 
 def test_output_that_breaks_off_still_exits_with_the_run_code(home, tmp_path):

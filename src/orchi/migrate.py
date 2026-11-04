@@ -96,7 +96,7 @@ class LinearKey(Step):
         undo = f"cp -p {shlex.quote(str(copy))} {shlex.quote(str(target))}"
         if wrote:
             undo += f" && security delete-generic-password -s {keychain.LINEAR_SERVICE}"
-        ctx.note(f"To undo the move: {undo}")
+        ctx.note(f"Undo: {undo}")
         return "moved to the keychain" if wrote else "removed from linear.json"
 
     def remove(self, target):

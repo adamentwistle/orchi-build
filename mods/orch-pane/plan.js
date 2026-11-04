@@ -17,6 +17,9 @@ function slugParts(slug) {
   return m ? { name: m[1], item: m[2] } : { name: slug, item: null };
 }
 
+// A PR cell may be written "65" or "#65". The number is kept bare, so "#" isn't drawn twice. The same as Orchi's parse.js.
+const prNumber = (cell) => String(cell ?? "").replace(/^#+\s*/, "");
+
 // The table of `.legwork/fanout-state.md`, its heading and its `Progress:` line.
 export function parseFanout(text) {
   const rows = text.split("\n").filter((l) => l.startsWith("|")).map((l) => l.split("|").slice(1, -1).map((c) => c.trim()));
@@ -24,7 +27,7 @@ export function parseFanout(text) {
   const at = (name) => (head < 0 ? -1 : rows[head].indexOf(name));
   const items = head < 0 ? [] : rows.slice(head + 2).filter((r) => present(r[at("slug")])).map((r) => {
     const [model, effort] = (r[at("model")] ?? "-").split(/\s+/);
-    return { slug: r[at("slug")], ...slugParts(r[at("slug")]), route: r[at("route")] ?? "", model: present(model) && title(model), effort: effort ?? null, state: present(r[at("state")]) ?? "", pr: present(r[at("PR")]) };
+    return { slug: r[at("slug")], ...slugParts(r[at("slug")]), route: r[at("route")] ?? "", model: present(model) && title(model), effort: effort ?? null, state: present(r[at("state")]) ?? "", pr: present(prNumber(r[at("PR")])) };
   });
   const progress = /^Progress: (\d+)\/(\d+)\s*$/m.exec(text);
   const heading = /^# fanout-state:\s*(.*)$/m.exec(text)?.[1] ?? "";

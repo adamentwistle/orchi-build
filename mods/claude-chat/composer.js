@@ -14,7 +14,7 @@ import { findSession } from "./session.js";
 import { KEY_CONTEXT, LIST_KEYS, SEND_ACTION, keyAction, keyBindings } from "./slash.js";
 import { NOTES, cleanText, plainQueued, pullQueue, removeQueued, sendMessage, sendNow, serial, settleSent, stopTurn, trayRows, withPaths, withoutEnter } from "./send.js";
 
-const PLACEHOLDER = "Reply to Claude, or type / for commands";
+const PLACEHOLDER = "Reply";
 const MIN_ROWS = 1, MAX_ROWS = 10;
 const THUMB = 44;
 
@@ -142,7 +142,7 @@ export function composerInput({ placeholder = PLACEHOLDER, onChange, onSend, onS
 }
 
 const fileName = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-const NO_IMAGE = "There's no image on the clipboard.";
+const NO_IMAGE = "No image on the clipboard";
 
 // The composer's state and what its presses do, so main.js stays thin. `terminal` is the session's address, and
 // `changed(cx)` is called when something the thread draws has changed. `intercept(text, cx)` is step 7's: it gets the

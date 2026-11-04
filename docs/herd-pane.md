@@ -8,9 +8,9 @@ It sits beside the progress pane rather than replacing it. The progress pane nee
 
 ## One colour, one meaning
 
-Blue is thinking, cyan is reading, yellow is writing, purple is shell, grey is waiting. The same colours are on the map, in the words and on the ribbons, and the key sits under the map. Red needs you, green is finished, hollow is queued. Light red reading `Quiet` means a working session has run no tool and written nothing for three minutes.
+Blue is thinking, cyan is reading, yellow is writing, purple is shell, grey is waiting. The same colours are on the map, in the words and on the ribbons. Red needs you, green is finished, hollow is queued. Light red reading `Quiet` means a working session has run no tool and written nothing for three minutes.
 
-The same five icons are on the map's nodes and in the key, so the colours aren't the only cue. A shell command that only waits, such as `hc wait` or `bugbot-wait`, counts as waiting, so an orchestrator doing its job doesn't look like one running a long command. An Agent call still open after 10 seconds is a foreground subagent run, so it reads `Waiting` and draws grey, not `Starting`.
+The same five icons are on the map's running nodes, so the colours aren't the only cue. A shell command that only waits, such as `hc wait` or `bugbot-wait`, counts as waiting, so an orchestrator doing its job doesn't look like one running a long command. An Agent call still open after 10 seconds is a foreground subagent run, so it reads `Waiting` and draws grey, not `Starting`.
 
 ## Reading it, top to bottom
 
@@ -20,7 +20,7 @@ The same five icons are on the map's nodes and in the key, so the colours aren't
 - **The rows:** one per worker, with what it's doing now and for how long at the right, a ribbon of its last 30 minutes, and one line of status. Now is at the right of the ribbon, and a gap is thinking. Beside the time is how full its context window is, which turns yellow from 60%, as the sidebar's does. Once a turn is over, the status line ends with what it came to, such as `4m 10s, 12 tools, 1 failed`. A press on a call in the ribbon names it under the ribbon, as its tool and its file, the program a command ran, a pattern or a description, with how long it took and how long ago, and marks it. A second press, or a press on that line, hides it. A press opens the rest: the full status, the model and effort, the time so far, and Show terminal, which peeks at it over the tab.
 - **Subagents and processes:** folded into one line under their worker, with a dot for each in the colour of what it's doing, and a press opens them. A fold stays open until it's pressed again.
 - **Usage:** at the foot, the same meters as Orchi's: the 5-hour limit, the Fable weekly limit and the all-models weekly one, each with what's used, where its pace ends the window, and when it resets. They come from `~/.cache/orchi/usage.json`, which usage-watch keeps fresh (see `docs/usage-watch.md`), read at most every 15 seconds, so the Claude Code status line no longer needs to show them. A limit the file gives no reset time for is one the account doesn't have, so it's left out, as Orchi leaves it out. An account with no 5-hour limit gets `sessionUsage` 0 and no `sessionResetAt` there, so only Fable and All show. The helper is `mods/herd/meters.js`, a copy of `mods/orchi/usage.js` with `metersFrom` added.
-- **Finished agents:** folded into one row with a count. Each entry has a bar sized against the longest, red if the terminal exited with an error. Past 40 the last line says how many more there are.
+- **Finished:** folded into one row with a count. Each entry has a bar sized against the longest, red if the terminal exited with an error. Past 40 the last line reads `+N`.
 
 ## Where the data comes from
 

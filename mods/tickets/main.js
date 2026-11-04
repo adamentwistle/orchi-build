@@ -67,7 +67,7 @@ export default class Tickets extends View {
     this.statusOpen = null; this.moving = null; this.moveError = null; this.projectNote = null; this.startingProject = null;
     this.search = InputState.new({ placeholder: "Filter" });
     this.search.on("change", (_e, cx) => { this.text = this.search.value(); cx.notify(); });
-    this.picker = InputState.new({ placeholder: "Search projects" });
+    this.picker = InputState.new({ placeholder: "Search" });
     this.picker.on("change", (_e, cx) => { this.pickerText = this.picker.value(); cx.notify(); });
     this.pickerOpen = null;
     this.world = emptyWorld(); this.trust = {}; this.going = false; this.goError = null; this.sessionsGeneration = 0;
@@ -451,8 +451,8 @@ export default class Tickets extends View {
 
   emptyText() {
     if (this.error) return this.error;
-    if (this.loading && !this.tickets.length) return "Loading…";
-    return this.tickets.length ? "No tickets match" : "No open tickets";
+    if (this.loading && !this.tickets.length) return "";
+    return this.tickets.length ? "No matches" : "No tickets";
   }
 
   // ---- a private window's test hook ----

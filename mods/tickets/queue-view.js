@@ -55,8 +55,7 @@ function projectCard(view, group, searching, t) {
   const ticked = group.tickets.filter((x) => view.ticked.has(x.ref)).length;
   return card(t)
     .child(sectionHead({
-      id: group.key, title: group.label, count: group.tickets.length, open,
-      right: ticked ? `${ticked} ticked` : null,
+      id: group.key, title: group.label, count: group.tickets.length, open, right: ticked ? `${ticked} ticked` : null,
       onToggle: (_e, cx) => { view.toggleCard(group.key); cx.notify(); }, t,
     }))
     .when(open, (e) => e.child(v_flex().flex_none().bg(t.raised).children(group.tickets.map((x) => row(view, x, t)))));

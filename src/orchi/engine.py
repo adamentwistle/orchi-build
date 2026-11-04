@@ -325,6 +325,7 @@ def _checked(step):
 
 
 def _summary(changed, to_fix, needs_you, stopped, backup, notes=()):
+    """What the run came to on one line, then the backup and each note on a line of their own."""
     parts = ["Stopped."] if stopped else []
     if changed:
         parts.append(f"Changed: {', '.join(changed)}.")
@@ -334,10 +335,11 @@ def _summary(changed, to_fix, needs_you, stopped, backup, notes=()):
         parts.append(f"Needs you: {', '.join(needs_you)}.")
     if not parts:
         parts.append("All set.")
+    lines = [" ".join(parts)]
     if backup:
-        parts.append(f"Backup: {backup}")
-    parts.extend(notes)
-    return " ".join(parts)
+        lines.append(f"Backup: {backup}")
+    lines.extend(notes)
+    return "\n".join(lines)
 
 
 def _report(command, results, stopped, backup, summary=None, ok=None, notes=()):

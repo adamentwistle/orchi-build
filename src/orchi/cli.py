@@ -29,10 +29,10 @@ def _steps(fix):
 DEFAULT = Command("set up or fix everything", _steps(fix=True))
 
 COMMANDS = {
-    "doctor": Command("check everything and change nothing", _steps(fix=False)),
-    "update": Command("move to the newest release and run the steps", update.run),
-    "uninstall": Command("remove what Orchi made and keep what is yours", uninstall.run, uninstall.configure),
-    "tickets": Command("list the tickets of every chosen source", tickets.run, tickets.configure),
+    "doctor": Command("check and change nothing", _steps(fix=False)),
+    "update": Command("move to the newest release, then set up", update.run),
+    "uninstall": Command("remove what Orchi made", uninstall.run, uninstall.configure),
+    "tickets": Command("list and change tickets", tickets.run, tickets.configure),
 }
 
 
@@ -40,8 +40,7 @@ def build_parser():
     parser = argparse.ArgumentParser(
         prog="orchi",
         allow_abbrev=False,
-        description="Orchi dresses Herdr and runs the orchestration layer. "
-        "With no command it sets up or fixes; `doctor` only checks.",
+        description="Set up or fix everything.",
     )
     parser.add_argument("--version", action="version", version="orchi %s" % __version__)
     json_help = "print one JSON object instead of lines"

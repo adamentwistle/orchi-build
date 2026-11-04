@@ -206,7 +206,7 @@ test("Send now says so when the queue didn't move, because with no tool running 
   const io = session({ state: "working", screens: [HINT] });
   const r = await sendNow(io, "t1");
   assert.equal(r.ok, true);
-  assert.match(r.note, /no tool running/);
+  assert.equal(r.note, "Still queued in the terminal");
   assert.deepEqual(pressed(io), ["ctrl+enter"]);
 });
 

@@ -107,7 +107,7 @@ def test_it_says_what_it_removed_and_what_it_kept_and_how_to_remove_the_command(
     assert lines[0].startswith("Removed ") and "files" in lines[0] and "folders" in lines[0]
     assert "launch agent" in lines[0]
     assert any(line.strip().startswith("~/.local/state/orchi/backups") for line in lines)
-    assert lines[-1] == "To remove the orchi command: uv tool uninstall orchi"
+    assert lines[-1] == "Remove the orchi command: uv tool uninstall orchi"
     assert not mac.program("uv")
 
 
@@ -252,7 +252,7 @@ def test_with_nothing_to_remove_it_asks_nothing(setup_done, capsys):
     code, out = uninstall(capsys)
     assert code == 0 and mac.asked == []
     assert out.splitlines()[0] == "Nothing to remove."
-    assert out.splitlines()[-1] == "To remove the orchi command: uv tool uninstall orchi"
+    assert out.splitlines()[-1] == "Remove the orchi command: uv tool uninstall orchi"
 
 
 def test_a_rerun_changes_nothing(setup_done, capsys):

@@ -911,7 +911,7 @@ def test_the_undo_line_is_one_command_line_that_can_be_pasted(mac, home):
     from test_migration import put
     put(home)
     _, report = go(["Linear key"])
-    undo = report["summary"].split("To undo the move: ")[1]
+    (undo,) = [line for line in report["summary"].splitlines() if line.startswith("Undo: ")]
     assert " and " not in undo and "&&" in undo
 
 

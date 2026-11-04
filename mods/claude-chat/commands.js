@@ -16,8 +16,8 @@ const SIDE = 24, GAP = 8;
 const ENTER_MS = 40, CLOSE_MS = 350;
 // `/model` and `/effort` are taken by the model control before this gets the text. A line that still gets here is one it
 // won't take, such as several lines, and a name sent through would save a default for every new session.
-const AWAY_NOTE = "That opened a dialog in the terminal.";
-const PICKER_NOTE = "Use the model control for that. Nothing was sent, because /model and /effort with a name save a default for every new session.";
+const AWAY_NOTE = "Opened in the terminal";
+const PICKER_NOTE = "Not sent. Use the model control";
 let fallback = null;
 
 export class Commands {

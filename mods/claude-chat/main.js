@@ -29,10 +29,9 @@ const MAX_EDITORS = 64;
 // `scroll_to_bottom` uses the sizes from the last render, so it has to come a frame after a row joins.
 const NEXT_FRAME_MS = 40;
 const AWAY_TICKS = 2;
-const WAITING = "Waiting for this session.";
-const EMPTY = "No messages yet.";
-const LOST = "This session's transcript can't be read. Use the terminal.";
-const BROKE = "The thread hit an error and may be behind. The terminal has everything.";
+const LOOKING = "…";
+const LOST = "Transcript unreadable";
+const BROKE = "Thread may be behind";
 const MISSES = 3;
 // Items either side of what the list drew whose editors are kept, so a row about to scroll in doesn't lose its colours.
 const EDITOR_MARGIN = 4;
@@ -484,7 +483,10 @@ export default class Chat extends View {
 
   view(t, live) {
     const items = this.items;
-    if (!items.length) return notice(this.problem ?? (this.session && (this.loaded || this.absent) ? EMPTY : WAITING), t);
+    if (!items.length) {
+      if (this.problem) return notice(this.problem, t);
+      return this.session && (this.loaded || this.absent) ? v_flex() : notice(LOOKING, t);
+    }
     const pending = pendingItems(items, this.fresh, BATCH);
     this.pendingCount = pending.length;
     this.shown = shownItems(items, this.heights).filter((item) => !this.motion.held(item));

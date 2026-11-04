@@ -136,18 +136,18 @@ export default class Orchi extends View {
     this.dismissed = new Set();
     try { this.dismissed = new Set(JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? "[]")); } catch { /* start with none */ }
     this.planFor = null; this.planOpen = false; this.planSearch = ""; this.planError = null;
-    this.planInput = InputState.new({ placeholder: "Search projects" });
+    this.planInput = InputState.new({ placeholder: "Search" });
     this.planInput.on("change", (_e, cx) => { this.planSearch = this.planInput.value(); cx.notify(); });
-    this.replyInput = InputState.new({ placeholder: "Or type a reply" });
+    this.replyInput = InputState.new({ placeholder: "Reply" });
     this.replyInput.on("change", (_e, cx) => { this.replyText = this.replyInput.value(); this.replyError = null; cx.notify(); });
-    this.actionInput = InputState.new({ placeholder: "Details, a response or feedback" });
+    this.actionInput = InputState.new({ placeholder: "Reply" });
     this.actionInput.on("change", (_e, cx) => { this.actionText = this.actionInput.value(); this.replyError = null; cx.notify(); });
     this.replyText = ""; this.actionText = ""; this.option = null; this.pinned = null; this.sending = false; this.replyError = null;
     this.note = null; this.actionError = null; this.noticeAt = null; this.starting = {}; this.usageOverrides = new Map(); this.seenFocus = null; this.focusSession = null;
     this.startFor = null; this.stopping = null; this.completing = null;
     this.startPrs = InputState.new({ placeholder: PR_HINT });
     this.startPrs.on("change", (_e, cx) => this.setStartOption({ prs: this.startPrs.value() }, cx));
-    this.startExtra = TextareaState.new({ placeholder: "Anything this run should know" });
+    this.startExtra = TextareaState.new({ placeholder: "" });
     this.startExtra.on("change", (_e, cx) => this.setStartOption({ extra: this.startExtra.value() }, cx));
     this.at = 0; this.generation = 0; this.loadingSince = 0; this.again = false; this.stale = false; this.size = null; this.opened = {};
     try { this.opened = JSON.parse(localStorage.getItem(OPEN_KEY) ?? "{}"); } catch { /* start with defaults */ }
@@ -254,14 +254,14 @@ export default class Orchi extends View {
     if (d?.planner) { run("agent.focus", { terminal: d.terminal }); return; }
     this.act(async () => {
       const holder = await ensureSwitchboard(await io(), this.switchboardChoice());
-      if (holder.where === "terminal") { this.note = "The switchboard is in terminal Herdr, so it can't be shown from here."; return; }
+      if (holder.where === "terminal") { this.note = "Switchboard is in terminal Herdr"; return; }
       const line = d ? discussLine(d) : null;
       if (line && holder.started) {
         await copyText(exec, line);
-        this.note = "Copied. Paste it once the switchboard is up.";
+        this.note = "Copied, not sent";
       }
       if (line && !holder.started) {
-        if (!await pasteInto({ exec, run, focused }, holder.terminal, line)) this.note = "Copied, but that terminal didn't take the keyboard, so nothing was pasted.";
+        if (!await pasteInto({ exec, run, focused }, holder.terminal, line)) this.note = "Copied, not pasted";
         return;
       }
       run("agent.focus", { terminal: holder.terminal });
@@ -291,12 +291,12 @@ export default class Orchi extends View {
 
   answerAction(d, cx) { this.send(d, actionAnswer(this.actionText), cx); }
 
-  copyCommand(d, cx) { this.act(async () => { await copyText(exec, d.run); this.note = "Copied."; }, cx); }
+  copyCommand(d, cx) { this.act(async () => { await copyText(exec, d.run); this.note = "Copied"; }, cx); }
 
   // Never presses Enter. The permission check wants the user's own action in that session.
   putInTerminal(d, cx) {
     this.act(async () => {
-      if (!await pasteInto({ exec, run, focused }, d.address, d.run)) this.note = "Copied, but that terminal didn't take the keyboard, so nothing was pasted.";
+      if (!await pasteInto({ exec, run, focused }, d.address, d.run)) this.note = "Copied, not pasted";
     }, cx);
   }
 

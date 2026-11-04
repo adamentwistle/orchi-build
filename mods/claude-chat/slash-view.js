@@ -1,5 +1,5 @@
 // Draws the / completion card: a card on the composer's own edges, commands in sections under full-width header
-// bands, the typed part in the accent colour, and a footer band with the keys. A view file: elements out, no state.
+// bands, the typed part in the accent colour. A view file: elements out, no state.
 //
 //   s.rows      completionRows() of the filtered sections
 //   s.index     the selected command, counted among commands
@@ -32,19 +32,9 @@ function commandRow(row, s, cb, t, plate) {
     .when(on && !plate, (e) => e.bg(t.raised)).when(!on, (e) => e.hover((x) => x.bg(t.hover)))
     // A virtual list's row renderer can't register handlers: the list's own on_item_click takes presses there.
     .when(plate, (e) => e.on_mouse_move((_e, cx) => cb.onHover(row.index, cx)).on_click((_e, cx) => cb.onPick(row.index, cx)))
-    .child(h_flex().w(190).flex_none().font_family(mono()).text_size(12.5).font_medium().text_color(t.foreground).truncate()
+    .child(h_flex().flex_1().min_w(0).font_family(mono()).text_size(12.5).font_medium().text_color(t.foreground).truncate()
       .child(p.before).child(div().text_color(t.accent).child(p.match)).child(p.after))
-    .child(div().flex_1().min_w(0).truncate().text_size(13).text_color(t.muted).child(row.item.desc))
     .child(div().w(20).flex_none().text_size(12).text_color(t.dim).opacity(on ? 1 : 0).child("↵"));
-}
-
-const keyHint = (keys, label, t) => h_flex().gap(6).items_center()
-  .child(h_flex().h(18).min_w(18).px(4).items_center().justify_center().rounded(4).bg(t.raised).text_size(11).text_color(t.muted).child(keys))
-  .child(label);
-
-function footer(t) {
-  return h_flex().h(ROW.foot).flex_none().items_center().gap(14).px(14).bg(t.canvas).border_t(1).border_color(t.border).text_size(12).text_color(t.dim)
-    .child(keyHint("↑↓", "Move", t)).child(keyHint("↵", "Run", t)).child(keyHint("Tab", "Fill in", t)).child(keyHint("Esc", "Close", t));
 }
 
 // When the list fits, the selection is a plate that springs between rows. When it scrolls, each row paints its own
@@ -62,8 +52,7 @@ export function completionCard(t, s, cb) {
   return v_flex().w_full().flex_none().rounded(14).overflow_hidden().bg(t.background).border_1().border_color(t.border)
     .relative().top(s.entered ? 0 : MOTION.rise).opacity(s.entered ? 1 : 0)
     .transition("opacity", MOTION.enter).transition("top", MOTION.enter)
-    .child(div().w_full().h(h).flex_none().overflow_hidden().spring("height", MOTION.height).child(body))
-    .child(footer(t));
+    .child(div().w_full().h(h).flex_none().overflow_hidden().spring("height", MOTION.height).child(body));
 }
 
 // /exit asks first, because it ends the session. It sits in the same slot as the other cards.
@@ -73,7 +62,6 @@ export function exitCard(t, cb) {
     .on_click((_e, cx) => onClick(cx)).child(label);
   return v_flex().w_full().flex_none().rounded(14).overflow_hidden().bg(t.background).border_1().border_color(t.border)
     .child(v_flex().gap(3).px(14).pt(12).pb(10)
-      .child(div().text_size(13.5).font_semibold().text_color(t.foreground).child("End this session?"))
-      .child(div().text_size(12.5).text_color(t.muted).child("This exits Claude Code in its terminal, and the chat pane closes with it.")))
+      .child(div().text_size(13.5).font_semibold().text_color(t.foreground).child("End this session?")))
     .child(h_flex().gap(8).justify_end().px(10).pb(10).child(button("exit-keep", "Keep going", false, cb.onKeep)).child(button("exit-end", "End session", true, cb.onEnd)));
 }

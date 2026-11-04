@@ -52,8 +52,6 @@ function option(id, t, { key, label, note, first, chosen, busy }, on) {
 
 const foot = (t) => h_flex().w_full().flex_none().gap(8).items_center().justify_end().px(10).py(8).border_t(1).border_color(t.border).bg(well(t));
 
-const hint = (t, text) => div().pl(4).text_size(12.5).text_color(t.dim).child(text);
-
 function ghost(id, t, label, onClick) {
   return h_flex().id(id).h(26).px(10).flex_none().items_center().justify_center().rounded(13).cursor_pointer().whitespace_nowrap()
     .border_1().border_color(t.border).bg(t.surface).text_size(12.5).font_medium().text_color(t.foreground)
@@ -85,13 +83,12 @@ export function permissionCard(id, { dialog, t, mono, busy = false }, on) {
     .child(body(id, t, mono, dialog.body))
     .when(Boolean(dialog.reason), (e) => e.child(div().min_w(0).mx(14).mb(10).text_size(13).text_color(t.muted).child(dialog.reason)))
     .children(dialog.options.map((o, i) => option(id, t, { ...o, first: i === 0, busy }, on)))
-    .child(foot(t).child(hint(t, "Press a number, or")).child(div().flex_1()).child(kbd(t, "Esc", t.surface)).child(ghost(`${id}-cancel`, t, "Cancel", (_, cx) => on.cancel(cx))));
+    .child(foot(t).child(div().flex_1()).child(kbd(t, "Esc", t.surface)).child(ghost(`${id}-cancel`, t, "Cancel", (_, cx) => on.cancel(cx))));
 }
 
-// One question offers the two rows that need typing as buttons. Several questions only say so, as the mockup does.
+// The two rows that need typing, as buttons. Both open the terminal.
 function typingFoot(id, t, dialog, on) {
-  if (dialog.tabs) return foot(t).child(hint(t, "Anything typed opens the terminal")).child(div().flex_1());
-  return foot(t).child(hint(t, "These open the terminal")).child(div().flex_1())
+  return foot(t).child(div().flex_1())
     .children(dialog.typing.map((o) => ghost(`${id}-type-${o.key}`, t, o.label, (_, cx) => on.terminal(cx))));
 }
 
@@ -108,7 +105,6 @@ export function reviewCard(id, { dialog, t, mono, busy = false }, on) {
   const submit = dialog.options.find((o) => o.label === "Submit answers");
   return frame(t)
     .child(tabs(id, t, dialog, on))
-    .child(head(t, mono, { title: "Send these answers?" }))
     .child(v_flex().px(14).pb(12).flex_none().gap(2).text_size(13.5)
       .children(dialog.answers.map((a) => h_flex().min_w(0).gap(14)
         .child(div().w(LABEL_WIDTH).flex_none().truncate().text_color(t.muted).child(a.tab))

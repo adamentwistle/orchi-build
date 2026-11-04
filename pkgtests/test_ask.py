@@ -124,3 +124,24 @@ def test_a_secret_without_termios_is_no_terminal_not_a_crash(monkeypatch):
     monkeypatch.setattr(screen, "termios", None)
     with pytest.raises(screen.NoTerminal):
         asking(monkeypatch, Tty(["secret\n"])).ask_secret("Key")
+
+
+class TerminalOut(io.StringIO):
+    def isatty(self):
+        return True
+
+
+def test_closing_lines_after_a_question_stand_apart_from_it(monkeypatch):
+    monkeypatch.setattr(screen, "open_tty", lambda: Tty(["2\n"]))
+    out = TerminalOut()
+    s = screen.Screen(out, env={"NO_COLOR": "1"})
+    assert s.ask("Remove 3 files that Orchi made?", ["Yes", "No"]) == "No"
+    s.finish({"summary": "Nothing removed."})
+    assert out.getvalue() == "\nNothing removed.\n"
+
+
+def test_piped_closing_lines_after_a_question_have_no_gap(monkeypatch):
+    out = asking(monkeypatch, Tty(["1\n"]))
+    out.ask("Remove 3 files that Orchi made?", ["Yes", "No"])
+    out.finish({"summary": "Removed 3 files."})
+    assert out.out.getvalue() == "Removed 3 files.\n"

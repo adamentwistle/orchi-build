@@ -158,10 +158,10 @@ Read `choices.after`.
   End your turn with one line to the user. The switchboard starts the
   orchestrators and then closes this terminal, so start nothing yourself.
 - `wait`: end your turn with one line to the user. Orchi shows a Plan ready card.
-  Stay here, because Read the plan jumps to this terminal and they may carry on
+  Stay here, because Open plan jumps to this terminal and they may carry on
   the conversation. If the plan changes, change the roadmap and its `PLAN`
-  entry in place. Never write the request yourself: Start orchestrators on
-  the panel does that.
+  entry in place. Never write the request yourself: Start on the panel
+  does that.
 
 Never run `/fanout`, never open an orchestrator, and never write a `STARTED`
 or `KEPT` entry. The switchboard writes the first and the panel the second.

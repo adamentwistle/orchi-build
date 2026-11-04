@@ -91,6 +91,7 @@ class Screen:
         self._spinning = None
         self._write_lock = threading.Lock()
         self._gone = False
+        self._shown = False
 
     def begin(self, names):
         self.width = max((len(n) for n in names), default=0)
@@ -114,14 +115,15 @@ class Screen:
         if detail:
             line = f"{self._paint(mark, colour)}  {name.ljust(self.width)}  {self._paint(detail, DIM)}"
         self._write(line + "\n")
+        self._shown = True
 
     def finish(self, report):
-        """The closing line, or the whole report as JSON."""
+        """The closing lines, after a blank line when steps are shown above them, or the whole report as JSON."""
         self._stop_spinner()
         if self.as_json:
             self._write(json.dumps(report, ensure_ascii=False) + "\n")
         else:
-            self._write(report["summary"] + "\n")
+            self._write(("\n" if self._shown else "") + report["summary"] + "\n")
 
     def ask(self, question, choices):
         """One of choices, picked by number (or typed in full) at the terminal. Raises NoTerminal when there is no
@@ -197,6 +199,8 @@ class Screen:
             except OSError:
                 raise NoTerminal(f"needs a terminal to answer: {question}") from None
             with tty:
+                # The question is on the screen above whatever comes next, as a step's line would be.
+                self._shown = self._shown or _isatty(self.out)
                 yield tty
 
     def _paint(self, text, colour):

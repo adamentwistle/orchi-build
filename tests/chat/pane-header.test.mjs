@@ -40,8 +40,13 @@ test("a chat's N new shows on its own header and on its terminal's, and nowhere 
 });
 
 test("another mod's pane keeps its own title", () => {
-  const other = { pane: "p6", terminal: null, mod: "plan-view", title: "plan-view" };
-  assert.equal(headerFacts(other, [other], {}).name, "plan-view");
+  const other = { pane: "p6", terminal: null, mod: "files", title: "files" };
+  assert.equal(headerFacts(other, [other], {}).name, "files");
+});
+
+test("the plan pane is called Plan, not by its mod's folder name", () => {
+  const plan = { pane: "p7", terminal: null, mod: "plan-view", title: "plan-view" };
+  assert.equal(headerFacts(plan, [plan], {}).name, "Plan");
 });
 
 test("the progress pane has a plain name, not its mod's", () => {

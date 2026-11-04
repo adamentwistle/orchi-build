@@ -221,7 +221,7 @@ export function ensureList(folder, { exec, trusted, now = Date.now, limitMs }) {
 // ---- the card's rows ----
 
 // Rows are fixed heights, so the card can be laid out and sized without measuring anything.
-export const ROW = { item: 34, head: 28, gap: 6, pad: 6, max: 318, foot: 31 };
+export const ROW = { item: 34, head: 28, gap: 6, pad: 6, max: 318 };
 
 // The list as rows for a virtual list: a header band per section, then its commands. `index` counts commands only,
 // the way the selection does. `top` is the row's offset from the top of the list.

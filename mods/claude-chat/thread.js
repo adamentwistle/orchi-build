@@ -51,7 +51,7 @@ const BOTTOM = LAYOUT.BOTTOM;
 const FRAMES = ["·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢"];
 const FRAME_MS = 110;
 // tail.py cuts a tool's result at 24,000 characters.
-const CLIPPED_RESULT = "Clipped at 24,000 characters. The terminal has all of it.";
+const CLIPPED_RESULT = "Clipped at 24,000 characters";
 
 // Geist Mono's shaping here turns " --" into "--", so `node --test` draws as `node--test`, in an editor or a plain element.
 // JetBrains Mono doesn't. A command drawn wrong is worse than a near match on the font.
@@ -99,7 +99,7 @@ function toolRow(item, t, opts) {
   const result = showing ? opts.results[item.row.tool] : null;
   const body = !showing ? null
     : div().mt(2).ml(23).mb(4).px(11).py(8).rounded(8).bg(well).border_1().border_color(edge).text_size(12).text_color(t.muted).font_family(CODE_FONT)
-      .child(result?.text || (result?.missing ? "This result can't be read." : item.status === "running" ? "Still running." : result ? "No output." : "Reading…"))
+      .child(result?.text || (result?.missing ? "Unreadable" : item.status === "running" ? "Running" : result ? "No output" : "…"))
       .when(Boolean(result?.clipped), (e) => e.child(div().mt(6).text_color(t.dim).child(CLIPPED_RESULT)));
   return v_flex().pl(4).pr(4).ml(4).bg(card).border_l(1).border_r(1).border_color(edge).overflow_hidden()
     .when(item.first, (e) => e.rounded_t(12).border_t(1).pt(LAYOUT.TOOL_EDGE - 1))
@@ -161,7 +161,7 @@ function drawRow(item, t, width, opts) {
 // A row that can't be drawn says so. One bad row mustn't blank the list, which is what a throw here does.
 function rowBody(item, t, width, opts) {
   try { return drawRow(item, t, width, opts); }
-  catch { return div().w_full().pl(4).text_size(12.5).text_color(t.dim).child("This row can't be drawn."); }
+  catch { return div().w_full().pl(4).text_size(12.5).text_color(t.dim).child("Unreadable row"); }
 }
 
 // The width rows are drawn in, inside the thread's centred column.

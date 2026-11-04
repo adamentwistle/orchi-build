@@ -9,7 +9,7 @@ The button is at the right of the tab bar, in any tab holding a session named `o
 | What | From |
 | --- | --- |
 | The plan and its count | `<repo>/.legwork/fanout-state.md`: the `Progress:` line and the table |
-| Latest update | The newest `UPDATE` on `<repo>/.legwork/switchboard.md` |
+| The newest update | The newest `UPDATE` on `<repo>/.legwork/switchboard.md` |
 | Subagents | `agents.py`, from `<project>/<session>/subagents/agent-<id>.meta.json` and the `.jsonl` beside it |
 | Pane workers | Live `fw-<slug>` terminals whose `parent` is this orchestrator, with `created_ms` from `hc get`, and `finished_ms` once one has gone |
 

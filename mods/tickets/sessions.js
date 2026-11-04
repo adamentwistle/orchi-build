@@ -88,15 +88,15 @@ const DOTS = { "Needs you": "blocked", Planning: "working", Running: "working", 
 
 function detailOf(s) {
   const count = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
-  if (s.phase === "Needs you") return `${count(s.board.open.length + s.runs.reduce((n, r) => n + r.open, 0), "open question")}. Press to open it.`;
+  if (s.phase === "Needs you") return `${count(s.board.open.length + s.runs.reduce((n, r) => n + r.open, 0), "open question")}`;
   if (s.phase === "Planned") return s.board.kept ? "Kept for later" : "Plan ready";
   if (s.phase === "Planning") return s.board.answered.length ? `${count(s.board.answered.length, "question")} answered` : "Reading the tickets";
   if (s.phase === "Paused") return "Paused at a safe point";
-  if (s.phase === "Pull requests open") return "All tasks done";
+  if (s.phase === "Pull requests open") return "All done";
   if (s.phase === "Finished") return "Run finished";
   const known = s.runs.filter((r) => r.progress);
   if (!known.length) return "Orchestrators running";
-  return `${known.reduce((n, r) => n + r.progress.done, 0)} of ${known.reduce((n, r) => n + r.progress.total, 0)} tasks done`;
+  return `${known.reduce((n, r) => n + r.progress.done, 0)} of ${known.reduce((n, r) => n + r.progress.total, 0)}`;
 }
 
 const whereOf = (s) => (s.board.started ? s.board.plans.map((p) => `orch-${p.project}`).join(", ") : s.planner?.where ?? "Planning");

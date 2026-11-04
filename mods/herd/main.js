@@ -72,7 +72,7 @@ export default class Herd extends View {
     // A pane opened before Herd moved to the side panel still has its session in its props.
     this.pinned = props()?.terminal ?? null;
     this.terminal = this.pinned; this.root = null;
-    this.model = null; this.problem = "Open a Claude Code session to see what it has running.";
+    this.model = null; this.problem = "No session";
     this.width = 0; this.height = 0; this.reading = false;
     this.selected = null; this.folds = new Map(); this.sparks = []; this.sparkId = 0;
     this.seenUntil = null; this.ended = {}; this.call = null; this.press = null;
@@ -148,7 +148,7 @@ export default class Herd extends View {
     const miss = missed(this.misses, Boolean(me));
     this.misses = miss.count;
     if (!me) {
-      if (miss.gone) { this.model = null; this.problem = "That session's terminal has closed."; } else this.problem = "Can't find that session's terminal. Trying again.";
+      if (miss.gone) { this.model = null; this.problem = "Session closed"; } else this.problem = "Session not found. Retrying";
       return;
     }
     if (me.address !== this.root) {
@@ -170,7 +170,7 @@ export default class Herd extends View {
     const plan = cwd ? await readTextFile(`${cwd}/.legwork/fanout-state.md`).then((t) => t ?? "").catch(() => "") : "";
     // The session in view may have changed while this was reading. The next read is for that one.
     if (asked !== this.terminal) return;
-    this.problem = reply.error ? `Transcripts can't be read, so this shows terminals only. ${reply.error}` : null;
+    this.problem = reply.error ? `Transcripts unreadable: ${reply.error}` : null;
     this.model = buildHerd({ root, nodes, facts, reply: reply.sessions, fanout: parseFanout(plan), now, gaps: this.gaps });
     this.over = this.model.over ? asked : null;
     this.launch(cx, now);

@@ -1,5 +1,6 @@
-// Draws the Herd panel: who needs you, the map of the run, what the colours mean, then a row per agent saying what it's
-// doing now, over a ribbon of its last 30 minutes. One colour means one thing everywhere.
+// Draws the Herd panel: who needs you, the map of the run, then a row per agent saying what it's doing now, in that
+// doing's colour, over a ribbon of its last 30 minutes. One colour means one thing everywhere, and each row's word
+// says which, so the map needs no key.
 // `view` is the panel's View. Colours come from `theme()` only. Everything from a file or a terminal is drawn as text.
 // Only .transition, .spring, .loop and .spin animate here, so the motion runs natively between the once-a-second renders.
 import { div, PathBuilder, svg } from "gpui-kit";
@@ -16,7 +17,6 @@ const STEP = { duration: 1050, easing: "linear" };
 
 const PADDING = 14, WELL = 8, WIDE = 700, MAP_MIN = 220, MAP_MAX = 340, MAP_MAX_WIDE = 460, MAX_SLOTS = 28, MOON = 7, HIT = 32, RIBBON = 9, THIN = 5;
 const EFFORT = ["low", "medium", "high", "xhigh", "max"];
-const KEY = [["think", "Thinking"], ["read", "Reading"], ["write", "Writing"], ["shell", "Shell"], ["wait", "Waiting"]];
 const ICONS = { think: "think", read: "read", write: "write", shell: "shell", wait: "wait" };
 const MAX_DOTS = 12;
 const MAX_FINISHED = 40;
@@ -54,8 +54,8 @@ function iconButton(id, icon, label, t, press) {
 function header(view, model, now, t) {
   const going = model.running;
   const facts = [
-    model.total ? `Plan ${model.done} of ${model.total}` : null,
-    going ? `${going} ${going === 1 ? "agent" : "agents"} running` : null,
+    model.total ? `${model.done} of ${model.total}` : null,
+    going ? `${going} running` : null,
     shortTime(now - (model.started ?? now)),
   ].filter(Boolean).join(" · ");
   const full = view.isFull();
@@ -71,7 +71,7 @@ function needsYou(view, rows, t) {
   return v_flex().flex_none().mx(PADDING).mb(10).gap(6).children(rows.map((row) => h_flex().id(`needs-${row.key}`).px(11).py(8).gap(10).items_center().rounded(8)
     .bg(`${t.blocked.slice(0, 7)}26`).border_1().border_color(`${t.blocked.slice(0, 7)}66`)
     .child(v_flex().flex_1().min_w(0).gap(1)
-      .child(div().truncate().font_semibold().child(`${row.name} needs you`))
+      .child(div().truncate().font_semibold().child(row.name))
       .when(Boolean(row.status), (e) => e.child(div().truncate().text_size(12).text_color(t.muted).child(row.status))))
     .when(Boolean(row.address), (e) => e.child(div().id(`needs-show-${row.key}`).flex_none().px(10).py(4).rounded(6).text_size(12).font_medium().cursor_pointer()
       .bg(t.solid).text_color(t.solid_foreground).on_click(() => view.showTerminal(row)).child("Show")))));
@@ -86,7 +86,7 @@ function hub(model, geo, moving, now, tone, t) {
     ...(moving ? [div().absolute().left(c - glow / 2).top(c - glow / 2).size(glow).rounded_full().bg(t.accent).loop("opacity", { from: 0.03, to: 0.11, period: 3200 })] : []),
     v_flex().absolute().left(at).top(at).w(geo.hub).h(geo.hub).items_center().justify_center().rounded_full().bg(t.raised).border(1).border_color(t.border)
       .child(div().text_size(Math.round(geo.hub * 0.36)).line_height(1.05).font_semibold().child(String(planned ? model.done : model.running)))
-      .child(div().text_size(11).line_height(1.1).text_color(t.muted).child(planned ? `of ${model.total} done` : "running"))
+      .child(div().text_size(11).line_height(1.1).text_color(t.muted).child(planned ? `of ${model.total}` : "running"))
       .when(Boolean(doing), (e) => e.child(div().pt(2).text_size(11).line_height(1.1).font_medium().text_color(tone[doing.tone]).child(doing.word))),
   ];
 }
@@ -248,13 +248,6 @@ function mapView(view, model, size, now, tone, t) {
     .children(spots.map((s) => label(view, s, geo, t)).filter(Boolean));
 }
 
-function colourKey(tone, t, width) {
-  const entry = ([kind, word]) => h_flex().gap(4).items_center()
-    .child(svg(`mods/herd/tone-${ICONS[kind]}.svg`).size(12).text_color(tone[kind])).child(small(t, word));
-  const line = (list) => h_flex().justify_center().gap(11).children(list.map(entry));
-  return width >= 340 ? line(KEY) : v_flex().gap(3).items_center().child(line(KEY.slice(0, 3))).child(line(KEY.slice(3)));
-}
-
 // What the agent did, left to right, with now at the right. Gaps are thinking. A press on a call names it under the
 // ribbon, and the call picked is marked.
 function ribbon(view, row, width, now, tone, t, height) {
@@ -328,14 +321,15 @@ function fold(view, key, inner) {
 }
 
 function details(view, row, now, t) {
+  const turn = turnLine(row.turn);
   return v_flex().w_full().gap(7).pt(1)
     .when(Boolean(row.status), (e) => e.child(div().text_size(12).text_color(t.foreground).child(row.status)))
     .when(Boolean(row.command), (e) => e.child(div().font_family(mono()).text_size(11).text_color(t.muted).child(row.command)))
     .child(h_flex().min_w(0).gap(8).items_center()
       .when(Boolean(row.model), (e) => e.child(small(t, row.model)))
       .when(Boolean(row.effort), (e) => e.child(effortBars(row.effort, t)))
-      .when(row.started != null, (e) => e.child(small(t, `${shortTime(now - row.started)} so far`)))
-      .when(Boolean(turnLine(row.turn)), (e) => e.child(small(t, `Last turn ${turnLine(row.turn)}`)))
+      .when(row.started != null, (e) => e.child(small(t, shortTime(now - row.started))))
+      .when(Boolean(turn), (e) => e.child(small(t, turn)))
       .child(div().flex_1())
       .when(Boolean(row.address), (e) => e.child(div().id(`show-${row.key}`).flex_none().px(9).py(4).rounded(6).text_size(12).font_medium().cursor_pointer().bg(t.raised).hover((s) => s.bg(t.hover))
         .on_click((_e, cx) => { cx.stop_propagation(); view.showTerminal(row); }).child("Show terminal"))));
@@ -401,7 +395,7 @@ function finishedRows(model, width, t) {
       .child(div().flex_1().min_w(0).truncate().text_size(12).text_color(t.muted).child(row.name))
       .child(div().w(room).h(4).flex_none().rounded(2).bg(t.border).child(div().h(4).rounded(2).bg(row.failed ? t.blocked : t.done).w(`${Math.max(3, (took / longest) * 100)}%`)))
       .child(div().w(46).flex_none().text_right().font_family(mono()).text_size(12).text_color(t.muted).child(shortTime(took)));
-  })).when(more > 0, (e) => e.child(h_flex().h(26).px(PADDING).items_center().child(small(t, `and ${more} more, older`))));
+  })).when(more > 0, (e) => e.child(h_flex().h(26).px(PADDING).items_center().child(small(t, `+${more}`))));
 }
 
 function finishedBand(view, model, width, t) {
@@ -409,13 +403,13 @@ function finishedBand(view, model, width, t) {
   return v_flex().flex_none().border_t(1).border_color(t.border)
     .child(h_flex().id("finished-band").h(34).px(PADDING).gap(7).items_center().cursor_pointer().hover((s) => s.bg(t.hover)).on_click(() => view.toggleFold("finished"))
       .child(svg(open ? "mods/files/chevron-down.svg" : "mods/files/chevron-right.svg").size(12).flex_none().text_color(t.dim))
-      .child(div().flex_1().text_size(12).text_color(t.muted).child("Finished agents"))
+      .child(div().flex_1().text_size(12).text_color(t.muted).child("Finished"))
       .child(time(t, String(model.finished.length))))
     .when(open, (e) => e.child(fold(view, "finished", finishedRows(model, width, t))));
 }
 
 const axis = (t) => h_flex().h(20).flex_none().px(PADDING).items_center().justify_between().text_size(11).text_color(t.dim)
-  .child(div().child("30m ago")).child(div().child("20m")).child(div().child("10m")).child(div().child("Now"));
+  .child(div().child("30m")).child(div().child("20m")).child(div().child("10m")).child(div().child("Now"));
 
 function agents(view, model, width, now, tone, t) {
   const inner = Math.max(120, Math.floor(width - PADDING * 2));
@@ -423,21 +417,21 @@ function agents(view, model, width, now, tone, t) {
     .child(axis(t))
     .child(v_flex().id("herd-list").flex_1().min_h(0).overflow_y_scrollbar()
       .children(model.groups.map((group) => agentGroup(view, group, inner, now, tone, t)))
-      .when(model.rows.length <= 1, (e) => e.child(div().px(PADDING).py(10).border_t(1).border_color(t.border).child(small(t, "Nothing else running yet. Workers show here once this session starts them."))))
       .when(model.finished.length > 0, (e) => e.child(finishedBand(view, model, width, t))));
 }
 
-// The usage meters, drawn as Orchi draws them, so the status line doesn't have to. Nothing shows until the status line
-// has written its usage file.
+// The usage meters, drawn as Orchi draws them, so the status line doesn't have to. Nothing shows until the usage file
+// is there. Over the bars, the limit and how full it is; under them, when it resets and where it's heading.
 function meter(m, count, t) {
   const cells = meterCells(m, count).map((c) => div().w(1.5).h(16).flex_none().bg(c.part === "used" ? t[m.tone] : c.part === "ahead" ? t.dim : t.popover));
   return v_flex().flex_1().min_w(0).gap(3)
     .child(h_flex().min_w(0).items_baseline().gap(6).text_size(12)
       .child(div().min_w(0).truncate().text_color(t.dim).child(m.label)).child(div().flex_1())
-      .child(div().flex_none().font_semibold().child(`${Math.round(m.used)}%`))
-      .child(div().flex_none().text_color(t.muted).child(`→ ${m.projected == null ? "-" : `${Math.round(m.projected)}%`}`)))
+      .child(div().flex_none().font_semibold().child(`${Math.round(m.used)}%`)))
     .child(h_flex().h(24).gap(4).items_center().overflow_hidden().children(cells))
-    .child(div().truncate().text_size(12).text_color(t.dim).child(`Resets in ${m.resetIn}`));
+    .child(h_flex().min_w(0).gap(6).text_size(12).text_color(t.dim)
+      .child(div().min_w(0).truncate().child(`↻ ${m.resetIn}`)).child(div().flex_1())
+      .child(div().flex_none().child(`→ ${m.projected == null ? "-" : `${Math.round(m.projected)}%`}`)));
 }
 
 function usageFooter(usage, width, t) {
@@ -457,12 +451,12 @@ export function paneView(view, t) {
   const zoom = settings().zoom || 1, width = Math.max(120, (view.width || 368 * zoom) / zoom), height = Math.max(120, (view.height || 700 * zoom) / zoom);
   const root = v_flex().id("herd").size_full().min_h(0).min_w(0).overflow_hidden().bg(t.background).text_color(t.foreground).text_size(13)
     .on_size_change((size, cx) => { if (size.width !== view.width || size.height !== view.height) { view.width = size.width; view.height = size.height; cx.notify(); } });
-  if (!model) return root.child(message(view.problem ?? "Reading this session.", t));
+  if (!model) return root.child(view.problem ? message(view.problem, t) : v_flex());
   const wide = width >= WIDE, blocked = model.rows.filter((r) => r.state === "blocked");
   const room = wide ? Math.min(MAP_MAX_WIDE, height - 150, width * 0.42) : Math.min(MAP_MAX, width - WELL * 2, Math.max(MAP_MIN, height * 0.42));
   const size = Math.max(MAP_MIN, Math.floor(room));
-  const well = v_flex().flex_none().mx(WELL).mb(8).pt(2).pb(9).gap(3).items_center().rounded(12).bg(t.canvas).overflow_hidden()
-    .child(mapView(view, model, size, now, tone, t)).child(colourKey(tone, t, size));
+  const well = v_flex().flex_none().mx(WELL).mb(8).pt(2).pb(2).gap(3).items_center().rounded(12).bg(t.canvas).overflow_hidden()
+    .child(mapView(view, model, size, now, tone, t));
   const body = wide
     ? h_flex().flex_1().min_h(0).items_start().child(well).child(agents(view, model, width - size - WELL * 2, now, tone, t).h_full())
     : v_flex().flex_1().min_h(0).child(well).child(agents(view, model, width, now, tone, t));

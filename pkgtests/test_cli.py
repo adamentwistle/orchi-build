@@ -23,6 +23,15 @@ def test_help_exits_zero_and_names_the_command(capsys):
     assert "orchi" in out and "--version" in out
 
 
+def test_help_says_what_each_command_does_and_nothing_else(capsys):
+    with pytest.raises(SystemExit):
+        cli.main(["--help"])
+    out = capsys.readouterr().out
+    assert "Set up or fix everything." in out
+    assert "dresses Herdr" not in out and "keep what is yours" not in out and "run the steps" not in out
+    assert "move to the newest release, then set up" in out
+
+
 @pytest.mark.parametrize("argv, fix", [([], True), (["doctor"], False), (["--json"], True),
                                        (["--json", "doctor"], False)])
 def test_bare_orchi_and_doctor_run_the_steps(argv, fix, monkeypatch):

@@ -250,9 +250,6 @@ export function tokenTotals(cache) {
   return t;
 }
 
-// How many times longer the longest session is than the album. Abbey Road runs 47 minutes.
-export const ABBEY_ROAD_MS = 47 * 60 * 1000;
-export const albumRatio = (ms) => (ms > 0 ? Math.round(ms / ABBEY_ROAD_MS) : null);
 
 // ---- the heat grid ----
 
@@ -292,7 +289,7 @@ export function heatGrid(cache) {
 // Everything the Stats tab draws for one range. `heat` and `totals` are the same for every range, so they can be passed in.
 export function statsView(cache, key, heat = heatGrid(cache), totals = tokenTotals(cache)) {
   const f = statsFigures(cache, key);
-  return { ...f, heat, totals, albumRatio: key === "all" && f.longest ? albumRatio(f.longest) : null };
+  return { ...f, heat, totals };
 }
 
 // All three ranges. Code that has just loaded runs far slower than the 55 ms render limit allows, and the limit stops a
@@ -324,11 +321,11 @@ export const heatColors = (ink, well) => HEAT_STEPS.map((f, i) => (i === 0 ? wel
 // The panel's height in pixels for what it shows, so its opening spring has a target. Every row has a fixed height,
 // so this is a sum, and anything over `max` scrolls inside the panel.
 export const TOPS_SHOWN = 5;
-export const PANEL = { header: 41, pad: 26, meters: 80, section: 68, advice: 33, adviceNote: 45, top: 23, topHead: 21, heat: 141, figures: 131, line: 27, fact: 23, loading: 28 };
+export const PANEL = { header: 41, pad: 26, meters: 55, section: 68, advice: 33, adviceNote: 45, top: 23, topHead: 21, heat: 120, figures: 131, line: 27, loading: 28 };
 export function usageHeight({ tab, detail, range, statsFigures: figs }, max = 520) {
   const base = PANEL.header + PANEL.pad + PANEL.meters + PANEL.section;
   let page;
-  if (tab === "stats") page = figs ? PANEL.heat + PANEL.figures + PANEL.line + (figs.albumRatio ? PANEL.fact : 0) : PANEL.loading;
+  if (tab === "stats") page = figs ? PANEL.heat + PANEL.figures + PANEL.line : PANEL.loading;
   else if (!detail) page = PANEL.loading;
   else {
     const r = detail.ranges.find((x) => x.label === range) ?? detail.ranges[0];

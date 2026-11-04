@@ -91,7 +91,7 @@ keychain's generic password under the service `orchi-linear`. Until setup moves 
 uv tool install .             # install the `orchi` command from this checkout
 orchi                         # put the themes, mods, layout, keys, sounds and browser pane into Herdr
 orchi doctor                  # check them and change nothing
-orchi update                  # move to the newest release
+orchi update                  # move to the newest release, then set up
 orchi uninstall               # remove what Orchi made
 orchi tickets                 # the open tickets of every chosen source; --json for agents
 orchi tickets show ENG-12     # one ticket by its reference

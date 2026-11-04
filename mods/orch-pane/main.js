@@ -33,7 +33,7 @@ async function readAgents(session, title, since, sleep) {
 export default class OrchPane extends View {
   init(_props, cx) {
     this.terminal = props()?.terminal ?? null;
-    this.model = null; this.problem = this.terminal ? null : "This pane has lost its orchestrator. Close it and open it again."; this.width = 0;
+    this.model = null; this.problem = this.terminal ? null : "No orchestrator"; this.width = 0;
     this.beat = false; this.reading = false; this.updateOpen = false;
     this.misses = 0; this.closed = false; this.wasShowing = true; this.lastTick = null;
     // Each orchestrator keeps its own, so two panes can't overwrite each other's workers.
@@ -108,7 +108,7 @@ export default class OrchPane extends View {
     this.misses = miss.count;
     if (!me) {
       this.closed = miss.gone;
-      this.problem = miss.gone ? "That orchestrator's terminal has closed." : "Can't see the orchestrator's terminal. Trying again.";
+      this.problem = miss.gone ? "Orchestrator closed" : "Orchestrator not found. Retrying";
       return;
     }
     this.closed = false;
@@ -116,7 +116,7 @@ export default class OrchPane extends View {
     const mine = await facts(this.terminal);
     const session = await findSession({ readTextFile, home, orchi: await orchi() }, mine);
     const cwd = session?.cwd ?? me.cwd, name = session?.name ?? (terminalName(me) || me.title || "orchestrator");
-    if (!cwd) { this.problem = "Can't tell which folder the orchestrator is in yet."; return; }
+    if (!cwd) { this.problem = "Folder unknown"; return; }
     const [fanout, board] = await Promise.all([text(`${cwd}/.legwork/fanout-state.md`), text(`${cwd}/.legwork/switchboard.md`)]);
     const plan = parseFanout(fanout);
     const { agents, error } = session ? await readAgents(session, name, plan.started, sleep) : { agents: [], error: null };
@@ -126,7 +126,7 @@ export default class OrchPane extends View {
     const rows = buildRows({ items: plan.items, agents, workers, records: mine?.records });
     const sorted = sortRows(rows);
     const starts = rows.map((r) => r.started).filter(Boolean);
-    this.problem = error ? `Subagents can't be read. ${error}` : null;
+    this.problem = error ? `Subagents unreadable: ${error}` : null;
     this.model = {
       plan, name: name.replace(/^orch-/, ""), update: latestUpdate(board), sorted, progress: progressOf(plan, sorted),
       runStart: plan.started ?? (starts.length ? Math.min(...starts) : mine?.created_ms ?? null),

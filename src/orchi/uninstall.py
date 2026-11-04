@@ -16,7 +16,7 @@ from orchi.tickets import keychain
 from orchi.tickets.files import tilde
 from orchi.usage import LABEL, LAUNCHCTL
 
-TOOL = "To remove the orchi command: uv tool uninstall orchi"
+TOOL = "Remove the orchi command: uv tool uninstall orchi"
 CHANGED = "you changed it"
 HOLDS = "holds other files"
 AGENT = "the usage-watch launch agent"

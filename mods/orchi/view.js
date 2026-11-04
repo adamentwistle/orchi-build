@@ -25,9 +25,11 @@ function ghost(id, label, onClick, t) {
     .text_color(t.muted).hover((s) => s.bg(t.hover).text_color(t.foreground)).on_click(onClick).child(label);
 }
 
-function outline(id, label, onClick, t) {
-  return h_flex().id(id).h(28).px(10).flex_none().items_center().justify_center().rounded(6).cursor_pointer().text_size(12)
-    .border_1().border_color(t.border).text_color(t.foreground).hover((s) => s.bg(t.hover)).on_click(onClick).child(label);
+// With no onClick the button is drawn off: dim, nothing happens on a press, and `why` is its tooltip.
+function outline(id, label, onClick, t, why = null) {
+  const base = h_flex().id(id).h(28).px(10).flex_none().items_center().justify_center().rounded(6).text_size(12).border_1().border_color(t.border);
+  if (!onClick) return base.text_color(t.dim).when(Boolean(why), (e) => e.tooltip(why)).child(label);
+  return base.cursor_pointer().text_color(t.foreground).hover((s) => s.bg(t.hover)).on_click(onClick).child(label);
 }
 
 function primary(id, label, enabled, onClick, t) {
@@ -117,7 +119,7 @@ function workerRow(view, w, kind, t) {
 
 function workerList(view, o, kind, rows, t) {
   const key = `${o.name}:${kind}`, open = view.isOpen(key);
-  const label = `${rows.length} ${rows.length === 1 ? "worker" : "workers"} ${kind}`;
+  const label = `${rows.length} ${kind}`;
   return v_flex().flex_none()
     .child(h_flex().id(`list-${key}`).h(32).px(12).gap(8).items_center().cursor_pointer().text_size(12)
       .border_t(1).border_color(t.border).hover((s) => s.bg(t.hover))
@@ -150,20 +152,18 @@ const bullet = (text, t) => h_flex().gap(7).items_start().text_size(12).text_col
   .child(div().flex_1().min_w(0).child(text));
 
 // The newest thing the orchestrator wrote, which moves more often than the task count. It shows one line, and a press
-// opens the rest as a list with the updates before it.
+// opens the rest as a list with the updates before it. Drawn only when there is an update.
 function latestUpdate(view, o, t) {
   const [update, ...earlier] = o.activity.updates;
-  if (!update) return dim(t, "Nothing reported yet.");
   const { headline, points } = splitUpdate(update.text), key = `${o.name}:update`, open = view.isOpen(key), more = points.length > 0 || earlier.length > 0;
   return v_flex().id(`update-${o.name}`).flex_none().min_w(0).px(10).py(8).gap(5).rounded(8).bg(t.background).border_1().border_color(t.border)
     .when(more, (e) => e.cursor_pointer().hover((s) => s.bg(t.hover)).on_click((_e, cx) => { view.toggle(key); cx.notify(); }))
     .child(h_flex().gap(6).items_center()
       .when(more, (e) => e.child(svg(open ? "mods/files/chevron-down.svg" : "mods/files/chevron-right.svg").size(12).flex_none().text_color(t.dim)))
-      .child(dim(t, "Latest update").flex_1().min_w(0).truncate()).child(dim(t, ago(update.time) ?? "").flex_none()))
-    .child(div().min_w(0).font_semibold().when(!open, (e) => e.truncate()).child(headline))
+      .child(div().flex_1().min_w(0).font_semibold().when(!open, (e) => e.truncate()).child(headline))
+      .child(dim(t, ago(update.time) ?? "").flex_none()))
     .when(open && points.length > 0, (e) => e.child(v_flex().gap(4).children(points.map((p) => bullet(p, t)))))
     .when(open && earlier.length > 0, (e) => e.child(v_flex().gap(3).pt(5).border_t(1).border_color(t.border)
-      .child(dim(t, "Earlier"))
       .children(earlier.map((u) => h_flex().gap(8).min_w(0).text_size(12)
         .child(div().flex_1().min_w(0).truncate().text_color(t.muted).child(splitUpdate(u.text).headline))
         .child(div().flex_none().text_color(t.dim).child(ago(u.time) ?? ""))))));
@@ -174,20 +174,18 @@ function latestUpdate(view, o, t) {
 function runActions(view, o, pending, t) {
   if (view.completing === o.name) {
     return v_flex().flex_none().px(12).py(9).gap(6).border_t(1).border_color(t.border)
-      .child(small(t, "Mark complete writes the run's DONE and closes what's open on its board. The terminal stays, to read."))
       .child(h_flex().gap(6).items_center()
         .child(ghost(`complete-cancel-${o.name}`, "Cancel", (_e, cx) => { view.completing = null; cx.notify(); }, t))
         .child(div().flex_1())
-        .child(primary(`complete-yes-${o.name}`, "Mark complete", true, (_e, cx) => view.completeRun(o, cx), t)));
+        .child(primary(`complete-yes-${o.name}`, "Mark done and close open items", true, (_e, cx) => view.completeRun(o, cx), t)));
   }
   if (view.stopping === o.name) {
     const workers = o.running.filter((w) => w.address).length;
     return v_flex().flex_none().px(12).py(9).gap(6).border_t(1).border_color(t.border)
-      .child(small(t, workers ? `Stop ends this terminal and ${workers} ${workers === 1 ? "worker" : "workers"}. Worktrees and branches stay.` : "Stop ends this terminal. Worktrees and branches stay."))
       .child(h_flex().gap(6).items_center()
         .child(ghost(`stop-cancel-${o.name}`, "Cancel", (_e, cx) => { view.stopping = null; cx.notify(); }, t))
         .child(div().flex_1())
-        .child(primary(`stop-yes-${o.name}`, "Stop the run", true, (_e, cx) => view.stopRun(o, cx), t)));
+        .child(primary(`stop-yes-${o.name}`, workers ? `Stop the run and ${workers} ${workers === 1 ? "worker" : "workers"}` : "Stop the run", true, (_e, cx) => view.stopRun(o, cx), t)));
   }
   const canStop = o.where === "app" && Boolean(o.address);
   return h_flex().flex_none().px(8).py(5).gap(4).items_center().border_t(1).border_color(t.border)
@@ -210,11 +208,10 @@ function orchestratorCard(view, o, t) {
       .child(div().flex_none().text_size(13).text_color(t.muted).child(status))
       .when(o.where === "app", (e) => e.child(pauseButton(view, o, pending, t))))
     .child(panelBody(t).p(12).gap(12)
-      .child(latestUpdate(view, o, t))
+      .when(o.activity.updates.length > 0, (e) => e.child(latestUpdate(view, o, t)))
       .child(v_flex().gap(5)
         .child(h_flex().items_baseline().gap(6)
           .child(div().text_size(15).font_semibold().child(p ? `${p.done} of ${p.total}` : DASH))
-          .child(dim(t, "tasks done"))
           .child(div().flex_1())
           .child(small(t, counts)))
         .when(Boolean(p), (e) => e.child(steps(p.done, Math.min(o.running.length, p.total - p.done), p.total, t))))
@@ -224,7 +221,7 @@ function orchestratorCard(view, o, t) {
         .child(stat("Decided", String(o.activity.decided), t))
         .child(div().flex_1())
         .child(v_flex().gap(4).items_end().child(dim(t, "Context")).child(contextRing(o.context, t))))
-      .when(Boolean(o.model), (e) => e.child(dim(t, `Orchestrator on ${o.model}`))))
+      .when(Boolean(o.model), (e) => e.child(dim(t, o.model))))
     .child(workerList(view, o, "running", o.running, t))
     .when(o.queued.length > 0, (e) => e.child(workerList(view, o, "queued", o.queued, t)))
     .child(workerList(view, o, "completed", o.completed, t))
@@ -247,8 +244,6 @@ const fact = (name, text, t) => h_flex().gap(8).items_start().text_size(12)
   .child(div().w(44).flex_none().text_color(t.dim).child(name))
   .child(div().flex_1().min_w(0).text_color(t.muted).child(text));
 
-const KIND = { ACTION: "Action", DECISION: "Decision" };
-
 function decisionCard(view, t) {
   const { decisions } = view.data, total = decisions.length, key = "decisions", open = view.isOpen(key);
   const d = decisions[view.at];
@@ -261,21 +256,21 @@ function decisionCard(view, t) {
       .child(arrow("decision-next", "›", step(1), t)) : null, t,
   });
   const { hidden, dismissedDecisions } = view.data;
-  const older = hidden ? dim(t, `${hidden} older ${hidden === 1 ? "decision" : "decisions"} from stopped sessions not shown.`) : null;
   const restore = dismissedDecisions ? ghost("restore-decisions", `Show ${dismissedDecisions} dismissed`, (_e, cx) => { view.restore("decision"); cx.notify(); }, t) : null;
   const notes = h_flex().flex_wrap().px(12).py(7).gap(6).items_center().bg(t.raised).border_t(1).border_color(t.border)
-    .when(Boolean(older), (e) => e.child(older)).when(Boolean(restore), (e) => e.child(restore));
-  const body = !d ? panelBody(t).p(12).child(dim(t, "Nothing is waiting for you.")) : panelBody(t).px(12).pt(9).pb(8).gap(10)
+    .when(hidden > 0, (e) => e.child(dim(t, `+${hidden} from stopped sessions`)))
+    .when(Boolean(restore), (e) => e.child(restore));
+  const body = !d ? null : panelBody(t).px(12).pt(9).pb(8).gap(10)
     .child(h_flex().gap(6).items_center().text_size(12).text_color(t.muted)
       .child(div().size(7).flex_none().rounded_full().bg(t.blocked))
-      .child(div().flex_none().font_semibold().text_color(t.foreground).child(KIND[d.kind] ?? d.kind))
-      .child(div().flex_none().font_family(monoFont()).child(d.id))
+      .child(div().flex_none().font_family(monoFont()).text_color(t.foreground).child(d.id))
       .child(div().min_w(0).truncate().font_family(monoFont()).text_color(t.dim).child(d.orch))
       .child(div().flex_1()).child(div().flex_none().child(ago(d.time) ?? d.time)))
     .children(d.kind === "ACTION" ? action(view, d, t) : choice(view, d, t))
     .when(Boolean(view.replyError), (e) => e.child(problemLine(view.replyError, t)))
     .child(decisionActions(view, d, t));
-  return card(t).child(head).when(open, (e) => e.child(body).when(Boolean(older || restore), (e) => e.child(notes)));
+  return card(t).child(head).when(open && Boolean(body), (e) => e.child(body))
+    .when(open && (Boolean(restore) || hidden > 0), (e) => e.child(notes));
 }
 
 function choice(view, d, t) {
@@ -297,9 +292,8 @@ function commandButtons(view, d, t) {
   const safe = pasteable(d.run), here = Boolean(d.address);
   return h_flex().gap(6).items_center()
     .child(outline(`copy-${d.id}`, "Copy", (_e, cx) => view.copyCommand(d, cx), t))
-    .when(safe && here, (e) => e.child(outline(`paste-${d.id}`, "Put in terminal", (_e, cx) => view.putInTerminal(d, cx), t)))
-    .when(!safe, (e) => e.child(dim(t, "It has a control character, so it can only be copied.")))
-    .when(safe && !here, (e) => e.child(dim(t, "That terminal isn't in the app, so copy it.")));
+    .child(outline(`paste-${d.id}`, "Put in terminal", safe && here ? (_e, cx) => view.putInTerminal(d, cx) : null, t,
+      !safe ? "Has a control character" : !here ? "Terminal not in this app" : null));
 }
 
 function action(view, d, t) {
@@ -335,14 +329,14 @@ function problemsList(view, id, problems, t) {
   const lines = problems.map((p) => problemLine(p, t));
   if (!view.usageHeld().some((h) => problems.includes(h.text))) return lines;
   return [...lines, h_flex().gap(8).items_center()
-    .child(div().flex_1().min_w(0).text_size(12).text_color(t.dim).child("Usage holds last until the limit resets."))
+    .child(div().flex_1())
     .child(ghost(`anyway-${id}`, "Start anyway", (_e, cx) => view.overrideUsage(cx), t))];
 }
 
 function planReadyCard(view, s, t) {
   const key = `ready:${s.session}`, open = view.isOpen(key), problems = view.sessionProblems(s, view.frame.rows), starting = view.isStarting(`start:${s.session}`);
   return card(t).when(view.frame.focus === s.session, (e) => e.border_color(t.input))
-    .child(sectionHead({ id: key, title: "Plan ready", open, right: `Planned in ${elapsed(s.created, new Date(s.board.ready.replace(" ", "T")).getTime())}`, onToggle: (_e, cx) => { view.toggle(key); cx.notify(); }, t }))
+    .child(sectionHead({ id: key, title: "Plan ready", open, right: elapsed(s.created, new Date(s.board.ready.replace(" ", "T")).getTime()), onToggle: (_e, cx) => { view.toggle(key); cx.notify(); }, t }))
     .when(open, (e) => e.child(panelBody(t).p(12).gap(9)
       .child(ticketList(s.tickets, t))
       .children(s.board.plans.map((p) => h_flex().gap(8).items_baseline()
@@ -351,16 +345,16 @@ function planReadyCard(view, s, t) {
         .child(small(t, `${p.tickets.length} ${p.tickets.length === 1 ? "ticket" : "tickets"}`))))
       .child(h_flex().id(`read-${s.session}`).h(30).px(10).gap(8).items_center().rounded(6).cursor_pointer().border_1().border_color(t.border).hover((h) => h.bg(t.hover))
         .on_click(() => view.readSaved(s))
-        .child(div().child("Read the plan")).child(div().flex_1()).child(dim(t, s.planner ? "Planning terminal ›" : "Saved plan ›")))
+        .child(div().child("Open plan")).child(div().flex_1()).child(dim(t, "›")))
       .children(problemsList(view, `ready-${s.session}`, problems, t))
       .child(h_flex().gap(6).items_center()
-        .child(ghost(`keep-${s.session}`, "Keep for later", (_e, cx) => view.keepPlan(s, cx), t))
+        .child(ghost(`keep-${s.session}`, "Keep", (_e, cx) => view.keepPlan(s, cx), t))
         .child(div().flex_1())
-        .child(primary(`start-${s.session}`, starting ? "Starting…" : "Start orchestrators", !problems.length && !starting, (_e, cx) => { view.askStartSession(s); cx.notify(); }, t))))
+        .child(primary(`start-${s.session}`, starting ? "Starting…" : "Start", !problems.length && !starting, (_e, cx) => { view.askStartSession(s); cx.notify(); }, t))))
       .when(view.startFor?.key === `start:${s.session}`, (e) => e.child(startSheet(view, t))));
 }
 
-// Choosing a project starts nothing. Create a new plan does.
+// Choosing a project starts nothing. New plan does.
 function newPlan(view, t) {
   const { projects } = view.data, chosen = projects.find((p) => p.file === view.planFor), open = view.planOpen;
   const search = view.planSearch.trim().toLowerCase();
@@ -371,7 +365,7 @@ function newPlan(view, t) {
     .child(div().flex_1().min_w(0).truncate().child(p.name));
   const trigger = h_flex().id("new-plan-project").h(30).flex_1().min_w(0).px(8).gap(6).items_center().rounded(6).cursor_pointer().border_1().border_color(t.border).bg(t.background)
     .text_color(chosen ? t.foreground : t.dim)
-    .child(div().flex_1().min_w(0).truncate().child(chosen?.name ?? "Choose a project"))
+    .child(div().flex_1().min_w(0).truncate().child(chosen?.name ?? "Project"))
     .child(svg("mods/files/chevron-down.svg").size(12).flex_none().text_color(t.dim));
   const list = !open ? v_flex() : v_flex().w(240).p(4).gap(4).rounded(8).bg(t.popover).border_1().border_color(t.border)
     .child(h_flex().h(28).flex_none().px(8).items_center().rounded(6).border_1().border_color(t.border).bg(t.background)
@@ -385,18 +379,18 @@ function newPlan(view, t) {
       .child(div().flex_1().min_w(0).child(picker))
       .child(h_flex().id("new-plan-go").h(30).px(12).flex_none().items_center().rounded(8).font_semibold().text_size(12).bg(t.solid).text_color(t.solid_foreground)
         .when(!chosen, (e) => e.opacity(0.4)).when(Boolean(chosen), (e) => e.cursor_pointer().on_click((_e, cx) => view.createPlan(cx)))
-        .child("Create a new plan")))
+        .child("New plan")))
     .when(Boolean(view.planError), (e) => e.child(problemLine(view.planError, t)));
 }
 
-// One row in Plans: what it is, then its buttons, then why it can't start. A row stacks because three buttons and a
-// name don't fit across the panel.
+// One row in Plans: its name and age, then its buttons, then why it can't start. A row stacks because three buttons and
+// a name don't fit across the panel.
 function planRow(view, { id, title, meta, buttons, problems, focused: on, sheet }, t) {
   return v_flex().id(id).flex_none()
     .child(v_flex().px(12).py(9).gap(6).bg(on ? t.selected : t.raised).border_t(1).border_color(t.border)
-      .child(v_flex().min_w(0)
-        .child(div().truncate().font_semibold().child(title))
-        .child(div().truncate().text_size(12).text_color(t.dim).child(meta)))
+      .child(h_flex().min_w(0).gap(8).items_baseline()
+        .child(div().flex_1().min_w(0).truncate().font_semibold().child(title))
+        .when(Boolean(meta), (e) => e.child(div().flex_none().text_size(12).text_color(t.dim).child(meta))))
       .child(h_flex().gap(4).items_center().children(buttons))
       .children(problemsList(view, id, problems, t)))
     .when(Boolean(sheet), (e) => e.child(sheet));
@@ -411,9 +405,9 @@ function keptRow(view, s, t) {
   return planRow(view, {
     id: `kept-${s.session}`, title: s.tickets.map(shortRef).join(", "), focused: view.frame.focus === s.session, problems,
     sheet: view.startFor?.key === `start:${s.session}` ? startSheet(view, t) : null,
-    meta: ["Kept plan", s.board.plans.map((p) => p.project).join(", "), age ? `${age} ago` : null].filter(Boolean).join(" · "),
+    meta: ["Kept", s.board.plans.map((p) => p.project).join(", "), age].filter(Boolean).join(" · "),
     buttons: [
-      ghost(`read-${s.session}`, "Read the plan", () => view.readSaved(s), t),
+      ghost(`read-${s.session}`, "Open plan", () => view.readSaved(s), t),
       startButton(`start-${s.session}`, view.isStarting(`start:${s.session}`), problems, (_e, cx) => { view.askStartSession(s); cx.notify(); }, t),
       ghost(`discard-${s.session}`, "Discard", (_e, cx) => view.discardPlan(s, cx), t),
     ],
@@ -425,9 +419,9 @@ function queuedRow(view, p, t) {
   return planRow(view, {
     id: `plan-${p.file}`, title: p.name, problems,
     sheet: view.startFor?.key === `run:${p.file}` ? startSheet(view, t) : null,
-    meta: ["Queued in legwork", p.needsYou ? "Needs you first" : null, age ? `${age} ago` : null].filter(Boolean).join(" · "),
+    meta: [p.needsYou ? "Needs you" : null, age].filter(Boolean).join(" · "),
     buttons: [
-      ghost(`read-${p.file}`, "Read the plan", () => view.readPlan(p), t),
+      ghost(`read-${p.file}`, "Open plan", () => view.readPlan(p), t),
       startButton(`start-plan-${p.file}`, view.isStarting(`run:${p.file}`), problems, (_e, cx) => { view.askStartQueued(p); cx.notify(); }, t),
       ghost(`dismiss-plan-${p.file}`, "Dismiss", (_e, cx) => { view.dismiss(view.planKey(p)); cx.notify(); }, t),
     ],
@@ -439,7 +433,7 @@ function plansCard(view, t) {
   const kept = view.frame.rows.filter(keptPlan), count = plans.length + kept.length;
   return card(t)
     .child(sectionHead({ id: key, title: "Plans", count, open, onToggle: (_e, cx) => { view.toggle(key); cx.notify(); }, t }))
-    .when(open, (e) => e.children(count ? [...kept.map((s) => keptRow(view, s, t)), ...plans.map((p) => queuedRow(view, p, t))] : [panelBody(t).p(12).child(dim(t, "No plans are ready."))])
+    .when(open, (e) => e.children([...kept.map((s) => keptRow(view, s, t)), ...plans.map((p) => queuedRow(view, p, t))])
       .when(dismissedPlans > 0, (e) => e.child(h_flex().px(8).py(4).bg(t.raised).border_t(1).border_color(t.border)
         .child(ghost("restore-plans", `Show ${dismissedPlans} dismissed`, (_e, cx) => { view.restore("plan"); cx.notify(); }, t))))
       .child(newPlan(view, t)));
@@ -449,12 +443,10 @@ function orchestratorsCard(view, t) {
   const { orchestrators } = view.data, key = "orchestrators", open = view.isOpen(key);
   return card(t)
     .child(sectionHead({ id: key, title: "Orchestrators", count: orchestrators.length, open, onToggle: (_e, cx) => { view.toggle(key); cx.notify(); }, t }))
-    .when(open, (e) => e.child(orchestrators.length
-      ? panelBody(t).p(8).gap(8).children(orchestrators.map((o) => orchestratorCard(view, o, t)))
-      : panelBody(t).p(12).child(dim(t, "There are no orchestrators running currently"))));
+    .when(open && orchestrators.length > 0, (e) => e.child(panelBody(t).p(8).gap(8).children(orchestrators.map((o) => orchestratorCard(view, o, t)))));
 }
 
-const HOLDERS = { app: "Running in the app", terminal: "Running in terminal Herdr" };
+const HOLDERS = { app: "Running", terminal: "Running in terminal" };
 
 function header(view, t) {
   const { where } = view.data.holder;
@@ -462,7 +454,7 @@ function header(view, t) {
     .child(h_flex().h(48).px(12).gap(8).items_center()
       .child(div().text_size(15).font_semibold().child("Orchi"))
       .child(div().size(7).flex_none().rounded_full().bg(where ? t.done : t.dim))
-      .child(small(t, HOLDERS[where] ?? "Not running"))
+      .child(small(t, HOLDERS[where] ?? "Stopped"))
       .child(div().flex_1())
       .when(view.stale, (e) => e.child(dim(t, "Out of date")))
       .child(ghost("open-chat", "Open chat", (_e, cx) => view.chat(null, cx), t)))
@@ -481,18 +473,19 @@ function notice(view, t) {
 function meter(m, count, t) {
   const cells = meterCells(m, count).map((c) => div().w(1.5).h(16).flex_none().bg(c.part === "used" ? t[m.tone] : c.part === "ahead" ? t.dim : t.popover));
   return v_flex().flex_1().min_w(0).gap(3)
-    .child(h_flex().items_baseline().gap(6).text_size(12)
-      .child(div().text_color(t.dim).child(m.label)).child(div().flex_1())
-      .child(div().font_semibold().child(`${Math.round(m.used)}%`))
-      .child(div().text_color(t.muted).child(`→ ${m.projected == null ? DASH : `${Math.round(m.projected)}%`}`)))
+    .child(h_flex().min_w(0).items_baseline().gap(6).text_size(12)
+      .child(div().min_w(0).truncate().text_color(t.dim).child(m.label)).child(div().flex_1())
+      .child(div().flex_none().font_semibold().child(`${Math.round(m.used)}%`)))
     .child(h_flex().h(24).gap(4).items_center().overflow_hidden().children(cells))
-    .child(dim(t, `Resets in ${m.resetIn}`));
+    .child(h_flex().min_w(0).gap(6).text_size(12).text_color(t.dim)
+      .child(div().min_w(0).truncate().child(`↻ ${m.resetIn}`)).child(div().flex_1())
+      .child(div().flex_none().child(`→ ${m.projected == null ? DASH : `${Math.round(m.projected)}%`}`)));
 }
 
 function footer(view, t) {
-  const { usage } = view.data, count = meterTicks(view.size?.width, usage.length || 1);
+  const { usage } = view.data, count = meterTicks(view.size?.width, usage.length);
   return h_flex().flex_none().px(12).pt(10).pb(11).gap(16).border_t(1).border_color(t.border).bg(t.background)
-    .children(usage.length ? usage.map((m) => meter(m, count, t)) : [dim(t, `Usage ${DASH}`)]);
+    .children(usage.map((m) => meter(m, count, t)));
 }
 
 export function orchiView(view, t) {
@@ -508,5 +501,5 @@ export function orchiView(view, t) {
       .child(decisionCard(view, t))
       .child(plansCard(view, t))
       .child(orchestratorsCard(view, t)))
-    .child(footer(view, t));
+    .when(view.data.usage.length > 0, (e) => e.child(footer(view, t)));
 }

@@ -83,7 +83,7 @@ function runHead(model, now, t) {
         .when(Boolean(plan.title), (e) => e.child(div().flex_1().min_w(0).truncate().text_size(12).text_color(t.dim).child(plan.title))))
       .child(h_flex().flex_wrap().gap(18)
         .child(figure(t, "Elapsed", runStart ? duration(now - runStart) : DASH))
-        .when(left != null && left > 0, (e) => e.child(figure(t, "Left, estimate", aboutLeft(left))))));
+        .when(left != null && left > 0, (e) => e.child(figure(t, "Left", aboutLeft(left))))));
 }
 
 // One line, and a press opens the rest as a list.
@@ -93,8 +93,8 @@ function latest(view, update, now, t) {
     .when(more, (e) => e.cursor_pointer().hover((s) => s.bg(t.hover)).on_click((_e, cx) => { view.updateOpen = !view.updateOpen; cx.notify(); }))
     .child(h_flex().gap(6).items_center()
       .when(more, (e) => e.child(svg(open ? "mods/files/chevron-down.svg" : "mods/files/chevron-right.svg").size(12).flex_none().text_color(t.dim)))
-      .child(dim(t, "Latest update").flex_1().min_w(0).truncate()).child(dim(t, ageText(now - update.time)).flex_none()))
-    .child(div().min_w(0).font_semibold().when(!open, (e) => e.truncate()).child(headline))
+      .child(div().flex_1().min_w(0).font_semibold().when(!open, (e) => e.truncate()).child(headline))
+      .child(dim(t, ageText(now - update.time)).flex_none()))
     .when(open && more, (e) => e.child(v_flex().gap(4).children(points.map((p) => h_flex().gap(7).items_start().text_size(12).text_color(t.muted)
       .child(div().size(4).mt(7).flex_none().rounded_full().bg(t.dim))
       .child(div().flex_1().min_w(0).child(p))))));
@@ -177,8 +177,7 @@ function steps(p, t) {
 }
 
 function empty(view, t) {
-  const text = view.problem ?? "Waiting for this orchestrator's session.";
-  return v_flex().size_full().items_center().justify_center().p(20).child(dim(t, text));
+  return v_flex().size_full().items_center().justify_center().p(20).when(Boolean(view.problem), (e) => e.child(dim(t, view.problem)));
 }
 
 export function paneView(view, t) {
@@ -198,12 +197,9 @@ export function paneView(view, t) {
     .when(Boolean(steps(progress, t)), (e) => e.child(steps(progress, t)))
     .child(v_flex().id("orch-pane-list").flex_1().min_h(0).overflow_y_scrollbar()
       .when(Boolean(update), (e) => e.child(latest(view, update, now, t)))
-      .when(!anyTask, (e) => e.child(div().p(PADDING).child(dim(t, "No workers yet. They show here once the orchestrator starts them."))))
       .when(anyTask, (e) => e.child(h_flex().flex_none().px(PADDING).pb(4).font_family(mono()).text_size(11).text_color(t.dim)
         .when(wide, (x) => x.pl(PADDING + TITLE_WIDTH + 16)).children(scale(axis, left > 0, t))))
       .when(sorted.active.length > 0, (e) => e.child(band("Active", sorted.active.length, "working", t)).children(sorted.active.map((row) => activeRow(view, row, ctx, t))))
       .when(sorted.done.length > 0, (e) => e.child(band("Done", sorted.done.length, "done", t)).children(sorted.done.map((row) => doneRow(view, row, ctx, t))))
-      .when(sorted.waiting.length > 0, (e) => e.child(band("Not started", sorted.waiting.length, "dim", t)).children(sorted.waiting.map((row) => waitingRow(row, t))))
-      .when(anyTask, (e) => e.child(div().flex_none().p(PADDING).child(dim(t, left == null ? "A time left shows once a task has finished." : "Times left are estimates, from the tasks finished in this run.")))))
-    ;
+      .when(sorted.waiting.length > 0, (e) => e.child(band("Not started", sorted.waiting.length, "dim", t)).children(sorted.waiting.map((row) => waitingRow(row, t)))));
 }

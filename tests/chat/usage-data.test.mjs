@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildStats, albumRatio, compact, dayLabel, duration, heatGrid, landing, landingBar, limitMeters, loadDetail, modelName, parseStatsCache, parseUsageText, statsFigures, statsView, streaks, tokenTotals, topOf, usageText, WEEKS } from "../../mods/claude-chat/usage-data.js";
+import { buildStats, compact, dayLabel, duration, heatGrid, landing, landingBar, limitMeters, loadDetail, modelName, parseStatsCache, parseUsageText, statsFigures, statsView, streaks, tokenTotals, topOf, usageText, WEEKS } from "../../mods/claude-chat/usage-data.js";
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8");
 // Made up, in the shapes Claude Code 2.1.316 and usage-watch write: the headless /usage text, the usage cache
@@ -257,11 +257,6 @@ test("counts and times", () => {
   assert.equal(dayLabel(null), "-");
 });
 
-test("the album line", () => {
-  assert.equal(albumRatio(391_522_310), 139);
-  assert.equal(albumRatio(0), null);
-});
-
 test("token totals add up the models", () => {
   const t = tokenTotals(cache);
   assert.equal(t.input + t.output + t.cacheRead + t.cacheWrite, 67_571_101_902);
@@ -320,9 +315,7 @@ test("a grid with no activity is all zeros", () => {
 test("the Stats tab's data is worked out in one call", () => {
   const v = statsView(cache, "all");
   assert.equal(v.heat.cells, 189);
-  assert.equal(v.albumRatio, 139);
   assert.equal(v.favourite, "Opus 5.5");
-  assert.equal(statsView(cache, "d7").albumRatio, null);
 });
 
 // ---- colour and size ----
@@ -356,7 +349,7 @@ test("the panel's height follows what it shows and stops at the most it can have
   assert.equal(week, using, "five names a list is the most either range shows, so the tops set the height");
   const stats = usageHeight({ tab: "stats", statsFigures: statsView(cache, "all") }, big);
   assert.ok(stats > loading);
-  assert.ok(usageHeight({ tab: "stats", statsFigures: statsView(cache, "d7") }, big) < stats, "no album line outside All time");
+  assert.equal(usageHeight({ tab: "stats", statsFigures: statsView(cache, "d7") }, big), stats, "every range draws the same parts");
   assert.equal(usageHeight({ tab: "stats", statsFigures: statsView(cache, "all") }, 300), 300);
   assert.equal(usageHeight({ tab: "stats", statsFigures: null }, big), loading);
   assert.equal(usageHeight({ tab: "using", detail, range: "no such range" }, big), using, "an unknown range falls back to the first");

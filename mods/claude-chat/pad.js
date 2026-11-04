@@ -120,10 +120,10 @@ export function routeModel(text, models) {
   if (command.toLowerCase() === "model") {
     row = rowFor(words[0] === "default" ? "" : words[0]);
     if (!row && words.length > 1) row = rowFor(`${words[0]} ${words[1]}`);
-    if (!row) return note(`There's no model called ${rest} on the pad. Pick one here.`);
+    if (!row) return note(`There's no model called ${rest}`);
     effort = words.find((w, i) => i > 0 && EFFORTS.includes(w)) ?? null;
   } else {
-    if (words.length !== 1 || !EFFORTS.includes(words[0])) return note(`The efforts are ${EFFORTS.map((e) => EFFORT_LABEL[e]).join(", ")}. Pick one here.`);
+    if (words.length !== 1 || !EFFORTS.includes(words[0])) return note(`The efforts are ${EFFORTS.map((e) => EFFORT_LABEL[e]).join(", ")}`);
     effort = words[0];
   }
   return { choose: { model: row?.name ?? null, effort }, row };
@@ -148,12 +148,12 @@ export function addChoice(waiting, choice, row) {
 }
 
 const APPLY_NOTES = {
-  "no picker": "Claude Code didn't open its model picker. Use the terminal.",
-  unconfirmed: "Claude Code didn't confirm the change. Check the terminal.",
-  dialog: "A dialog is open in the terminal. Close it, then try again.",
-  stashed: "The terminal is holding a stashed line. Send or clear it there first.",
-  "no effort line": "The terminal is too small to show the effort. Swap to it and back, then try again.",
-  other: "That didn't change the model. Check the terminal.",
+  "no picker": "The model picker didn't open",
+  unconfirmed: "The change wasn't confirmed",
+  dialog: "A dialog is open in the terminal",
+  stashed: "A stashed line is in the terminal",
+  "no effort line": "The terminal is too small to show the effort",
+  other: "The model didn't change",
 };
 
 // What a finished apply leaves: the new `current` and `applied`, whether the choice stays `pending`, the `note`, and whether
@@ -165,7 +165,7 @@ export function afterApply(r, current, applied, now) {
     return { current: set, applied: { ...set, at: now }, pending: false, note: null, read: true };
   }
   if (r.reason === "busy") return { current, applied, pending: true, note: null, read: false };
-  const note = r.closed === false ? "The model picker is still open in the terminal. Press Esc there." : APPLY_NOTES[r.reason] ?? APPLY_NOTES.other;
+  const note = r.closed === false ? "The model picker is still open in the terminal" : APPLY_NOTES[r.reason] ?? APPLY_NOTES.other;
   return { current, applied: null, pending: false, note, read: true };
 }
 
