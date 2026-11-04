@@ -509,6 +509,13 @@ class Reload(Step):
         on the next run, so without it a failed reload would never be tried again."""
         return store_mod.state_dir() / "reload-pending"
 
+    def noted(self):
+        """What the pending note says: Orchi's layout name when a new install is still to be shown, else nothing."""
+        try:
+            return self.pending().read_text().strip()
+        except OSError:
+            return ""
+
     def check(self):
         found = self.status()
         if found is None:
@@ -523,11 +530,11 @@ class Reload(Step):
 
     def fix(self, ctx):
         found = self.status() or {}
+        # The note keeps a new install's layout too, so a retry after a failed switch still shows Orchi's.
+        fresh = any(getattr(step, "fresh", False) for step in self.watched) or self.noted() == LAYOUT
         ctx.folder(self.pending().parent)
-        ctx.write(self.pending(), "")
-        shown = found.get("layout")
-        if any(getattr(step, "fresh", False) for step in self.watched):
-            shown = LAYOUT
+        ctx.write(self.pending(), LAYOUT if fresh else "")
+        shown = LAYOUT if fresh else found.get("layout")
         if isinstance(shown, str):
             done = ctx.run([system.find("herdr-app"), "do", "layout.switch", json.dumps({"name": shown})], timeout=30)
             if done.returncode != 0:
