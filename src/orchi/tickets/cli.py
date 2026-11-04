@@ -4,14 +4,12 @@ A write prints its plan and makes it only with --yes, or after a yes typed at a 
 """
 import argparse
 import json
-import re
 import sys
 
 from orchi import refs, settings
+from orchi.plain import plain as _plain
 from orchi.tickets import SOURCES, SourceError, chosen, linear, list_tickets, show, sync, writes
 from orchi.tickets.files import unreadable
-
-CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
 
 
 def configure(parser):
@@ -64,13 +62,6 @@ def _write(sub, name, text):
     return parser
 
 
-def _plain(text, lines=False):
-    """Text a terminal shows as text: no escape codes, and on one line unless `lines`."""
-    # A file name that isn't UTF-8 holds surrogates, which can't be printed; they show as \udcff escapes instead.
-    text = CONTROL.sub(" ", str(text or "")).encode("utf-8", "backslashreplace").decode("utf-8")
-    return text if lines else re.sub(r"[\t\n]", " ", text)
-
-
 def _dump(value):
     print(json.dumps(value, indent=2))
 
@@ -80,7 +71,7 @@ def _list(args, s):
     if args.json:
         _dump({"tickets": tickets, "problems": problems, "sources": chosen(s, args.source)})
     else:
-        width = max((len(t["ref"]) for t in tickets), default=0)
+        width = max((len(_plain(t["ref"])) for t in tickets), default=0)
         state = max((len(_plain(t["state"])) for t in tickets), default=0)
         for t in tickets:
             print(f"{_plain(t['ref']):<{width}}  {_plain(t['state']):<{state}}  {_plain(t['title'])}".rstrip())
@@ -161,7 +152,7 @@ def _lines(plan, outcome):
         line = f"{_plain(i.ticket):<{width}}  {i.do:<{action}}  {_plain(i.detail())}"
         if outcome and i.do != "skip":
             line += "  " + (f"failed: {_plain(i.error)}" if i.status == "failed" else
-                            f"done {i.created}" if i.status == "done" and i.created else i.status)
+                            f"done {_plain(i.created)}" if i.status == "done" and i.created else i.status)
         print(line.rstrip())
 
 

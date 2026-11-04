@@ -52,3 +52,8 @@
   lists what it kept. The `orchi` command itself goes with `uv tool uninstall orchi`.
 - **Installer**: the maker's own script or command for a tool, such as Homebrew's script or `claude.ai/install.sh`.
   Setup runs one only after the user says yes to that tool.
+- **Outside text**: any text that comes from somewhere else, such as a Linear or GitHub name, title, state, label or body,
+  a legwork or Markdown file's text, or a server's reply in an error. Orchi writes it to a terminal only through
+  `orchi.plain` (control characters become spaces, so an escape code is shown as text and never acts), and to JSON
+  with `plain.dumps`, which escapes them (`orchi tickets --json` uses `json.dumps` with its ASCII escapes, which does
+  the same). Either way the JSON reads back as the exact text.

@@ -9,10 +9,11 @@ scripts/build-themes.py), so in Herdr they are Orchi's palette in dark and light
 Questions are a numbered list read from /dev/tty, never stdin, so they work under `curl | sh`.
 """
 import contextlib
-import json
 import os
 import sys
 import threading
+
+from orchi.plain import dumps, plain
 
 try:
     import termios
@@ -94,7 +95,7 @@ class Screen:
         self._shown = False
 
     def begin(self, names):
-        self.width = max((len(n) for n in names), default=0)
+        self.width = max((len(plain(n)) for n in names), default=0)
 
     def running(self, name):
         """Show the step as running: a spinner on a terminal, nothing otherwise."""
@@ -110,6 +111,7 @@ class Screen:
         self._stop_spinner()
         if self.as_json:
             return
+        name, detail = plain(name), plain(detail)
         mark, colour = MARKS[status]
         line = f"{self._paint(mark, colour)}  {name}"
         if detail:
@@ -121,33 +123,30 @@ class Screen:
         """The closing lines, after a blank line when steps are shown above them, or the whole report as JSON."""
         self._stop_spinner()
         if self.as_json:
-            self._write(json.dumps(report, ensure_ascii=False) + "\n")
+            self._write(dumps(report) + "\n")
         else:
-            self._write(("\n" if self._shown else "") + report["summary"] + "\n")
+            self._write(("\n" if self._shown else "") + plain(report["summary"], lines=True) + "\n")
 
     def ask(self, question, choices):
-        """One of choices, picked by number (or typed in full) at the terminal. Raises NoTerminal when there is no
-        terminal to ask, and NoAnswer when the terminal closes or gives no usable answer."""
+        """One of choices, picked by number (or typed in full, as shown) at the terminal. Raises NoTerminal when there
+        is no terminal to ask, and NoAnswer when the terminal closes or gives no usable answer."""
+        shown = self._list(choices)
         with self._asking(question) as tty:
-            tty.write(f"{self._paint('?', MAGENTA)}  {question}\n")
-            for n, choice in enumerate(choices, 1):
-                tty.write(f"   {n}  {choice}\n")
+            self._put(tty, question, shown)
             for _ in range(TRIES):
                 line = _prompt(tty)
                 if not line:
                     break
-                picked = _pick(line.strip(), choices)
+                picked = _pick(line.strip(), shown)
                 if picked is not None:
-                    return picked
+                    return choices[picked]
         raise NoAnswer(f"no answer: {question}")
 
     def ask_many(self, question, choices):
         """Any number of choices, picked by their numbers separated by commas; Enter alone picks none. Raises the same
         as ask()."""
         with self._asking(question) as tty:
-            tty.write(f"{self._paint('?', MAGENTA)}  {question}\n")
-            for n, choice in enumerate(choices, 1):
-                tty.write(f"   {n}  {choice}\n")
+            self._put(tty, question, self._list(choices))
             for _ in range(TRIES):
                 line = _prompt(tty)
                 if not line:
@@ -156,6 +155,16 @@ class Screen:
                 if picked is not None:
                     return picked
         raise NoAnswer(f"no answer: {question}")
+
+    @staticmethod
+    def _list(choices):
+        """The choices as the terminal shows them: outside text such as a team name has no control characters."""
+        return [plain(c) for c in choices]
+
+    def _put(self, tty, question, shown):
+        tty.write(f"{self._paint('?', MAGENTA)}  {plain(question)}\n")
+        for n, choice in enumerate(shown, 1):
+            tty.write(f"   {n}  {choice}\n")
 
     def ask_secret(self, question):
         """What the user types at the terminal, which is never shown. Raises NoTerminal when there is no terminal or
@@ -169,7 +178,7 @@ class Screen:
             except (AttributeError, OSError, ValueError, *((termios.error,) if termios else ())):
                 raise NoTerminal(f"needs a terminal that hides what you type: {question}") from None
             try:
-                tty.write(f"{self._paint('?', MAGENTA)}  {question}\n>  ")
+                tty.write(f"{self._paint('?', MAGENTA)}  {plain(question)}\n>  ")
                 tty.flush()
                 line = tty.readline()
             finally:
@@ -219,7 +228,7 @@ class Screen:
                 _send_to_null(self.out)
 
     def _spin(self, name, stop):
-        n = 0
+        name, n = plain(name), 0
         while True:
             self._write(f"\r\x1b[2K{self._paint(FRAMES[n % len(FRAMES)], BLUE)}  {name}")
             if stop.wait(0.08):
@@ -269,7 +278,10 @@ def _pick_many(answer, choices):
 
 
 def _pick(answer, choices):
+    """The place in choices of the one the answer names by number or in full, or None."""
     if answer.isdecimal() and answer.isascii() and 1 <= int(answer) <= len(choices):
-        return choices[int(answer) - 1]
-    folded = {c.casefold(): c for c in choices}
+        return int(answer) - 1
+    folded = {}
+    for n, c in enumerate(choices):
+        folded.setdefault(c.strip().casefold(), n)
     return folded.get(answer.casefold())

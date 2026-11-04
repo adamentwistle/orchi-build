@@ -9,6 +9,7 @@ from pathlib import Path
 from orchi import herdr, migrate, settings, settings_write
 from orchi import store as store_mod
 from orchi.engine import Step, broken, needs_fix, ok
+from orchi.plain import plain
 from orchi.tickets import keychain, linear
 from orchi.tickets.shape import SourceError
 from orchi.tools import SetupError
@@ -49,9 +50,16 @@ def key_in_linear_json():
 
 def listed(found, keyed):
     """Choice text for each {id: name}, and the id each stands for. A team shows its key before its name. A project
-    shows its name, with its id after it when two projects share the name."""
-    names = list(found.values())
-    text = {i: (f"{i}  {n}" if keyed else n if names.count(n) == 1 else f"{n} ({i[:8]})") for i, n in found.items()}
+    shows its name, with its id after it when two projects share the name. The names and ids come from Linear, so they
+    are shown without control characters, and two that look alike once those are gone still get a choice each."""
+    names = [plain(n) for n in found.values()]
+    text, used = {}, set()
+    for (i, _), name in zip(found.items(), names):
+        shown = f"{plain(i)}  {name}" if keyed else name if names.count(name) == 1 else f"{name} ({plain(i)[:8]})"
+        while shown in used:
+            shown += "'"
+        used.add(shown)
+        text[i] = shown
     return text, {t: i for i, t in text.items()}
 
 

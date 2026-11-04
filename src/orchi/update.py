@@ -17,6 +17,7 @@ import urllib.error
 import orchi
 from orchi import system
 from orchi.engine import last_line
+from orchi.plain import dumps, plain
 
 REPO = "adamentwistle/orchi-build"
 API = "https://api.github.com"
@@ -147,7 +148,7 @@ def run(args):
             code = system.run([command], interactive=True).returncode
     except system.Refused as e:
         # Said here rather than by the command line, so --json still gives its one object.
-        print(f"orchi: {e}", file=sys.stderr)
+        print(f"orchi: {plain(e)}", file=sys.stderr)
         code = 1
     if args.json:
         # One object, said once the steps are done, so ok says whether they worked.
@@ -157,5 +158,5 @@ def run(args):
 
 
 def _say(report, as_json):
-    sys.stdout.write((json.dumps(report, ensure_ascii=False) if as_json else report["summary"]) + "\n")
+    sys.stdout.write((dumps(report) if as_json else plain(report["summary"], lines=True)) + "\n")
     sys.stdout.flush()

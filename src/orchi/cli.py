@@ -12,6 +12,7 @@ import sys
 from collections import namedtuple
 
 from orchi import __version__, engine, system, uninstall, update
+from orchi.plain import plain
 from orchi.tickets import cli as tickets
 
 Command = namedtuple("Command", "help handler options", defaults=(None,))
@@ -62,5 +63,5 @@ def main(argv=None):
         return command.handler(args)
     except system.Refused as e:
         # ORCHI_NO_SYSTEM is set (the tests, a scratch-home check): one line, not a traceback.
-        print(f"orchi: {e}", file=sys.stderr)
+        print(f"orchi: {plain(e)}", file=sys.stderr)
         return 1
