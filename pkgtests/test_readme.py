@@ -1,6 +1,11 @@
 """The README is what a stranger reads first: install, update, uninstall and the settings."""
+import io
 import json
 import re
+import subprocess
+import tarfile
+
+import pytest
 
 from conftest import ROOT
 
@@ -61,3 +66,30 @@ def test_every_setting_in_the_schema_is_in_the_table():
 
 def test_the_readme_has_no_dashes_for_commas():
     assert "\u2014" not in README and "\u2013" not in README
+
+
+
+def in_git_checkout():
+    return (ROOT / ".git").exists()
+
+
+def test_every_image_the_readme_shows_is_in_the_repo():
+    # A release archive leaves docs/demo out, so this only holds in a checkout.
+    if not in_git_checkout():
+        pytest.skip("not a git checkout")
+    images = [p for p in re.findall(r"!\[[^\]]*\]\(([^)\s]+)", README) if "://" not in p]
+    assert images, "README shows no images"
+    for path in images:
+        assert (ROOT / path).is_file(), f"README shows {path}, which is not in the repo"
+
+
+def test_the_demo_media_stays_out_of_the_release_archive():
+    # orchi update and install.sh download the release tag's archive, built from the committed tree the way
+    # git archive builds it; the demo media is only for the README.
+    if not in_git_checkout():
+        pytest.skip("not a git checkout")
+    listed = subprocess.run(["git", "-C", str(ROOT), "archive", "HEAD"], capture_output=True, check=True).stdout
+    with tarfile.open(fileobj=io.BytesIO(listed)) as archive:
+        names = archive.getnames()
+    assert "README.md" in names
+    assert not [n for n in names if n == "docs/demo" or n.startswith("docs/demo/")]

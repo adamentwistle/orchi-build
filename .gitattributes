@@ -1,0 +1,2 @@
+# The README's demo media stays out of release archives, which orchi update and install.sh download.
+docs/demo export-ignore

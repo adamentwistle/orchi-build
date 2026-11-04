@@ -42,6 +42,43 @@ Then remove the command itself:
 uv tool uninstall orchi
 ```
 
+## The window
+
+### Spaces, agents and panels
+
+The sidebar lists each space with its agents grouped by status, and anyone who needs you at the top. The header over a
+terminal says what it is and when it needs you. The buttons in the tab bar open Tickets, Orchi and Herd. The toggle
+beside them swaps a session between its terminal and the chat, and in an orchestrator's tab one more button opens its
+progress pane.
+
+![The sidebar as one agent is approved and goes back to work, the Tickets, Orchi and Herd panels opening in turn, and a session swapped to its chat and back](docs/demo/window.gif)
+
+### Tickets
+
+Every chosen source's open tickets in one list. Open one to read it, tick a few, check the session's choices, then Go
+starts the planner.
+
+![The tickets panel filtered to Markdown, one ticket opened, two ticked, the review, and Go starting a planner in a new space](docs/demo/tickets.gif)
+
+### Orchi and a run
+
+The Orchi panel holds decisions, plans and the running orchestrators. The progress pane beside an orchestrator shows
+its run task by task, and the plan pane shows a project's roadmap.
+
+![A decision answered in the Orchi panel, the run's card, the progress pane moving from 2 of 5 to 3 of 5, and the plan pane](docs/demo/orchi-run.gif)
+
+### Herd
+
+Everything the session in view has started, on one map, with a row per worker.
+
+![The Herd panel on an orchestrator, at full width and back, as a worker that needed you goes back to work](docs/demo/herd.gif)
+
+### Chat
+
+The chat pane reads a Claude Code session as a thread and sends what you type to it.
+
+![A message typed and sent in the chat pane, and the reply arriving with its tool calls](docs/demo/chat.gif)
+
 ## Settings
 
 Orchi reads `~/.config/orchi/settings.json` (`$ORCHI_SETTINGS` for the scripts). Every key can be left out, and then
@@ -87,6 +124,8 @@ keychain's generic password under the service `orchi-linear`. Until setup moves 
 
 ## Commands
 
+![orchi fixing a theme that drifted, orchi doctor finding nothing to fix, orchi update moving to a newer release, and orchi uninstall removing what it made](docs/demo/orchi.gif)
+
 ```bash
 uv tool install .             # install the `orchi` command from this checkout
 orchi                         # put the themes, mods, layout, keys, sounds and browser pane into Herdr
@@ -102,6 +141,8 @@ scripts/herdr-dev             # run a private Herdr for testing
 node --test tests/            # the panels' checks
 python3 -m pytest bin/tests pkgtests   # the scripts' and the package's checks
 ```
+
+![orchi tickets listing every source's open tickets, then one legwork ticket and one Markdown ticket shown](docs/demo/tickets-command.gif)
 
 See `docs/setup.md` for the switchboard, and `docs/legwork-sync.md` for the line that hands legwork's Linear sync to
 `orchi tickets sync`.
