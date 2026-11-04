@@ -53,8 +53,8 @@ These files are changed copies of mods and a layout that ship with the Herdr des
 ## The Linear and GitHub marks
 
 `mods/tickets/linear.svg` is Linear's logo, a trademark of Linear. `mods/tickets/github.svg` is the GitHub mark, a
-trademark of GitHub, Inc., drawn as GitHub's Octicons draw it (MIT, Copyright (c) GitHub Inc.). Each is used only to show
-that a ticket is that service's, as their logo terms allow. Orchi is not made or endorsed by Linear or GitHub.
+trademark of GitHub, Inc., drawn as GitHub's Octicons draw it (Copyright (c) GitHub Inc., under the MIT licence above).
+Each is used only to show that a ticket comes from that service. Orchi is not made or endorsed by Linear or GitHub.
 
 `mods/tickets/legwork.svg`, `mods/tickets/markdown.svg` and `mods/tickets/tickets.svg` were drawn for Orchi and are
 under its MIT licence.
