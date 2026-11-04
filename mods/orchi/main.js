@@ -3,7 +3,8 @@
 // switchboard.js. It reads shared state once per render, into `frame`. Dismissing is kept in this panel.
 import { View } from "gpui-kit";
 import { InputState, TextareaState } from "gpui-base";
-import { exec, hc, home, appHome, readTextFile, writeTextFile, terminals, spaces, theme, run, shared, setShared, focused, watchFolder } from "herdr";
+import { exec, hc, home, appHome, readTextFile, writeTextFile, terminals, spaces, theme, run, shared, setShared, focused, watchFolder, nextCommand } from "herdr";
+import { scriptFile, scriptSteps, testing } from "./test-hook.js";
 import { boardActivity, liveDecisions, parseProgress, parseItems, parseContext, parseModel, workerPhase } from "./parse.js";
 import { metersFrom } from "./usage.js";
 import { readyPlan, parseTracker, planTask, planLabel, plannable, visible } from "./plans.js";
@@ -157,6 +158,21 @@ export default class Orchi extends View {
       const dir = switchboardDir(await orchi(), home());
       for (;;) { await watchFolder(dir); this.refresh(cx); }
     });
+    cx.spawn(async (cx) => {
+      // A step that throws ends that script, not the loop, so the next script still runs.
+      for (;;) if ((await nextCommand()) === "script" && testing(appHome())) { await this.runScript(cx).catch(() => {}); cx.notify(); }
+    });
+  }
+
+  // The test hook's steps, on the decision on screen, the way its option, reply line and Send would take them.
+  async runScript(cx) {
+    const steps = scriptSteps(await readTextFile(scriptFile(appHome())).catch(() => null));
+    for (const step of steps) {
+      const d = this.data.decisions[this.at];
+      if (step.do === "option" && d?.options?.some((o) => o.key === step.value)) { this.option = step.value; this.replyError = null; }
+      else if (step.do === "reply") { this.replyText = step.text; this.replyInput.set_value(step.text); }
+      else if (step.do === "send" && d) this.sendDecision(d, cx);
+    }
   }
 
   // One load at a time, and a press during one runs another straight after. A load that took longer than the timer

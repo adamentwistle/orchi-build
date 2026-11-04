@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { MODELS, PR_SUGGESTION, defaultSession, restoreSession, pickModel, pickEffort, sessionProblems } from "../../mods/tickets/review.js";
+import { MODELS, PR_SUGGESTION, defaultSession, restoreSession, pickModel, pickEffort, sessionProblems, footerLines } from "../../mods/tickets/review.js";
 
 test("workers default to Auto, the others to Opus at high", () => {
   const s = defaultSession();
@@ -118,4 +118,12 @@ test("several repos need the legwork folder trusted as well, because the planner
   assert.deepEqual(sessionProblems(tickets, projectOf, { trust: { ...trust, "/lw": true }, planning: "/lw" }), []);
   assert.match(sessionProblems(tickets, projectOf, { trust: { ...trust, "/lw": false }, planning: "/lw" })[0], /the legwork folder/);
   assert.match(sessionProblems(tickets, projectOf, { trust })[0], /no legwork folder/);
+});
+
+test("while Go starts, the hold it just took isn't shown as another session's", () => {
+  // Go writes its hold before the planner starts, and the review screen redraws with it while the button says Starting.
+  const held = "Another session holds Fernlog's repo until it's done or discarded";
+  assert.deepEqual(footerLines([held], { going: true, goError: null }), []);
+  assert.deepEqual(footerLines([held], { going: false, goError: null }), [held]);
+  assert.deepEqual(footerLines([], { going: false, goError: "Fernlog has no repo" }), ["Fernlog has no repo"]);
 });
