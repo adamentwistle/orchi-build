@@ -16,6 +16,8 @@ It installs uv if you don't have it, then Orchi, then runs `orchi`. `orchi` asks
 with Herdr showing Orchi. Run `orchi` again whenever something has drifted, and `orchi doctor` to only look. While the
 repo is private, set `ORCHI_GITHUB_TOKEN` to a token that can read it.
 
+![orchi typed in a plain Herdr, its questions answered, and the window turning into Orchi](docs/demo/setup.gif)
+
 ## Update
 
 ```bash
@@ -51,33 +53,31 @@ terminal says what it is and when it needs you. The buttons in the tab bar open 
 beside them swaps a session between its terminal and the chat, and in an orchestrator's tab one more button opens its
 progress pane.
 
-![The sidebar as one agent is approved and goes back to work, the Tickets, Orchi and Herd panels opening in turn, and a session swapped to its chat and back](docs/demo/window.gif)
-
 ### Tickets
 
 Every chosen source's open tickets in one list. Open one to read it, tick a few, check the session's choices, then Go
 starts the planner.
 
-![The tickets panel filtered to Markdown, one ticket opened, two ticked, the review, and Go starting a planner in a new space](docs/demo/tickets.gif)
+![The Tickets panel: one Markdown ticket opened and read, two ticked, the review set to Haiku, and Go starting a planner and its switchboard](docs/demo/tickets.gif)
 
 ### Orchi and a run
 
 The Orchi panel holds decisions, plans and the running orchestrators. The progress pane beside an orchestrator shows
 its run task by task, and the plan pane shows a project's roadmap.
 
-![A decision answered in the Orchi panel, the run's card, the progress pane moving from 2 of 5 to 3 of 5, and the plan pane](docs/demo/orchi-run.gif)
+![An orchestrator with three workers: its one decision answered in the Orchi panel, the orchestrator passing the answer on, and the progress pane moving from 2 of 5 to 3 of 5](docs/demo/orchi-run.gif)
 
 ### Herd
 
 Everything the session in view has started, on one map, with a row per worker.
 
-![The Herd panel on an orchestrator, at full width and back, as a worker that needed you goes back to work](docs/demo/herd.gif)
+![The Herd panel on a running orchestrator, its three workers on the map and in rows, at full width and back](docs/demo/herd.gif)
 
 ### Chat
 
 The chat pane reads a Claude Code session as a thread and sends what you type to it.
 
-![A message typed and sent in the chat pane, and the reply arriving with its tool calls](docs/demo/chat.gif)
+![A session swapped to the chat pane, a message typed and sent, the reply arriving with its tool calls, and back to the terminal](docs/demo/chat.gif)
 
 ## Settings
 
@@ -124,7 +124,7 @@ keychain's generic password under the service `orchi-linear`. Until setup moves 
 
 ## Commands
 
-![orchi fixing a theme that drifted, orchi doctor finding nothing to fix, orchi update moving to a newer release, and orchi uninstall removing what it made](docs/demo/orchi.gif)
+![orchi doctor checking every step, orchi update finding it already has the newest, and orchi uninstall removing what it made](docs/demo/orchi.gif)
 
 ```bash
 uv tool install .             # install the `orchi` command from this checkout
