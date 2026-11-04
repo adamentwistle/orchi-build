@@ -29,7 +29,7 @@ def test_uv_tool_install_gives_a_working_orchi(uv, tmp_path):
 
     ran = subprocess.run([str(exe), "--version"], env=env, capture_output=True, text=True, cwd=str(tmp_path))
     assert ran.returncode == 0, ran.stderr
-    assert ran.stdout == "orchi 0.1.0\n"
+    assert ran.stdout == "orchi 0.1.1\n"
 
     # The installed copy runs its Herdr steps, and finds its own files. Bare `orchi` would start real installers, so
     # this runs the settings and Herdr steps through the installed package's own interpreter.
