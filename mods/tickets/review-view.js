@@ -2,7 +2,7 @@
 // `view` is the Tickets view, which owns the state and the actions used here.
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex, Popover, Input, Textarea } from "gpui-base";
-import { EFFORTS, MODELS, pickModel, pickEffort } from "./review.js";
+import { EFFORTS, MODELS, footerLines, pickModel, pickEffort } from "./review.js";
 import { filterProjects } from "./legwork.js";
 import { card, panelBody, sectionHead, segment, problemLine, monoFont } from "./ui.js";
 import { rowId } from "./tickets.js";
@@ -112,7 +112,7 @@ function instructionsCard(view, t) {
 }
 
 function footer(view, problems, t) {
-  const lines = [...problems, ...(view.goError ? [view.goError] : [])];
+  const lines = footerLines(problems, view);
   const blocked = problems.length > 0 || view.going;
   return h_flex().flex_none().px(12).py(10).gap(10).items_center().border_t(1).border_color(t.border).bg(t.background)
     .child(div().flex_1().min_w(0).when(lines.length > 0, (e) => e.child(problemLine(lines.join(". "), t))))

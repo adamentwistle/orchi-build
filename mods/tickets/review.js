@@ -34,6 +34,12 @@ export function pickEffort(choice, effort) {
   return { ...choice, effort };
 }
 
+// The lines under the review screen. While Go starts, the rules have already passed and Go has taken its hold, so the
+// redrawn rules would report that hold as another session's: nothing shows until the start ends.
+export function footerLines(problems, { going, goError }) {
+  return going ? [] : [...problems, ...(goError ? [goError] : [])];
+}
+
 // Why Go can't run, one line each. `context` is what's live now: `inSession` maps ticket references to their sessions,
 // `busy` holds repos with an orchestrator, `trust` maps folders to their flag, `folderOf` gives a project's folder on
 // this Mac, and `planning` is where a planner for several repos runs. With no `trust`, folders aren't checked. `held`
