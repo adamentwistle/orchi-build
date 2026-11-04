@@ -98,7 +98,7 @@ def no_real_seams(monkeypatch):
 from orchi import system as _system  # noqa: E402
 
 REAL.update({"system.run": _system.run, "system.fetch": _system.fetch, "system.sleep": _system.sleep,
-             "system.platform": _system.platform})
+             "system.platform": _system.platform, "system.get": _system.get})
 
 
 @pytest.fixture(autouse=True)
@@ -112,7 +112,11 @@ def no_real_system(monkeypatch):
     def sleep(seconds):
         raise AssertionError("a test slept: fake orchi.system.sleep")
 
+    def get(url, *a, **kw):
+        raise AssertionError(f"a test downloaded {url}: fake orchi.system.get")
+
     monkeypatch.setattr(_system, "run", run)
+    monkeypatch.setattr(_system, "get", get)
     monkeypatch.setattr(_system, "fetch", fetch)
     monkeypatch.setattr(_system, "sleep", sleep)
     monkeypatch.setattr(_system, "EXTRA_DIRS", ())

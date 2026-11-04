@@ -215,6 +215,13 @@ class Store:
         if any(r["path"] == path for r in records):
             self._save_owned([r for r in records if r["path"] != path])
 
+    def disown_many(self, paths):
+        """Drop the records for these paths in one write."""
+        drop = {str(full(p)) for p in paths}
+        records = self.owned()
+        if any(r["path"] in drop for r in records):
+            self._save_owned([r for r in records if r["path"] not in drop])
+
     def _save_owned(self, records):
         self.root.mkdir(parents=True, exist_ok=True)
         replace_file(self.root / "owned.json", json.dumps({"owned": records}, indent=2, ensure_ascii=False) + "\n")

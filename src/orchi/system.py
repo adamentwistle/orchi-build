@@ -12,6 +12,7 @@ import time
 import urllib.error
 import urllib.request
 from collections import namedtuple
+from urllib.parse import urlsplit
 
 # Set, it makes run() and fetch() refuse. The test suite sets it for itself and every child process it starts, so a test
 # that runs the real command in a child can't start a real installer, read the keychain or load a launch agent.
@@ -58,6 +59,46 @@ def fetch(url, timeout=60):
         raise ValueError(f"{url} is not an https address")
     with urllib.request.build_opener(HttpsOnly).open(url, timeout=timeout) as page:
         return page.read().decode("utf-8")
+
+
+# Only the addresses themselves: a name such as localhost is whatever the hosts file says it is.
+LOCAL_HOSTS = ("127.0.0.1", "::1")
+
+
+def _check_address(url):
+    parts = urlsplit(url)
+    if parts.scheme == "https" or (parts.scheme == "http" and parts.hostname in LOCAL_HOSTS):
+        return
+    raise ValueError(f"{url} is not an https address")
+
+
+class _KeepTokenHome(urllib.request.HTTPRedirectHandler):
+    """Follows a redirect only to an address get() would take, and drops the token when it leaves the host."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        try:
+            _check_address(newurl)
+        except ValueError as e:
+            raise urllib.error.URLError(str(e)) from None
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None and urlsplit(newurl).netloc != urlsplit(req.full_url).netloc:
+            new.headers.pop("Authorization", None)
+            new.unredirected_hdrs.pop("Authorization", None)
+        return new
+
+
+def get(url, token=None, timeout=60):
+    """The bytes at an address. HTTPS only, or a server on this computer, which is how a test plays GitHub. The token
+    goes in an Authorization header to the host asked, and no further: a redirect to another host leaves it behind."""
+    _guard(f"downloading {url}")
+    _check_address(url)
+    request = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"} if token else {})
+    # Only https goes through a proxy named in the environment. A server on this computer is asked directly, whatever
+    # the case of its scheme and wherever a redirect came from, or the proxy would be sent the token.
+    proxies = {scheme: found for scheme, found in urllib.request.getproxies().items() if scheme == "https"}
+    opener = urllib.request.build_opener(_KeepTokenHome, urllib.request.ProxyHandler(proxies))
+    with opener.open(request, timeout=timeout) as page:
+        return page.read()
 
 
 def _with_extra_dirs(env):

@@ -2,8 +2,8 @@
 
 Commands are entries in COMMANDS: a name, a one-line help text, a handler that
 takes the parsed arguments and returns an exit code, and optionally a function that
-adds the command's own options to its parser. Adding `update` or `uninstall` means
-adding an entry, and a global option such as `--json` goes on the parser from
+adds the command's own options to its parser. Adding a command means adding an entry,
+and a global option such as `--json` goes on the parser from
 build_parser(). `--json` also goes on every command's parser, so it works before or
 after the command.
 """
@@ -11,7 +11,7 @@ import argparse
 import sys
 from collections import namedtuple
 
-from orchi import __version__, engine
+from orchi import __version__, engine, uninstall, update
 from orchi.tickets import cli as tickets
 
 Command = namedtuple("Command", "help handler options", defaults=(None,))
@@ -30,6 +30,8 @@ DEFAULT = Command("set up or fix everything", _steps(fix=True))
 
 COMMANDS = {
     "doctor": Command("check everything and change nothing", _steps(fix=False)),
+    "update": Command("move to the newest release and run the steps", update.run),
+    "uninstall": Command("remove what Orchi made and keep what is yours", uninstall.run, uninstall.configure),
     "tickets": Command("list the tickets of every chosen source", tickets.run, tickets.configure),
 }
 

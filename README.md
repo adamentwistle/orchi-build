@@ -4,21 +4,43 @@ Orchi dresses the [Herdr](https://github.com/ogulcancelik/herdr) desktop app for
 once: its own look, panels for tickets, agents and progress, and an orchestration layer that plans work, hands it to
 agents and answers for you when they need a decision.
 
-## What's here
+## Install
 
-| Path | What it is |
-| --- | --- |
-| `themes/`, `scripts/build-themes.py` | Orchi's dark and light themes, and the script that builds them from its palette |
-| `config/` | The Herdr settings that go with them, and the browser's entry in the + menu |
-| `mods/` | The panels: chat, Herd, progress, Tickets, Orchi, the sidebar list and chrome, plan view |
-| `layouts/`, `keys/` | The layout that holds the panels, and their keys |
-| `sounds/` | The alert sounds, with their sources |
-| `browser/` | The browser pane agents drive |
-| `bin/` | The orchestration scripts: the switchboard, the herdr wrapper, hooks |
-| `skills/`, `commands/` | The Claude Code skills and commands for planning and orchestration |
-| `launchd/` | The switchboard's health watcher job |
-| `docs/` | How each piece works, and setup |
-| `tests/`, `bin/tests/` | The checks |
+Orchi needs a Mac. Run this in a terminal:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/adamentwistle/orchi-build/main/install.sh | sh
+```
+
+It installs uv if you don't have it, then Orchi, then runs `orchi`. `orchi` asks before it installs anything, and ends
+with Herdr showing Orchi. Run `orchi` again whenever something has drifted, and `orchi doctor` to only look. While the
+repo is private, set `ORCHI_GITHUB_TOKEN` to a token that can read it.
+
+## Update
+
+```bash
+orchi update
+```
+
+It moves to the newest release, says which version it moved from and to, then runs the steps so everything is fresh.
+When you already have the newest, it says so and stops.
+
+## Uninstall
+
+```bash
+orchi uninstall
+```
+
+It asks once, then removes the files, links, folders and launch agent that Orchi made. `--yes` skips the question. A
+file you changed since Orchi wrote it stays, and the list at the end names it. These stay too: the backups in
+`~/.local/state/orchi/backups`, your settings file when you changed it, the Linear key in the keychain, and the
+programs setup installed.
+
+Then remove the command itself:
+
+```bash
+uv tool uninstall orchi
+```
 
 ## Settings
 
@@ -47,12 +69,30 @@ keychain's generic password under the service `orchi-linear`. Until setup moves 
 `~/.config/herdr-app/orchi.json`, and `teams`, `repos`, `legwork.dir` and `legwork.projects` in
 `~/.config/herdr-app/linear.json`, count for any of these keys the file leaves out.
 
-## Use it
+## What's here
+
+| Path | What it is |
+| --- | --- |
+| `themes/`, `scripts/build-themes.py` | Orchi's dark and light themes, and the script that builds them from its palette |
+| `config/` | The Herdr settings that go with them, and the browser's entry in the + menu |
+| `mods/` | The panels: chat, Herd, progress, Tickets, Orchi, the sidebar list and chrome, plan view |
+| `layouts/`, `keys/` | The layout that holds the panels, and their keys |
+| `sounds/` | The alert sounds, with their sources |
+| `browser/` | The browser pane agents drive |
+| `bin/` | The orchestration scripts: the switchboard, the herdr wrapper, hooks |
+| `skills/`, `commands/` | The Claude Code skills and commands for planning and orchestration |
+| `launchd/` | The switchboard's health watcher job |
+| `docs/` | How each piece works, and setup |
+| `tests/`, `bin/tests/` | The checks |
+
+## Commands
 
 ```bash
 uv tool install .             # install the `orchi` command from this checkout
 orchi                         # put the themes, mods, layout, keys, sounds and browser pane into Herdr
 orchi doctor                  # check them and change nothing
+orchi update                  # move to the newest release
+orchi uninstall               # remove what Orchi made
 orchi tickets                 # the open tickets of every chosen source; --json for agents
 orchi tickets show ENG-12     # one ticket by its reference
 orchi tickets states ENG-12   # the states a Linear ticket can move to, in board order
@@ -60,7 +100,7 @@ orchi tickets move ENG-12 Done --comment "Merged"   # a write: asks first, or --
 orchi tickets sync legwork:birch --dry-run          # what /wrap's Linear sync would change
 scripts/herdr-dev             # run a private Herdr for testing
 node --test tests/            # the panels' checks
-python3 -m pytest bin/tests   # the scripts' checks
+python3 -m pytest bin/tests pkgtests   # the scripts' and the package's checks
 ```
 
 See `docs/setup.md` for the switchboard, and `docs/legwork-sync.md` for the line that hands legwork's Linear sync to

@@ -46,5 +46,9 @@
   shares `~/.local` with the real one, so Orchi leaves the launcher, the browser command and the skill alone there.
 - **System seam**: `orchi.system` (programs, downloads, platform) and `orchi.tickets.keychain` (the keychain), the only
   doors setup uses to reach the computer. Tests replace them, and both refuse while `ORCHI_NO_SYSTEM` is set.
+- **Update**: `orchi update`, which moves the installed `orchi` to the newest release and then runs the steps with the new
+  code. See `docs/adr/0007-update-and-uninstall.md`.
+- **Uninstall**: `orchi uninstall`, which removes what the ownership records say Orchi made and is still unchanged, and
+  lists what it kept. The `orchi` command itself goes with `uv tool uninstall orchi`.
 - **Installer**: the maker's own script or command for a tool, such as Homebrew's script or `claude.ai/install.sh`.
   Setup runs one only after the user says yes to that tool.
