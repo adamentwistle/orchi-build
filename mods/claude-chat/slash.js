@@ -167,8 +167,8 @@ export const SCRIPT = [
   'pkill -P $dog 2>/dev/null; kill $dog 2>/dev/null',
   'exit $code',
 ].join("\n");
-// The promise gives up a little after the watchdog, in case `exec` itself never answers.
-const HEADLESS_MS = (HEADLESS_S + 5) * 1000;
+// The watchdog's TERM or KILL ends `claude` with 143 or 137.
+const STOPPED = new Set([143, 137]);
 
 // Whether Claude Code has accepted trust for exactly this folder, from the text of its .claude.json. `claude -p` skips the
 // trust question and runs the folder's own settings and hooks, so a headless start only goes where a session already could.
@@ -179,21 +179,18 @@ export function folderTrusted(claudeJson, folder) {
 
 // Runs `claude -p` in a folder with one message, which costs no turn when it's a local command such as /usage.
 // Resolves to its stdout. Throws when the folder isn't trusted, so nothing runs there, or when it didn't finish in time.
-export async function runHeadless(exec, folder, text, trusted, { limitMs = HEADLESS_MS } = {}) {
+// There's no JS timer here: a mod has no `setTimeout` or `clearTimeout`. The watchdog stops `claude`, and `exec` itself
+// gives up at 30 s, so the read always settles.
+export async function runHeadless(exec, folder, text, trusted) {
   if (trusted !== true) throw new Error("folder not trusted");
-  let timer;
-  const late = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("claude -p took too long")), limitMs); });
-  try {
-    const r = await Promise.race([exec("zsh", ["-ic", SCRIPT, "zsh", userLine(text), ...HEADLESS], { cwd: folder }), late]);
-    if (r.code !== 0 && !/"subtype"\s*:\s*"init"/.test(String(r.stdout))) throw new Error(`claude -p exited ${r.code}`);
-    return r.stdout;
-  } finally {
-    clearTimeout(timer);
-  }
+  const r = await exec("zsh", ["-ic", SCRIPT, "zsh", userLine(text), ...HEADLESS], { cwd: folder });
+  if (STOPPED.has(r.code)) throw new Error("claude -p took too long");
+  if (r.code !== 0 && !/"subtype"\s*:\s*"init"/.test(String(r.stdout))) throw new Error(`claude -p exited ${r.code}`);
+  return r.stdout;
 }
 
 // Cached per folder for the life of the app. A failed read is tried again after RETRY_MS, never sooner, because each
-// headless start runs the user's hooks. Concurrent askers share one read. A read always settles, because `runHeadless`
+// headless start runs the user's hooks. Concurrent askers share one read. A read always settles, because `exec`
 // gives up, so a hang drops the shared promise and counts as a failure like any other.
 const RETRY_MS = 60_000;
 const cache = new Map();
@@ -202,13 +199,13 @@ export const cachedList = (folder) => cache.get(folder)?.list ?? null;
 export const resetCache = () => cache.clear();
 
 // `trusted(folder)` says whether the folder is trusted, and a folder that isn't gets the table's commands only.
-export function ensureList(folder, { exec, trusted, now = Date.now, limitMs }) {
+export function ensureList(folder, { exec, trusted, now = Date.now }) {
   const hit = cache.get(folder);
   if (hit?.promise) return hit.promise;
   if (hit?.list) return Promise.resolve(hit.list);
   if (hit?.failedAt != null && now() - hit.failedAt < RETRY_MS) return Promise.resolve(null);
   const entry = { list: null, failedAt: null, promise: null };
-  entry.promise = Promise.resolve().then(() => trusted?.(folder)).then((ok) => runHeadless(exec, folder, "/usage", ok === true, { limitMs })).then((out) => {
+  entry.promise = Promise.resolve().then(() => trusted?.(folder)).then((ok) => runHeadless(exec, folder, "/usage", ok === true)).then((out) => {
     const parsed = parseStream(out);
     if (!parsed.names.length) throw new Error("no commands in the init message");
     entry.list = buildList(parsed);

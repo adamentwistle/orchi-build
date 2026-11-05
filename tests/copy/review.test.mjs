@@ -63,8 +63,8 @@ test("Put in terminal, when off, names why in its tooltip", () => {
   assert.match(src, /"Terminal not in this app"/);
 });
 
-test("a chat still looking for its session shows a dot, not a blank pane", () => {
-  assert.match(read("mods/claude-chat/main.js"), /this\.session && \(this\.loaded \|\| this\.absent\) \? v_flex\(\) : notice\(LOOKING, t\)/);
+test("a chat still looking for its session shows a dot, and an empty one keeps the composer at the foot", () => {
+  assert.match(read("mods/claude-chat/main.js"), /this\.session && \(this\.loaded \|\| this\.absent\) \? v_flex\(\)\.flex_1\(\)\.min_h\(0\) : notice\(LOOKING, t\)/);
 });
 
 test("Orchi says where the switchboard is when it can't show it", () => {

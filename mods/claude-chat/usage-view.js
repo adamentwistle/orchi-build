@@ -106,7 +106,7 @@ function using(t, s, cb) {
   const d = s.detail;
   if (d.status === "loading") return loadingLine(t);
   if (d.status === "untrusted") return div().text_size(12.5).text_color(t.foreground).child("Folder not trusted");
-  if (d.status === "error") return div().text_size(12.5).text_color(t.foreground).child("Couldn't read");
+  if (d.status === "error") return div().text_size(12.5).text_color(t.foreground).child(d.reason ? `Couldn't read: ${d.reason}` : "Couldn't read");
   const ranges = d.data.ranges, r = ranges.find((x) => x.label === s.range) ?? ranges[0];
   const items = ranges.map((x) => ({ id: x.label, label: x.label }));
   return v_flex().gap(12)

@@ -63,11 +63,12 @@ export class Commands {
   }
 
   // Called when the composer's send has gone through. A dialog command swaps to the terminal now. Any other / command
-  // is watched, in case it opens a dialog.
+  // is watched, in case it opens a dialog. True means the transcript won't answer this message, so its bubble should go.
   delivered(text, cx) {
     const r = route(text);
-    if (r.kind === "terminal") this.swap(cx);
-    else if (r.kind === "command") this.watchForDialog(cx);
+    if (r.kind === "terminal") { this.swap(cx); return true; }
+    if (r.kind === "command") this.watchForDialog(cx);
+    return false;
   }
 
   // Only from a chat that's the focused pane: `pane.focus` would pull the window from another tab, and keys typed there would
@@ -202,8 +203,8 @@ export class Commands {
       u.detail = { status: "loading" };
       let next;
       try {
-        next = !folder ? { status: "error" } : (await this.trusted(folder)) ? { status: "ready", data: await sharedDetail(exec, folder, true) } : { status: "untrusted" };
-      } catch { next = { status: "error" }; }
+        next = !folder ? { status: "error", reason: "no folder" } : (await this.trusted(folder)) ? { status: "ready", data: await sharedDetail(exec, folder, true) } : { status: "untrusted" };
+      } catch (e) { next = { status: "error", reason: e?.message }; }
       if (!live()) return;
       u.detail = next;
       this.fit(u); cx.notify();

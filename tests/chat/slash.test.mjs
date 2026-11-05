@@ -192,11 +192,12 @@ test("a failed read is tried again only after a minute", async () => {
   assert.equal(cachedList("/f"), null);
 });
 
-test("a headless start that never answers gives up, and the next ask after a minute starts again", async () => {
+test("a headless start that never answers gives up when exec does, and the next ask after a minute starts again", async () => {
   resetCache();
   let calls = 0, clock = 1_000_000;
-  const hang = async () => { calls++; return new Promise(() => {}); };
-  const io = { exec: hang, trusted: () => true, now: () => clock, limitMs: 20 };
+  // Herdr's exec gives up at 30 s, so a hang reaches the list as a rejection.
+  const hang = async () => { calls++; throw new Error("exec timed out"); };
+  const io = { exec: hang, trusted: () => true, now: () => clock };
   assert.equal(await ensureList("/h", io), null);
   assert.equal(await ensureList("/h", io), null);
   assert.equal(calls, 1);
@@ -206,10 +207,19 @@ test("a headless start that never answers gives up, and the next ask after a min
   assert.ok(cachedList("/h").length);
 });
 
-test("runHeadless rejects a hang in time", async () => {
-  const started = Date.now();
-  await assert.rejects(runHeadless(() => new Promise(() => {}), "/x", "/usage", true, { limitMs: 30 }), /took too long/);
-  assert.ok(Date.now() - started < 1000);
+test("runHeadless says a read the watchdog stopped took too long", async () => {
+  for (const code of [143, 137]) await assert.rejects(runHeadless(async () => ({ code, stdout: "" }), "/x", "/usage", true), /took too long/);
+});
+
+test("a headless read needs no JS timer, because Herdr's mod runtime has none", async () => {
+  const saved = { setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout };
+  const missing = (name) => () => { throw new Error(`\`${name}\` is not available in the shell`); };
+  globalThis.setTimeout = missing("setTimeout"); globalThis.clearTimeout = missing("clearTimeout");
+  try {
+    assert.equal(await runHeadless(async () => ok(stream), "/x", "/usage", true), stream);
+    resetCache();
+    assert.ok((await ensureList("/t", { exec: async () => ok(stream), trusted: () => true })).length);
+  } finally { Object.assign(globalThis, saved); }
 });
 
 // The real shell script, with a stand-in `claude` that hangs and the watchdog cut to one second.
