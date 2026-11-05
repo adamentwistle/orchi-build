@@ -189,7 +189,7 @@ def test_everything_put_there_is_recorded_as_orchis(box, run):
     for rel, _ in shipped("mods"):
         assert str(box.app / "mods" / rel) in owned
     for path in (box.command, box.libexec / "orchi-app" / "herdr", box.skill, box.app / "keys.json",
-                 box.app / "settings.json", box.app / "programs.json", box.app / "layouts" / "main-linear.json",
+                 box.app / "settings.json", box.app / "programs.json", box.app / "layouts" / "orchi.json",
                  box.app / "themes" / "orchi-dark.json", box.app / "sounds" / "done.mp3"):
         assert str(path) in owned, path
 
@@ -336,13 +336,13 @@ def test_a_new_mod_gets_its_mod_json_before_anything_else(box, monkeypatch):
 # The layout
 
 def stray_layout(extra="browser-pane"):
-    layout = json.loads((paths.data_dir() / "layouts" / "main-linear.json").read_text())
+    layout = json.loads((paths.data_dir() / "layouts" / "orchi.json").read_text())
     layout["children"].append({"id": "extra", "type": "block", "content": {"mod": extra}})
     return json.dumps(layout)
 
 
 def test_a_layout_holding_a_mod_orchi_lacks_is_not_replaced_when_there_is_no_one_to_ask(box, run, no_terminal):
-    path = box.app / "layouts" / "main-linear.json"
+    path = box.app / "layouts" / "orchi.json"
     path.parent.mkdir(parents=True)
     path.write_text(stray_layout())
     code, report = run()
@@ -355,18 +355,18 @@ def test_a_layout_holding_a_mod_orchi_lacks_is_not_replaced_when_there_is_no_one
 
 
 def test_a_layout_with_a_mod_orchi_lacks_is_replaced_with_a_backup_when_the_answer_is_yes(box, run, monkeypatch):
-    path = box.app / "layouts" / "main-linear.json"
+    path = box.app / "layouts" / "orchi.json"
     path.parent.mkdir(parents=True)
     path.write_text(stray_layout())
     asked = answering(monkeypatch, "Replace")
     code, report = run()
     assert code == 0 and len(asked) == 1 and "browser-pane" in asked[0]
-    assert path.read_bytes() == (paths.data_dir() / "layouts" / "main-linear.json").read_bytes()
+    assert path.read_bytes() == (paths.data_dir() / "layouts" / "orchi.json").read_bytes()
     assert (Path(report["backup"]) / str(path).lstrip("/")).read_text() == stray_layout()
 
 
 def test_a_layout_is_kept_when_the_answer_is_keep_and_asked_about_again_next_time(box, run, monkeypatch):
-    path = box.app / "layouts" / "main-linear.json"
+    path = box.app / "layouts" / "orchi.json"
     path.parent.mkdir(parents=True)
     path.write_text(stray_layout())
     answering(monkeypatch, "Keep")
@@ -379,34 +379,34 @@ def test_a_layout_is_kept_when_the_answer_is_keep_and_asked_about_again_next_tim
 
 def test_an_edited_layout_that_loses_no_mod_is_replaced_without_asking(box, run, monkeypatch):
     run()
-    path = box.app / "layouts" / "main-linear.json"
+    path = box.app / "layouts" / "orchi.json"
     layout = json.loads(path.read_text())
     layout["id"] = "mine"
     path.write_text(json.dumps(layout))
     asked = answering(monkeypatch, "Keep")
     code, report = run()
     assert code == 0 and asked == []
-    assert path.read_bytes() == (paths.data_dir() / "layouts" / "main-linear.json").read_bytes()
+    assert path.read_bytes() == (paths.data_dir() / "layouts" / "orchi.json").read_bytes()
     assert json.loads((Path(report["backup"]) / str(path).lstrip("/")).read_text())["id"] == "mine"
 
 
 def test_a_layout_orchi_made_is_replaced_without_asking_when_a_new_version_drops_a_mod(box, run, tmp_path,
                                                                                           monkeypatch):
-    current = (paths.data_dir() / "layouts" / "main-linear.json").read_text()
+    current = (paths.data_dir() / "layouts" / "orchi.json").read_text()
     copy = moved_copy(tmp_path, monkeypatch)
-    (copy / "layouts" / "main-linear.json").write_text(stray_layout("old-mod"))
+    (copy / "layouts" / "orchi.json").write_text(stray_layout("old-mod"))
     assert run()[0] == 0
-    (copy / "layouts" / "main-linear.json").write_text(current)
+    (copy / "layouts" / "orchi.json").write_text(current)
     asked = answering(monkeypatch, "Keep")
     code, _ = run()
     assert code == 0 and asked == []
-    assert "old-mod" not in (box.app / "layouts" / "main-linear.json").read_text()
+    assert "old-mod" not in (box.app / "layouts" / "orchi.json").read_text()
 
 
 def test_a_layout_that_is_a_link_is_replaced_by_a_copy_and_the_link_kept(box, run, tmp_path):
     (box.app / "layouts").mkdir(parents=True)
-    path = box.app / "layouts" / "main-linear.json"
-    path.symlink_to(paths.data_dir() / "layouts" / "main-linear.json")
+    path = box.app / "layouts" / "orchi.json"
+    path.symlink_to(paths.data_dir() / "layouts" / "orchi.json")
     code, report = run()
     assert code == 0 and not path.is_symlink()
     assert (Path(report["backup"]) / str(path).lstrip("/")).is_symlink()
@@ -791,11 +791,11 @@ def test_an_unreadable_json_file_says_it_cannot_be_read(box, run):
 def test_an_install_from_before_the_tickets_panel_moves_to_it_with_no_question(box, run, tmp_path, monkeypatch):
     """An install with the Linear panel: its folder, its layout block and its key go to the tickets panel's."""
     real = paths.data_dir()
-    layout = (real / "layouts" / "main-linear.json").read_text()
+    layout = (real / "layouts" / "orchi.json").read_text()
     keys = (real / "keys" / "tickets.json").read_text()
     copy = moved_copy(tmp_path, monkeypatch)
     shutil.copytree(copy / "mods" / "tickets", copy / "mods" / "linear")
-    (copy / "layouts" / "main-linear.json").write_text(layout.replace('"tickets"', '"linear"'))
+    (copy / "layouts" / "orchi.json").write_text(layout.replace('"tickets"', '"linear"'))
     (copy / "keys" / "tickets.json").unlink()
     (copy / "keys" / "linear.json").write_text(keys.replace("mod.open:tickets", "mod.open:linear"))
     shutil.rmtree(copy / "mods" / "tickets")
@@ -804,14 +804,14 @@ def test_an_install_from_before_the_tickets_panel_moves_to_it_with_no_question(b
 
     shutil.rmtree(copy / "mods" / "linear")
     shutil.copytree(real / "mods" / "tickets", copy / "mods" / "tickets", ignore=shutil.ignore_patterns("__pycache__"))
-    (copy / "layouts" / "main-linear.json").write_text(layout)
+    (copy / "layouts" / "orchi.json").write_text(layout)
     (copy / "keys" / "linear.json").unlink()
     (copy / "keys" / "tickets.json").write_text(keys)
     asked = answering(monkeypatch, "Keep")
     assert run()[0] == 0 and asked == []
     assert not (box.app / "mods" / "linear").exists()
     assert (box.app / "mods" / "tickets" / "main.js").exists()
-    assert '"tickets"' in (box.app / "layouts" / "main-linear.json").read_text()
-    assert '"linear"' not in (box.app / "layouts" / "main-linear.json").read_text()
+    assert '"tickets"' in (box.app / "layouts" / "orchi.json").read_text()
+    assert '"linear"' not in (box.app / "layouts" / "orchi.json").read_text()
     assert json.loads((box.app / "keys.json").read_text())["global"]["ctrl-shift-y"] == "mod.open:tickets"
     assert run("doctor")[0] == 0

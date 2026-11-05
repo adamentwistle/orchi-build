@@ -33,7 +33,7 @@ case $cmd in
     # Quiet when it works; a failed install would otherwise show as a blank layout.
     out=$(orchi "$repo" 2>&1); rc=$?
     (( rc )) && { print -r -- "$out" >&2; echo "install failed (exit $rc)" >&2; exit $rc; }
-    inenv herdr-app do layout.switch '{"name":"main-linear"}' >/dev/null
+    inenv herdr-app do layout.switch '{"name":"orchi"}' >/dev/null
     inenv herdr-app status | grep -E '"layout"|"errors"' ;;
   install) out=$(orchi "${1:-$PWD}" 2>&1); rc=$?
     (( rc )) && { print -r -- "$out" >&2; echo "install failed (exit $rc)" >&2; exit $rc; }

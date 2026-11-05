@@ -1,6 +1,6 @@
 # Spaces and agents in one list
 
-`mods/space-agents` takes the place of the shipped `spaces` and `agents` blocks in `layouts/main-linear.json`. At the top is a Needs you inbox. Below it each space folds, and under it its agents sit in folds by status: Needs you, Done, Working, Idle. A status with no agents isn't drawn.
+`mods/space-agents` takes the place of the shipped `spaces` and `agents` blocks in `layouts/orchi.json`. At the top is a Needs you inbox. Below it each space folds, and under it its agents sit in folds by status: Needs you, Done, Working, Idle. A status with no agents isn't drawn.
 
 ## How it works
 
@@ -55,4 +55,4 @@ The shipped `spaces` and `agents` mods are untouched, and other layouts still us
 
 ## Installing
 
-`orchi` only adds settings that aren't there yet, at any depth, so a mute in Settings or a picked sound stays. It copies mods and never deletes a file it didn't put there, so an icon another checkout installed stays. It removes a file it installed only when the package no longer ships it and nobody has changed it. When the installed `main-linear` layout holds a mod this tree's doesn't, it names the mod and asks before replacing the layout, and keeps a backup. A fresh home with no `keys.json` or `settings.json` works, and a private home (`HERDR_APP_HOME` not the default) leaves `~/.local/libexec/orchi-app/herdr` alone. `scripts/herdr-dev up` and `install` print a failed run's output and exit code, and `session` escapes its folder in the JSON it sends.
+`orchi` only adds settings that aren't there yet, at any depth, so a mute in Settings or a picked sound stays. It copies mods and never deletes a file it didn't put there, so an icon another checkout installed stays. It removes a file it installed only when the package no longer ships it and nobody has changed it. When the installed `orchi` layout holds a mod this tree's doesn't, it names the mod and asks before replacing the layout, and keeps a backup. A fresh home with no `keys.json` or `settings.json` works, and a private home (`HERDR_APP_HOME` not the default) leaves `~/.local/libexec/orchi-app/herdr` alone. `scripts/herdr-dev up` and `install` print a failed run's output and exit code, and `session` escapes its folder in the JSON it sends.
