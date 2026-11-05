@@ -156,6 +156,15 @@ class Screen:
                     return picked
         raise NoAnswer(f"no answer: {question}")
 
+    def ask_text(self, question):
+        """A line typed at the terminal; Enter alone is an empty answer. Raises the same as ask()."""
+        with self._asking(question) as tty:
+            self._put(tty, question, [])
+            line = _prompt(tty)
+        if not line:
+            raise NoAnswer(f"no answer: {question}")
+        return line.strip()
+
     @staticmethod
     def _list(choices):
         """The choices as the terminal shows them: outside text such as a team name has no control characters."""

@@ -172,6 +172,9 @@ class Context:
     def ask_many(self, question, choices):
         return self.screen.ask_many(question, choices)
 
+    def ask_text(self, question):
+        return self.screen.ask_text(question)
+
     def ask_secret(self, question):
         return self.screen.ask_secret(question)
 

@@ -16,7 +16,7 @@ def test_uv_tool_install_editable_runs_and_finds_the_checkout(uv, tmp_path):
     exe = Path(env["UV_TOOL_BIN_DIR"]) / "orchi"
     ran = subprocess.run([str(exe), "--version"], env=env, capture_output=True, text=True, cwd=str(tmp_path))
     assert ran.returncode == 0, ran.stderr
-    assert ran.stdout == "orchi 0.1.3\n"
+    assert ran.stdout == "orchi 0.1.4\n"
 
     python = Path(env["UV_TOOL_DIR"]) / "orchi" / "bin" / "python"
     where = subprocess.run(

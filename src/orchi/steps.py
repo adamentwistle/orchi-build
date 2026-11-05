@@ -53,6 +53,6 @@ def core():
 
 def steps():
     """Every step, in the order they run: the tools come first, since the Herdr steps need node and agent-browser, and
-    the Herdr reload is last."""
+    the Herdr reload is last. The tracker comes before the Claude steps, because its folder needs its trust answered."""
     content = herdr.steps()
-    return [*core(), migrate.OldSettings(), *tools.steps(), *claude.steps(), *content, *sources.steps(), *usage.steps(), herdr.Reload(content)]
+    return [*core(), migrate.OldSettings(), *tools.steps(), sources.LegworkTracker(), *claude.steps(), *content, *sources.steps(), *usage.steps(), herdr.Reload(content)]

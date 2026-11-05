@@ -7,7 +7,7 @@ from conftest import ROOT
 
 
 def test_version_is_0_1_0():
-    assert orchi.__version__ == "0.1.3"
+    assert orchi.__version__ == "0.1.4"
 
 
 def test_version_is_a_plain_release_number():

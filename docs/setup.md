@@ -213,4 +213,4 @@ A skill that's already a real folder in `<claude_dir>/skills` has to be moved ou
 
 `usage-guard` also works as the profile's UserPromptSubmit and PostToolUse hook, and `pane-notify` as its Stop and Notification hook (see Notifications), so keep those links in place while the hooks point at them. The hook asks a session to pause when any usage limit reaches `usage_guard_percent` in Orchi's settings, 95 when unset. That is one percent for the 5-hour window and both weekly limits. It reads `~/.cache/orchi/usage.json`, which usage-watch keeps fresh, and falls back to ccstatusline's `~/.cache/ccstatusline/usage.json` where that is installed. Nothing needs ccstatusline.
 
-The legwork skills (`legwork-tracker`, `/wrap`, `/go`, `/add`, `/log`, `/pickup`, `/shelve`, `/vision`) live in the legwork tracker repo, not here.
+The legwork skills (`legwork-tracker`, `/wrap`, `/go`, `/add`, `/log`, `/pickup`, `/shelve`, `/vision`) live in the legwork tracker repo, not here. `orchi` installs them as a plugin and sets `legwork_dir` to the tracker at `$LEGWORK_DIR`, else `~/legwork`.

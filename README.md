@@ -17,6 +17,27 @@ with Herdr showing Orchi. Run `orchi` again whenever something has drifted, and 
 
 ![orchi typed in a plain Herdr, its questions answered, and the window turning into Orchi](docs/demo/setup.gif)
 
+## What you need
+
+Orchi needs a Mac, a Claude account and [legwork](https://github.com/adamentwistle/legwork). Setup installs the rest
+after you agree: Herdr, Claude Code, the GitHub CLI, Node and the smaller tools.
+
+**Legwork is required.** It's the tracker Orchi works from: one Markdown file per project, each with a next prompt and a
+log. Planning reads it, each run works on one of its projects, and each run ends with its `/wrap`. A ticket from any
+source needs a legwork project before Go can plan it. Setup installs legwork's plugin and uses the tracker at
+`$LEGWORK_DIR`, else `~/legwork`, making one if there's none. To keep it elsewhere, set `LEGWORK_DIR` first.
+
+**Ticket sources are optional.** Setup asks about each one, and you can link any of them:
+
+| Source | What you link | What it needs |
+| --- | --- | --- |
+| Legwork | Your projects | Always on |
+| GitHub | The issues of the repos you name | `gh` signed in |
+| Linear | The teams and projects you pick | A Linear API key, kept in the keychain |
+| Markdown | Task files, or folders of them | Their paths |
+
+To change them later, edit `~/.config/orchi/settings.json` (see [Settings](#settings)). `orchi doctor` says what's missing.
+
 ## Update
 
 ```bash
@@ -87,7 +108,7 @@ its default holds. `src/orchi/settings.schema.json` is the schema. No secret eve
 | --- | --- | --- |
 | `claude_dir` | The Claude Code profile folder sessions Orchi starts run under | Claude Code's own, `~/.claude` |
 | `orchi_dir` | Orchi's checkout | `~/orchi-build` |
-| `legwork_dir` | The legwork tracker | none |
+| `legwork_dir` | The legwork tracker | Set by setup: `$LEGWORK_DIR`, else `~/legwork` |
 | `worker_limit` | Workers that can run at once, across every run, from 1 to 50 | `6` |
 | `usage_guard_percent` | How full a usage limit gets, from 1 to 100, before usage-guard pauses a session | `95` |
 | `sources` | The ticket sources planning reads: `legwork`, `github`, `linear`, `markdown` | `["legwork"]` |
