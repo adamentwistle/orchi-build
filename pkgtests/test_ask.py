@@ -145,3 +145,16 @@ def test_piped_closing_lines_after_a_question_have_no_gap(monkeypatch):
     out.ask("Remove 3 files that Orchi made?", ["Yes", "No"])
     out.finish({"summary": "Removed 3 files."})
     assert out.out.getvalue() == "Removed 3 files.\n"
+
+
+def test_a_typed_line_comes_back_trimmed(monkeypatch):
+    assert asking(monkeypatch, Tty(["  acme/site \n"])).ask_text("Repos") == "acme/site"
+
+
+def test_enter_alone_is_an_empty_answer(monkeypatch):
+    assert asking(monkeypatch, Tty(["\n"])).ask_text("Repos") == ""
+
+
+def test_a_closed_terminal_is_no_answer(monkeypatch):
+    with pytest.raises(screen.NoAnswer):
+        asking(monkeypatch, Tty([])).ask_text("Repos")

@@ -34,7 +34,7 @@ class Mac:
         monkeypatch.setenv("PATH", str(self.bin))
         monkeypatch.setattr(system, "EXTRA_DIRS", (str(self.brew_bin), str(home / ".local" / "bin")))
         self.calls, self.asked, self.pages = [], [], []
-        self.answers, self.secret, self.picks = {}, LINEAR_KEY, {}
+        self.answers, self.secret, self.picks, self.typed = {}, LINEAR_KEY, {}, {}
         self.tools_dir = home / ".local" / "bin"
         self.clt = False
         self.keychain = {}
@@ -71,6 +71,7 @@ class Mac:
         monkeypatch.setattr(screen.Screen, "ask", self.ask)
         monkeypatch.setattr(screen.Screen, "ask_many", self.ask_many, raising=False)
         monkeypatch.setattr(screen.Screen, "ask_secret", self.ask_secret, raising=False)
+        monkeypatch.setattr(screen.Screen, "ask_text", self.ask_text, raising=False)
 
     # Setting the Mac up
 
@@ -93,8 +94,10 @@ class Mac:
         self.executable(self.tools_dir / "hc")
         self.executable(self.tools_dir / "herdr-app")
         (self.home / "Applications" / "Herdr.app").mkdir(parents=True)
-        self.installed_plugins = {"mattpocock-skills@claude-plugins-official": [{"scope": "user"}]}
+        self.installed_plugins = {"mattpocock-skills@claude-plugins-official": [{"scope": "user"}],
+                                  "legwork@legwork": [{"scope": "user"}]}
         self.write_plugins()
+        (self.home / "legwork" / "projects").mkdir(parents=True)
         self.usage, self.loaded = "ok", True
         marker = state_dir() / "agent-browser-browser"
         marker.parent.mkdir(parents=True, exist_ok=True)
@@ -135,6 +138,11 @@ class Mac:
             if word.lower() in question.lower():
                 return [c for c in choices if any(c.startswith(p) or p in c for p in picked)]
         return []
+
+    def ask_text(self, question):
+        self.asked.append(question)
+        self.need_terminal(question)
+        return next((text for word, text in self.typed.items() if word.lower() in question.lower()), "")
 
     def need_terminal(self, question):
         if not self.terminal:
@@ -288,7 +296,7 @@ def states(report):
 
 
 ALL_STEPS = ["Orchi files", "Settings folder", "Settings", "Old settings", "Developer tools", "Homebrew", "GitHub CLI",
-             "terminal-notifier", "Node", "agent-browser", "Claude Code", "Herdr app", "Herdr core", "Claude profile",
-             "Skills and commands", "Planning skills", "Folder trust",
+             "terminal-notifier", "Node", "agent-browser", "Claude Code", "Herdr app", "Herdr core", "Legwork tracker", "Claude profile",
+             "Skills and commands", "Planning skills", "Legwork", "Folder trust",
              "Themes", "Mods", "Layout", "Keys", "Sounds", "App settings", "Launcher", "Browser pane",
-             "Ticket sources", "Linear key", "Linear", "House rules", "usage-watch", "Herdr reload"]
+             "Ticket sources", "GitHub repos", "Markdown paths", "Linear key", "Linear", "House rules", "usage-watch", "Herdr reload"]

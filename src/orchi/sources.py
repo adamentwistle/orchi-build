@@ -1,4 +1,5 @@
-"""Setup's questions about tickets: which sources to read, and for Linear the API key and which teams and projects.
+"""Setup's questions about tickets: where the legwork tracker is, which sources to read, which GitHub repos and Markdown
+files they mean, and for Linear the API key and which teams and projects.
 
 Both answers go in settings.json, even "none", so a question is asked once. The Linear key goes in the keychain through
 orchi.tickets.keychain and nowhere else: it is not echoed, not written to a file and not in any message here.
@@ -6,7 +7,7 @@ orchi.tickets.keychain and nowhere else: it is not echoed, not written to a file
 import os
 from pathlib import Path
 
-from orchi import herdr, migrate, settings, settings_write
+from orchi import claude, herdr, migrate, settings, settings_write
 from orchi import store as store_mod
 from orchi.engine import Step, broken, needs_fix, ok
 from orchi.plain import plain
@@ -16,6 +17,33 @@ from orchi.tools import SetupError
 
 OPTIONAL = (("github", "GitHub issues"), ("linear", "Linear"), ("markdown", "Markdown task files"))
 NUMBERS = "(numbers, separated by commas)"
+
+
+class LegworkTracker(Step):
+    """The folder of project files that planning, runs and /wrap work from. Legwork finds it at $LEGWORK_DIR, else
+    ~/legwork, so a tracker made here goes there and legwork's own commands find the same one."""
+    name = "Legwork tracker"
+
+    def place(self):
+        custom = os.environ.get("LEGWORK_DIR", "").strip()
+        return Path(os.path.expanduser(custom)) if custom else herdr.home() / "legwork"
+
+    def check(self):
+        if claude.leave_alone():
+            return ok()
+        folder = settings.read()["legwork_dir"]
+        if folder is None:
+            return needs_fix("no tracker chosen")
+        return ok() if (Path(folder) / "projects").is_dir() else needs_fix(f"no projects folder in {herdr.label(folder)}")
+
+    def fix(self, ctx):
+        folder = Path(settings.read()["legwork_dir"] or self.place())
+        if not (folder / "projects").is_dir():
+            if ctx.ask(f"Make a legwork tracker in {herdr.label(folder)}?", ["Yes", "No"]) == "No":
+                raise SetupError("no tracker, so nothing can be planned")
+            ctx.folder(folder / "projects")
+        settings_write.change(ctx, lambda s: s.__setitem__("legwork_dir", str(folder)))
+        return herdr.label(folder)
 
 
 class TicketSources(Step):
@@ -32,6 +60,63 @@ class TicketSources(Step):
                 chosen.append(source)
         settings_write.change(ctx, lambda s: s.__setitem__("sources", chosen))
         return ", ".join(chosen)
+
+
+class Listed(Step):
+    """What a chosen source reads, typed once at setup. The answer goes in settings.json even when it's empty, so the
+    question isn't asked again."""
+    source = group = key = question = None
+
+    def valid(self, item):
+        """The item as settings.json keeps it, or raises SetupError."""
+        raise NotImplementedError
+
+    def wanted(self):
+        return self.source in settings.read()["sources"]
+
+    def chosen(self):
+        found = settings_write.current().get(self.group)
+        return isinstance(found, dict) and self.key in found
+
+    def check(self):
+        return ok() if not self.wanted() or self.chosen() else needs_fix("not chosen")
+
+    def fix(self, ctx):
+        items = [self.valid(x.strip()) for x in ctx.ask_text(self.question).split(",") if x.strip()]
+
+        def apply(s):
+            found = s.setdefault(self.group, {})
+            if not isinstance(found, dict):
+                raise ValueError(f"settings.json holds a {self.group} setting that is not an object, so Orchi leaves it alone")
+            found[self.key] = items
+
+        settings_write.change(ctx, apply)
+        return f"{len(items)} chosen"
+
+
+class GitHubRepos(Listed):
+    """The repos whose issues are tickets."""
+    name = "GitHub repos"
+    source, group, key = "github", "github", "repos"
+    question = "GitHub repos, as owner/repo, separated by commas (Enter for none)"
+
+    def valid(self, item):
+        found = item.lower()
+        if not settings.REPO.fullmatch(found):
+            raise SetupError(f"{plain(item)} is not owner/repo")
+        return found
+
+
+class MarkdownPaths(Listed):
+    """The Markdown task files, or folders of them."""
+    name = "Markdown paths"
+    source, group, key = "markdown", "markdown", "paths"
+    question = "Markdown task files or folders, from / or ~/, separated by commas (Enter for none)"
+
+    def valid(self, item):
+        if not item.startswith(("/", "~/")):
+            raise SetupError(f"{plain(item)} is not a path from / or ~/")
+        return item
 
 
 def stored_key():
@@ -181,4 +266,4 @@ class HouseRules(Step):
 
 
 def steps():
-    return [TicketSources(), migrate.LinearKey(), Linear(), HouseRules()]
+    return [TicketSources(), GitHubRepos(), MarkdownPaths(), migrate.LinearKey(), Linear(), HouseRules()]

@@ -1,5 +1,5 @@
 """Setup for Claude Code: which profile folder Orchi works under, Orchi's skills and commands linked into it, the
-planning skills plugin, and the trust question for the folders Orchi starts sessions in.
+planning skills and legwork plugins, and the trust question for the folders Orchi starts sessions in.
 
 In a private window (scripts/herdr-dev) that has no claude_dir of its own, these leave the shared ~/.claude alone.
 """
@@ -15,6 +15,7 @@ from orchi.tools import SetupError, Tool, succeeded
 PLUGIN = "mattpocock-skills"
 MARKETPLACE = "claude-plugins-official"
 MARKETPLACE_SOURCE = "anthropics/claude-plugins-official"
+LEGWORK_SOURCE = "adamentwistle/legwork"
 # The browser skill is the Browser pane step's, which copies it.
 NOT_LINKED = {"herdr-browser"}
 SHOWN = 3
@@ -130,17 +131,16 @@ class SkillsAndCommands(Step):
         return ", ".join(said) or None
 
 
-class PlanningSkills(Tool):
-    """The grilling and domain-modeling skills come from the mattpocock-skills plugin, installed, not copied."""
-    name = "Planning skills"
-    label = "the planning skills"
+class Plugin(Tool):
+    """A Claude Code plugin, installed into the profile, not copied."""
+    plugin = marketplace = source = None
 
     def installed(self):
         try:
             found = json.loads((profile() / "plugins" / "installed_plugins.json").read_text())["plugins"]
         except (OSError, ValueError, KeyError, TypeError):
             return False
-        return isinstance(found, dict) and any(str(k).startswith(PLUGIN + "@") for k in found)
+        return isinstance(found, dict) and any(str(k).startswith(self.plugin + "@") for k in found)
 
     def missing(self):
         return None if leave_alone() or self.installed() else "not installed"
@@ -167,8 +167,26 @@ class PlanningSkills(Tool):
         else:
             env["CLAUDE_CONFIG_DIR"] = str(profile())
         # A new Claude Code may not know the official marketplace yet; adding one it knows is harmless.
-        ctx.run([claude, "plugin", "marketplace", "add", MARKETPLACE_SOURCE], env=env, timeout=300)
-        succeeded(ctx.run([claude, "plugin", "install", f"{PLUGIN}@{MARKETPLACE}"], env=env, timeout=300), PLUGIN)
+        ctx.run([claude, "plugin", "marketplace", "add", self.source], env=env, timeout=300)
+        succeeded(ctx.run([claude, "plugin", "install", f"{self.plugin}@{self.marketplace}"], env=env, timeout=300), self.plugin)
+
+
+class PlanningSkills(Plugin):
+    """The grilling and domain-modeling skills come from the mattpocock-skills plugin."""
+    name = "Planning skills"
+    label = "the planning skills"
+    plugin, marketplace, source = PLUGIN, MARKETPLACE, MARKETPLACE_SOURCE
+
+
+class Legwork(Plugin):
+    """Legwork's commands, /wrap, /go and /pickup among them, which every run ends on. Someone who linked its skills
+    into the profile by hand already has them."""
+    name = "Legwork"
+    label = "legwork"
+    plugin, marketplace, source = "legwork", "legwork", LEGWORK_SOURCE
+
+    def installed(self):
+        return super().installed() or (profile() / "skills" / "legwork-tracker" / "SKILL.md").is_file()
 
 
 class FolderTrust(Step):
@@ -254,4 +272,4 @@ class FolderTrust(Step):
 
 
 def steps():
-    return [ClaudeProfile(), SkillsAndCommands(), PlanningSkills(), FolderTrust()]
+    return [ClaudeProfile(), SkillsAndCommands(), PlanningSkills(), Legwork(), FolderTrust()]

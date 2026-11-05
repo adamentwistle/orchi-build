@@ -56,8 +56,10 @@ def test_a_fresh_mac_walks_every_step_and_asks_only_what_it_cannot_find_out(mac,
     assert mac.asked == [
         "Install the developer tools?", "Install Homebrew?", "Install the GitHub CLI?", "Install terminal-notifier?",
         "Install Node?", "Install agent-browser?", "Install Claude Code?", "Install Herdr app?",
-        "Install Herdr core?", "Install the planning skills?", "Also read GitHub issues?", "Also read Linear?",
-        "Also read Markdown task files?", "Linear API key", "Linear teams (numbers, separated by commas)",
+        "Install Herdr core?", "Make a legwork tracker in ~/legwork?", "Install the planning skills?", "Install legwork?",
+        "Also read GitHub issues?", "Also read Linear?", "Also read Markdown task files?",
+        "GitHub repos, as owner/repo, separated by commas (Enter for none)",
+        "Markdown task files or folders, from / or ~/, separated by commas (Enter for none)", "Linear API key", "Linear teams (numbers, separated by commas)",
         "Linear projects (numbers, separated by commas)"]
     # Each installer is the official one, run after the answer.
     assert mac.program("xcode-select", "--install")
@@ -74,7 +76,7 @@ def test_a_fresh_mac_walks_every_step_and_asks_only_what_it_cannot_find_out(mac,
 
 
 INSTALLS = {"Developer tools", "Homebrew", "GitHub CLI", "terminal-notifier", "Node", "agent-browser", "Claude Code",
-            "Herdr app", "Herdr core", "Planning skills"}
+            "Herdr app", "Herdr core", "Planning skills", "Legwork"}
 
 
 def test_a_mac_with_everything_asks_nothing_about_tools_and_a_second_run_changes_nothing(mac, home):
@@ -1081,3 +1083,119 @@ def test_a_dangling_inner_claude_json_link_is_left_alone(mac, home, tmp_path):
     assert code == 0, report
     assert json.loads((home / ".claude.json").read_text())["projects"][str(home / "orchi")]["hasTrustDialogAccepted"]
     assert not (tmp_path / "gone.json").exists()
+
+
+def no_tracker(home):
+    (home / "legwork" / "projects").rmdir()
+    (home / "legwork").rmdir()
+
+
+def no_legwork_plugin(mac):
+    mac.installed_plugins = {"mattpocock-skills@claude-plugins-official": [{"scope": "user"}]}
+    mac.write_plugins()
+
+
+def step_named(report, name):
+    return next(s for s in report["steps"] if s["name"] == name)
+
+
+def test_a_fresh_mac_gets_legwork_and_a_tracker_the_rest_of_orchi_can_find(mac, home):
+    mac.everything()
+    no_legwork_plugin(mac)
+    no_tracker(home)
+    code, report, _ = run_orchi()
+    assert code == 0, report
+    assert "Make a legwork tracker in ~/legwork?" in mac.asked and "Install legwork?" in mac.asked
+    assert ("claude", "plugin", "install", "legwork@legwork") in [c[:4] for c in mac.calls]
+    assert ("claude", "plugin", "marketplace", "add", "adamentwistle/legwork") in [c[:5] for c in mac.calls]
+    assert (home / "legwork" / "projects").is_dir()
+    assert settings_file()["legwork_dir"] == str(home / "legwork")
+
+
+def test_a_tracker_that_is_there_is_used_without_a_question(mac, home):
+    mac.everything()
+    code, report, _ = run_orchi()
+    assert code == 0, report
+    assert not any("tracker" in q for q in mac.asked)
+    assert settings_file()["legwork_dir"] == str(home / "legwork")
+
+
+def test_a_tracker_follows_legworks_own_variable(mac, home, monkeypatch):
+    mac.everything()
+    monkeypatch.setenv("LEGWORK_DIR", str(home / "notes" / "work"))
+    code, report, _ = run_orchi()
+    assert code == 0, report
+    assert "Make a legwork tracker in ~/notes/work?" in mac.asked
+    assert (home / "notes" / "work" / "projects").is_dir()
+    assert settings_file()["legwork_dir"] == str(home / "notes" / "work")
+
+
+def test_no_tracker_is_named_and_nothing_is_made(mac, home):
+    mac.everything()
+    no_tracker(home)
+    mac.answers["tracker"] = "No"
+    code, report, _ = run_orchi()
+    assert code != 0
+    step = step_named(report, "Legwork tracker")
+    assert step["status"] == "broken" and "nothing can be planned" in step["detail"]
+    assert not (home / "legwork").exists()
+
+
+def test_doctor_names_a_missing_tracker_and_makes_nothing(mac, home):
+    mac.everything()
+    no_tracker(home)
+    _, report, _ = run_orchi("doctor")
+    step = step_named(report, "Legwork tracker")
+    assert step["detail"] == "no tracker chosen"
+    assert not (home / "legwork").exists()
+
+
+def test_linked_legwork_skills_count_as_the_plugin(mac, home):
+    mac.everything()
+    no_legwork_plugin(mac)
+    skill = home / ".claude" / "skills" / "legwork-tracker"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("linked by hand")
+    run_orchi()
+    assert "Install legwork?" not in mac.asked
+
+
+def test_chosen_sources_ask_what_they_read_once(mac, home):
+    mac.everything()
+    mac.answers.update({"Linear": "No"})
+    mac.typed.update({"GitHub repos": "Acme/Site, acme/api", "Markdown": "~/tasks, /srv/todo.md"})
+    code, report, _ = run_orchi()
+    assert code == 0, report
+    assert settings_file()["github"]["repos"] == ["acme/site", "acme/api"]
+    assert settings_file()["markdown"]["paths"] == ["~/tasks", "/srv/todo.md"]
+    mac.asked.clear()
+    run_orchi()
+    assert mac.asked == []
+
+
+def test_enter_alone_is_an_answer_and_isnt_asked_again(mac, home):
+    mac.everything()
+    mac.answers.update({"Linear": "No"})
+    run_orchi()
+    assert settings_file()["github"]["repos"] == [] and settings_file()["markdown"]["paths"] == []
+    mac.asked.clear()
+    run_orchi()
+    assert mac.asked == []
+
+
+def test_a_source_not_chosen_asks_nothing_about_it(mac, home):
+    mac.everything()
+    mac.answers.update({"GitHub": "No", "Linear": "No", "Markdown task files?": "No"})
+    run_orchi()
+    assert not any("repos" in q or "folders" in q for q in mac.asked)
+
+
+def test_a_bad_repo_is_named_and_not_saved(mac, home):
+    mac.everything()
+    mac.answers.update({"Linear": "No"})
+    mac.typed["GitHub repos"] = "not a repo"
+    code, report, _ = run_orchi()
+    assert code != 0
+    step = step_named(report, "GitHub repos")
+    assert step["status"] == "broken" and "not a repo is not owner/repo" in step["detail"]
+    assert "repos" not in settings_file().get("github", {})

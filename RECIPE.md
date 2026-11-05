@@ -4,7 +4,7 @@ A window for running many Claude Code agents at once. The sidebar lists every sp
 
 ![Orchi](preview.png)
 
-To use it, run the installer. The layout and mods alone can't run the orchestration behind the panels (see Watch out).
+To use it, run the installer. The layout and mods alone can't run the orchestration behind the panels (see Watch out). It needs a Mac, a Claude account and [legwork](https://github.com/adamentwistle/legwork), the tracker it works from, which the installer adds. GitHub issues, Linear and Markdown task files are optional ticket sources, chosen during setup.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/adamentwistle/orchi-build/main/install.sh | sh
@@ -44,18 +44,19 @@ The Orchi panel has three cards. Decisions shows one question at a time with its
 
 ## Watch out
 
-- **The gallery copy isn't enough.** Adding this layout copies `layouts/orchi.json` and the mods. It leaves out the `orchi` command, `bin/`, the skills, `keys/`, `sounds/` and `themes/`. Tickets and Orchi then have nothing to read. Run the installer, which adds all of it and asks first.
+- **The gallery copy isn't enough.** Adding this layout copies `layouts/orchi.json` and the mods. It leaves out the `orchi` command, `bin/`, the skills, `keys/`, `sounds/`, `themes/` and legwork. Tickets and Orchi then have nothing to read. Run the installer, which adds all of it and asks first.
 - **Mac only.** `main` uses `osascript`, `zsh`, `open` and launch agents. Nothing else has been tried on this branch.
 - **What it does on your machine.** These mods run programs through `exec` and `hc`, read Claude Code transcripts, type into agent sessions, and reach the network through the ticket sources you choose. The installer adds launch agents for the usage and switchboard health checks.
 - Its Herdr pieces expect `hc` and terminals reporting agent status. A session outside Herdr won't show.
 - Shipped layouts refuse edits. Clone `main` first if you build this by hand.
 - A panel missing from `shared("workspace.panels")` is closed by the tab bar on a space switch. `panel-buttons` adds its own at start.
 - A mod can't import from another mod, so `settings.js` is copied into each one that needs it.
-- The Tickets panel's Linear source needs a key of your own.
+- **Legwork is required.** Planning and every run work from its project files, and a ticket from any source needs a legwork project before Go can plan it. The installer adds its plugin and a tracker at `$LEGWORK_DIR`, else `~/legwork`.
+- The Tickets panel's Linear source needs a key of your own, and its GitHub source needs `gh` signed in.
 
 ## Done when
 
-- `orchi doctor` reports nothing to fix, and `herdr-app check` passes on each folder in `mods/`.
+- `orchi doctor` reports nothing to fix, including the Legwork and Legwork tracker steps, and `herdr-app check` passes on each folder in `mods/`.
 - The window shows the sidebar's spaces list, and the tab row shows Tickets, Orchi and Herd.
 - Each of those three buttons opens its panel, and a second press closes it.
 - On a Claude Code session, `ctrl-shift-j` swaps to the chat and back with the same pane id.
