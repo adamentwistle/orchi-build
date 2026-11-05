@@ -14,7 +14,7 @@ Legwork ideas: work, personal and business filters, cards that brief like `/pick
 - **A new mod, `tickets`, that retires `linear`.** The folder is renamed, so its history follows it. A panel of four
   sources named after one would mislead. The Mods step removes the old folder's files, which Orchi made; the Layout
   step replaces Orchi's own layout, whose block is now `tickets`; the Keys step moves `ctrl-shift-y` to
-  `mod.open:tickets`. The layout file keeps its name, `main-linear.json`, because a new name would drop the layout the
+  `mod.open:tickets`. The layout file keeps its name, `orchi.json`, because a new name would drop the layout the
   user picked. Shared values move from `linear.*` to `tickets.*`; the review screen's choices start fresh once.
 - **Tickets come only from `orchi tickets --json`**, run with `~/.local/bin` first on `PATH`, where `uv tool install`
   puts the command. The panel calls no source's API. Problems a source reports show above the list, and the others

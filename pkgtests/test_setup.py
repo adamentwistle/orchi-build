@@ -573,7 +573,7 @@ def test_herdr_is_reloaded_when_a_content_step_changed_and_its_errors_are_report
     got = states(report)
     assert got["Themes"] == "fixed" and got["Herdr reload"] == "broken"
     assert "mods/x: bad" in detail(report, "Herdr reload")
-    assert ("herdr-app", "do", "layout.switch", json.dumps({"name": "main-linear"})) in mac.calls
+    assert ("herdr-app", "do", "layout.switch", json.dumps({"name": "orchi"})) in mac.calls
 
 
 def test_herdr_is_not_reloaded_when_nothing_changed_or_it_is_not_running(mac, home):
@@ -601,7 +601,7 @@ def test_a_fresh_window_on_herdrs_own_layout_ends_showing_orchis(mac, home):
     mac.settings(sources=["legwork"], claude_dir="~/.claude")
     code, report, _ = run_orchi()
     assert code == 0 and states(report)["Herdr reload"] == "fixed"
-    assert ("herdr-app", "do", "layout.switch", json.dumps({"name": "main-linear"})) in mac.calls
+    assert ("herdr-app", "do", "layout.switch", json.dumps({"name": "orchi"})) in mac.calls
 
 
 def test_a_fresh_install_whose_switch_failed_shows_orchis_layout_on_the_retry(mac, home):
@@ -615,7 +615,7 @@ def test_a_fresh_install_whose_switch_failed_shows_orchis_layout_on_the_retry(ma
     mac.calls.clear()
     code, report, _ = run_orchi()
     assert code == 0 and states(report)["Herdr reload"] == "fixed"
-    assert mac.program("herdr-app", "do") == [("herdr-app", "do", "layout.switch", json.dumps({"name": "main-linear"}))]
+    assert mac.program("herdr-app", "do") == [("herdr-app", "do", "layout.switch", json.dumps({"name": "orchi"}))]
 
 
 def test_a_later_run_keeps_the_layout_the_person_chose(mac, home):

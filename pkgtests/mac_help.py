@@ -44,7 +44,7 @@ class Mac:
         self.login = "ok"  # what a first read of Claude Code's login finds
         self.herdr_running = False
         self.herdr_errors = []
-        self.layout = "main-linear"
+        self.layout = "orchi"
         self.linear_teams = {"ENG": "Engineering", "OPS": "Operations"}
         self.linear_projects = {"p1": "Alpha", "p2": "Beta"}
         self.linear_refused = False

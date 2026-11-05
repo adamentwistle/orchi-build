@@ -13,8 +13,7 @@ curl -fsSL https://raw.githubusercontent.com/adamentwistle/orchi-build/main/inst
 ```
 
 It installs uv if you don't have it, then Orchi, then runs `orchi`. `orchi` asks before it installs anything, and ends
-with Herdr showing Orchi. Run `orchi` again whenever something has drifted, and `orchi doctor` to only look. While the
-repo is private, set `ORCHI_GITHUB_TOKEN` to a token that can read it.
+with Herdr showing Orchi. Run `orchi` again whenever something has drifted, and `orchi doctor` to only look.
 
 ![orchi typed in a plain Herdr, its questions answered, and the window turning into Orchi](docs/demo/setup.gif)
 

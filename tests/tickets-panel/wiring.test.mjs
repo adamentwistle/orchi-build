@@ -23,7 +23,7 @@ test("there is one tickets panel and no Linear panel", () => {
 });
 
 test("the layout holds the tickets block in the panel stack, and no linear block", () => {
-  const layout = JSON.parse(read("layouts/main-linear.json"));
+  const layout = JSON.parse(read("layouts/orchi.json"));
   const used = mods(layout);
   assert.ok(used.includes("tickets"));
   assert.ok(!used.includes("linear"));

@@ -48,7 +48,7 @@ These files are changed copies of mods and a layout that ship with the Herdr des
 | `mods/pane-header/main.js` | the shipped `pane` mod | A chat pane's header reads "Claude Code" and takes its terminal's folder and status, and a chat's unread count shows on both headers |
 | `mods/orchi-chrome/main.js` | the shipped `workspace-chrome` mod | Orchi's name and mark in the sidebar in place of Herdr's |
 | `mods/space-agents/main.js` | the shipped `spaces` and `agents` mods | One sidebar list: a Needs you inbox, fleet counts, and each space folding with its agents under it by status |
-| `layouts/main-linear.json` | the shipped `main` layout | Orchi's mods in place of the shipped sidebar and header blocks |
+| `layouts/orchi.json` | the shipped `main` layout | Orchi's mods in place of the shipped sidebar and header blocks |
 
 ## The Linear and GitHub marks
 

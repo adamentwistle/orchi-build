@@ -278,8 +278,8 @@ class Mods(Files):
         return None
 
 
-# Orchi's layout, layouts/main-linear.json, the one that holds its panels.
-LAYOUT = "main-linear"
+# Orchi's layout, layouts/orchi.json, the one that holds its panels.
+LAYOUT = "orchi"
 
 
 class Layout(Files):

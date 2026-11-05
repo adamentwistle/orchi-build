@@ -45,7 +45,7 @@ deletes a file it didn't put there. These are the answers that shape the eight s
 
 - The `--force` flag, `HERDR_INSTALL_FORCE` and exit code 3. Nothing is lost now, so nothing needs forcing.
 - A mod folder that is a link is no longer removed. It is the person's, so the step is broken and names it.
-- Removing the `layout:main-linear` scope from `keys.json`. Nothing in Orchi writes it, and deleting a person's keys
+- Removing the `layout:orchi` scope from `keys.json`. Nothing in Orchi writes it, and deleting a person's keys
   isn't Orchi's to do.
 - The `herdr-app status` errors line at the end. B11 reloads the app and reports its errors once, at the end of a
   whole run.
