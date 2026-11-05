@@ -60,7 +60,7 @@ def test_a_fresh_mac_walks_every_step_and_asks_only_what_it_cannot_find_out(mac,
         "Also read GitHub issues?", "Also read Linear?", "Also read Markdown task files?",
         "GitHub repos, as owner/repo, separated by commas (Enter for none)",
         "Markdown task files or folders, from / or ~/, separated by commas (Enter for none)", "Linear API key", "Linear teams (numbers, separated by commas)",
-        "Linear projects (numbers, separated by commas)"]
+        "Linear projects (numbers, separated by commas)", "Add the Linear sync line to ~/legwork/house-rules.md?"]
     # Each installer is the official one, run after the answer.
     assert mac.program("xcode-select", "--install")
     assert any(u.endswith("Homebrew/install/HEAD/install.sh") for u in mac.pages)
