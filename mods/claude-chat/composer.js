@@ -223,7 +223,7 @@ export class Composer {
   // back. `stuck` is in the terminal's prompt, so a copy here would send it twice.
   async after(item, images, r, cx) {
     if (r.ok || r.reason === "stuck") for (const image of images) await forgetImage(exec, appHome(), image.path);
-    if (r.ok) this.delivered?.(item.text, cx);
+    if (r.ok && this.delivered?.(item.text, cx)) { this.sent = this.sent.filter((x) => x !== item); this.changed(cx); }
     if (!r.ok) {
       this.sent = this.sent.filter((x) => x !== item);
       if (r.reason !== "stuck") { this.giveBack(item.text); this.images = [...images, ...this.images]; }

@@ -485,7 +485,8 @@ export default class Chat extends View {
     const items = this.items;
     if (!items.length) {
       if (this.problem) return notice(this.problem, t);
-      return this.session && (this.loaded || this.absent) ? v_flex() : notice(LOOKING, t);
+      // An empty thread still fills its room, so the composer sits at the foot from the start.
+      return this.session && (this.loaded || this.absent) ? v_flex().flex_1().min_h(0) : notice(LOOKING, t);
     }
     const pending = pendingItems(items, this.fresh, BATCH);
     this.pendingCount = pending.length;
