@@ -17,7 +17,7 @@ pytestmark = pytest.mark.skipif(shutil.which("zsh") is None, reason="herdr-dev i
 FAKE_APP = """#!/bin/sh
 echo "app $* | settings=$ORCHI_SETTINGS | appbin=$ORCHI_APP_BIN" >> "$MARKS/app.log"
 case "$1" in
-  status) echo '{"layout": "orchi", "errors": []}' ;;
+  status) echo '{"layout": "orchi", "errors": []}'; exit "${FAKE_STATUS_RC:-0}" ;;
   do) echo '{"ok": true}' ;;
 esac
 exit 0
@@ -27,7 +27,7 @@ exit 0
 FAKE_ORCHI = """import os, sys
 open(os.path.join(os.environ["MARKS"], "orchi.log"), "a").write("settings=" + os.environ.get("ORCHI_SETTINGS", "") + "\\n")
 print("Needs you: Ticket sources.")
-sys.exit(1)
+sys.exit(int(os.environ.get("FAKE_ORCHI_RC", "1")))
 """
 
 
@@ -101,3 +101,12 @@ def test_the_launcher_follows_install_to_another_checkout(world, tmp_path):
     run(world, "install", "t", str(other))
     r = subprocess.run([str(window(world) / "orchi-app" / "herdr"), "x"], capture_output=True, text=True)
     assert r.stdout == "other herdr x\n"
+
+
+def test_up_fails_when_the_launcher_cannot_be_written(world):
+    window(world).mkdir(parents=True)
+    (window(world) / "orchi-app").write_text("in the way")
+    world["env"]["FAKE_ORCHI_RC"] = "0"
+    assert run(world, "up", "t", str(world["repo"])).returncode != 0
+    assert run(world, "install", "t", str(world["repo"])).returncode != 0
+
