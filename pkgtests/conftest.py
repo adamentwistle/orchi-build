@@ -48,6 +48,7 @@ def scratch_env(base):
     )
     env.pop("ORCHI_SETTINGS", None)
     env.pop("CLAUDE_CONFIG_DIR", None)
+    env.pop("LEGWORK_DIR", None)
     return env
 
 
