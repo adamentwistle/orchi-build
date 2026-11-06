@@ -15,18 +15,17 @@ checkout under test, and `<repo>` is `<scratch>/orchi-smoke`.
    `.claude/settings.local.json` to its `.git/info/exclude`. Give it `.claude/settings.local.json` with allow rules for
    `git`, `herdr` and `gh-personal pr create|edit|view|list|merge`, and deny rules for `git push origin main`,
    `git push --force` and `git push -f`.
-3. Make a launcher, `<scratch>/orchi-app/herdr`, that runs `exec <checkout>/bin/herdr "$@"`. The one in
-   `~/.local/libexec/orchi-app` runs your installed Orchi, not the checkout under test.
-4. Start the window with both of these exported, so its core and every terminal in it have them:
-   ```
-   export ORCHI_SETTINGS=~/.config/hd/smoke/orchi-settings.json ORCHI_APP_BIN=<scratch>/orchi-app
-   scripts/herdr-dev up smoke <checkout>
-   ```
-5. Only now write `~/.config/hd/smoke/orchi-settings.json`: `claude_dir` `~/.claude`, `orchi_dir` `<checkout>`,
+3. Start the window: `scripts/herdr-dev up smoke <checkout>`, from a slug whose home in `~/.config/hd` has no
+   `orchi-settings.json` yet. `herdr-dev` gives the window, its core, every terminal in it and every `run` the
+   window's own `ORCHI_SETTINGS` and a launcher in `~/.config/hd/smoke/orchi-app` for the checkout's `bin/herdr`, and
+   drops your `LEGWORK_DIR`, so sessions there never read your settings or tracker, or start your installed Orchi. It exits 1 when a step needs a terminal to answer
+   (agent-browser, ticket sources); the window is still dressed.
+4. Only now write `~/.config/hd/smoke/orchi-settings.json`: `claude_dir` `~/.claude`, `orchi_dir` `<checkout>`,
    `legwork_dir` `<scratch>/legwork`, `github.own_owners` `["adamentwistle"]`, `github.command` `gh-personal`. Written
-   before `up`, the install would link the skills into `~/.claude`.
-6. Open a space in the repo: `herdr-dev run smoke herdr-app do space.new '{"name":"smoke","folder":"<repo>"}'`. Its
-   terminal is `t1`. Below, `H` is `herdr-dev run smoke env HC_TERMINAL_ID=t1 <scratch>/orchi-app/herdr`.
+   before `up`, the install would link the skills into `~/.claude`. `agent start` starts every session with the
+   `claude_dir` it names.
+5. Open a space in the repo: `herdr-dev run smoke herdr-app do space.new '{"name":"smoke","folder":"<repo>"}'`. Its
+   terminal is `t1`. Below, `H` is `herdr-dev run smoke env HC_TERMINAL_ID=t1 ~/.config/hd/smoke/orchi-app/herdr`.
 
 A session in a folder it hasn't seen stops at the trust question, and `agent start` returns `timeout`. Answer it with
 `herdr-dev run smoke hc keys <pane> down enter`.
@@ -98,7 +97,8 @@ It passed if:
    `HERDR_TELEMETRY=0` and `ORCHI_NO_SYSTEM=1`. That drops `CLAUDE_CONFIG_DIR`, every `XDG_*` and every `HC_*`.
 3. First print where `uv tool dir --bin`, Orchi's state folder, Herdr's app home and the Claude folder would land
    (the last three from `orchi.store`, `orchi.herdr` and `orchi.settings`). Every one must be under `<scratch>/home`.
-4. Without a token, `sh < install.sh`.
+4. Without a token, the README's one line:
+   `curl -fsSL https://raw.githubusercontent.com/adamentwistle/orchi-build/main/install.sh | sh`.
 5. With one, read in the same command and passed only to that process, inside the `env -i` list, because `env -i`
    clears an assignment in front of it: `env -i <the list> ORCHI_GITHUB_TOKEN="$(gh-personal auth token)" sh <
    install.sh`.
@@ -107,11 +107,13 @@ It passed if:
 
 It passed if:
 
-- Without the token it stopped with `no latest release found ... set ORCHI_GITHUB_TOKEN`.
-- With it, it found the latest release, downloaded it, uv installed `orchi` into the scratch home, and `orchi` ran its
-  steps. Steps that need the system say they were refused, or that they need a terminal.
+- Without the token, as a stranger runs it, it found the latest release, downloaded it, uv installed `orchi` into the
+  scratch home, and `orchi` ran its steps. Steps that need the system say they were refused, or that they need a
+  terminal.
+- With the token, the checkout's own `install.sh` did the same. The line without one runs main's installer, as a
+  stranger gets it, so a change to `install.sh` is tested only here.
 - `orchi update` said in one line that the download is refused while `ORCHI_NO_SYSTEM` is set. Checking the newest
-  needs GitHub, so run it once more without `ORCHI_NO_SYSTEM` and with the token as in step 5, only after
+  needs GitHub, so run it once more without `ORCHI_NO_SYSTEM`, only after
   `gh-personal api repos/adamentwistle/orchi-build/releases/latest -q .tag_name` shows the installed version: it
   then says `Orchi <version> is the newest.` and starts nothing.
 - `orchi doctor` ran and listed every step.
@@ -130,5 +132,9 @@ It passed if:
   working state even though they land. The skills skip `--wait` for those and check the pane instead.
 - Auto mode refuses a session's edit of the `.claude/settings.local.json` of the folder it runs in, as changing its
   own permissions. Write the repo's allow rules before the planning session.
+- On Haiku, the orchestrator may make a one-line change itself, with no worker and no review. Its prompt has to say to
+  dispatch a worker pane and to review with `/pr-review`.
+- Start the orchestrator's work before prompting the switchboard. A switchboard whose first wait finds the pane
+  already done may stop to ask rather than wait again.
 - On Haiku, the review subagent can report clean after a very short run, and the auto-mode check may then refuse a
   merge chained with other commands as a merge without review.

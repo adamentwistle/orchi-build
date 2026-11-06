@@ -1,6 +1,6 @@
 """For every test under this folder: ORCHI_SETTINGS, ORCHI_STATE and HERDR_APP_HOME start out pointing into a temporary
-folder of the test's own, where there are no files, so no test reads the real settings, `orchi`'s state or Herdr's
-own files. A test that wants settings writes them there or points these elsewhere.
+folder of the test's own, where there are no files, and LEGWORK_DIR is unset, so no test reads the real settings,
+`orchi`'s state, Herdr's own files or the caller's tracker. A test that wants settings writes them there or points these elsewhere.
 
 It sits at the top so pytest loads it before bin/tests and pkgtests, whose tests import pkgtests/conftest.py by name.
 """
@@ -19,6 +19,8 @@ def no_real_settings(tmp_path_factory, monkeypatch):
     monkeypatch.setenv("ORCHI_SETTINGS", str(base / "settings.json"))
     monkeypatch.setenv("ORCHI_STATE", str(base / "state"))
     monkeypatch.setenv("HERDR_APP_HOME", str(base / "herdr-app"))
+    # The caller's own tracker, which legwork and Orchi read before ~/legwork. A test that wants one names its own.
+    monkeypatch.delenv("LEGWORK_DIR", raising=False)
 
 
 # No test reaches the real keychain or the network. Orchi's keychain reads go through
