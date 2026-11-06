@@ -43,8 +43,10 @@ case $cmd in
     # exit 1 with everything else done, so the window still gets its layout, and the output and exit code show why.
     out=$(orchi "$repo" 2>&1); rc=$?
     (( rc )) && { print -r -- "$out" >&2; echo "orchi exited $rc" >&2; }
-    inenv herdr-app do layout.switch '{"name":"orchi"}' >/dev/null
-    inenv herdr-app status | grep -E '"layout"|"errors"'
+    # orchi's own exit code first; else 1 when the window didn't take the layout or answer.
+    inenv herdr-app do layout.switch '{"name":"orchi"}' >/dev/null || (( rc )) || rc=1
+    st=$(inenv herdr-app status) || { (( rc )) || rc=1; }
+    print -r -- "$st" | grep -E '"layout"|"errors"' || (( rc )) || rc=1
     exit $rc ;;
   install) out=$(orchi "${1:-$PWD}" 2>&1); rc=$?
     (( rc )) && { print -r -- "$out" >&2; echo "install failed (exit $rc)" >&2; exit $rc; }
