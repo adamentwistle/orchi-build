@@ -14,9 +14,18 @@ set -u
 cmd=$1; slug=$2; shift 2
 home=$HOME/.config/hd/$slug
 [[ $slug == default || -z $slug ]] && { echo "bad slug"; exit 2; }
-inenv() { env -u CLAUDE_CODE_CHILD_SESSION -u HC_TERMINAL_SOCKET -u HC_TERMINAL_ID -u HC_SCOPE HC_SESSION="d$slug" HERDR_APP_HOME="$home" HERDR_TELEMETRY=0 "$@"; }
-# orchi from the repo being tested, with its own records, backups and settings file in this window's home, never yours.
-orchi() { inenv env PYTHONPATH="$1/src" ORCHI_STATE="$home/orchi-state" ORCHI_SETTINGS="$home/orchi-settings.json" python3 -m orchi; }
+# The window, its core, every terminal in it and every command run against it use this window's own Orchi settings
+# file and herdr launcher, never yours, so a session started in it runs under the profile those settings name.
+inenv() { env -u CLAUDE_CODE_CHILD_SESSION -u HC_TERMINAL_SOCKET -u HC_TERMINAL_ID -u HC_SCOPE HC_SESSION="d$slug" HERDR_APP_HOME="$home" HERDR_TELEMETRY=0 ORCHI_SETTINGS="$home/orchi-settings.json" ORCHI_APP_BIN="$home/orchi-app" "$@"; }
+# The launcher sessions in the window find first on PATH: the herdr wrapper of the checkout under test.
+launcher() {
+  local wrapper=${1:A}/bin/herdr
+  mkdir -p "$home/orchi-app"
+  print -r -- "#!/bin/sh"$'\n'"exec ${(qq)wrapper} \"\$@\"" > "$home/orchi-app/herdr"
+  chmod +x "$home/orchi-app/herdr"
+}
+# orchi from the repo being tested, with its own records and backups in this window's home, never yours.
+orchi() { launcher "$1"; inenv env PYTHONPATH="$1/src" ORCHI_STATE="$home/orchi-state" python3 -m orchi; }
 frontid() { lsappinfo info -only bundleID "$(lsappinfo front)" | sed -n 's/.*bundleID="\(.*\)".*/\1/p' | head -1; }
 openwin() {
   local f=$(frontid)
@@ -29,12 +38,15 @@ case $cmd in
     repo=${1:-$PWD}; mkdir -p "$home"
     [[ -f $home/shared.json ]] || print '{"frame.welcomed":"finished"}' > "$home/shared.json"
     if [[ ! -f $home/window.json ]]; then i=$(( $(print -n $slug | cksum | cut -d" " -f1) % 8 )); print "{\"state\":\"windowed\",\"bounds\":[$((120+70*i)),$((60+45*i)),1280,820]}" > "$home/window.json"; fi
+    launcher "$repo"
     openwin
-    # Quiet when it works; a failed install would otherwise show as a blank layout.
+    # Quiet when it works. A step that needs a terminal to answer, such as which ticket sources to read, makes orchi
+    # exit 1 with everything else done, so the window still gets its layout, and the output and exit code show why.
     out=$(orchi "$repo" 2>&1); rc=$?
-    (( rc )) && { print -r -- "$out" >&2; echo "install failed (exit $rc)" >&2; exit $rc; }
+    (( rc )) && { print -r -- "$out" >&2; echo "orchi exited $rc" >&2; }
     inenv herdr-app do layout.switch '{"name":"orchi"}' >/dev/null
-    inenv herdr-app status | grep -E '"layout"|"errors"' ;;
+    inenv herdr-app status | grep -E '"layout"|"errors"'
+    exit $rc ;;
   install) out=$(orchi "${1:-$PWD}" 2>&1); rc=$?
     (( rc )) && { print -r -- "$out" >&2; echo "install failed (exit $rc)" >&2; exit $rc; }
     print -r -- "$out" | tail -1 ;;
