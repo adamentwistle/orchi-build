@@ -17,8 +17,8 @@ checkout under test, and `<repo>` is `<scratch>/orchi-smoke`.
    `git push --force` and `git push -f`.
 3. Start the window: `scripts/herdr-dev up smoke <checkout>`, from a slug whose home in `~/.config/hd` has no
    `orchi-settings.json` yet. `herdr-dev` gives the window, its core, every terminal in it and every `run` the
-   window's own `ORCHI_SETTINGS` and a launcher in `~/.config/hd/smoke/orchi-app` for the checkout's `bin/herdr`, so
-   nothing reads your real settings or reaches your installed Orchi. It exits 1 when a step needs a terminal to answer
+   window's own `ORCHI_SETTINGS` and a launcher in `~/.config/hd/smoke/orchi-app` for the checkout's `bin/herdr`, and
+   drops your `LEGWORK_DIR`, so sessions there never read your settings or tracker, or start your installed Orchi. It exits 1 when a step needs a terminal to answer
    (agent-browser, ticket sources); the window is still dressed.
 4. Only now write `~/.config/hd/smoke/orchi-settings.json`: `claude_dir` `~/.claude`, `orchi_dir` `<checkout>`,
    `legwork_dir` `<scratch>/legwork`, `github.own_owners` `["adamentwistle"]`, `github.command` `gh-personal`. Written
@@ -110,7 +110,8 @@ It passed if:
 - Without the token, as a stranger runs it, it found the latest release, downloaded it, uv installed `orchi` into the
   scratch home, and `orchi` ran its steps. Steps that need the system say they were refused, or that they need a
   terminal.
-- With the token, the same.
+- With the token, the checkout's own `install.sh` did the same. The line without one runs main's installer, as a
+  stranger gets it, so a change to `install.sh` is tested only here.
 - `orchi update` said in one line that the download is refused while `ORCHI_NO_SYSTEM` is set. Checking the newest
   needs GitHub, so run it once more without `ORCHI_NO_SYSTEM`, only after
   `gh-personal api repos/adamentwistle/orchi-build/releases/latest -q .tag_name` shows the installed version: it
