@@ -110,3 +110,9 @@ def test_up_fails_when_the_launcher_cannot_be_written(world):
     assert run(world, "up", "t", str(world["repo"])).returncode != 0
     assert run(world, "install", "t", str(world["repo"])).returncode != 0
 
+
+def test_up_fails_when_the_window_does_not_answer_after_a_clean_install(world):
+    world["env"]["FAKE_ORCHI_RC"] = "0"
+    assert run(world, "up", "t", str(world["repo"])).returncode == 0
+    world["env"]["FAKE_STATUS_RC"] = "1"
+    assert run(world, "up", "t", str(world["repo"])).returncode != 0
