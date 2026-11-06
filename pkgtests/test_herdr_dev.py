@@ -3,6 +3,7 @@ nothing reaches the real app, its homes or the real Orchi settings."""
 import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -51,7 +52,7 @@ def world(tmp_path):
     env = {
         "HOME": str(home), "MARKS": str(marks), "PATH": f"{tools}:{home}/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin",
         "ORCHI_SETTINGS": str(tmp_path / "callers-settings.json"), "ORCHI_APP_BIN": str(tmp_path / "callers-app-bin"),
-        "CLAUDE_CONFIG_DIR": str(tmp_path / "callers-profile"),
+        "CLAUDE_CONFIG_DIR": str(tmp_path / "callers-profile"), "LEGWORK_DIR": str(tmp_path / "callers-tracker"),
     }
     return {"home": home, "marks": marks, "repo": repo, "env": env}
 
@@ -62,6 +63,17 @@ def run(world, *args):
 
 def window(world, slug="t"):
     return world["home"] / ".config" / "hd" / slug
+
+
+def wait_for_open(world):
+    """The window's own line, which the app writes from the background after `up` has returned."""
+    log = world["marks"] / "app.log"
+    for _ in range(100):
+        opened = [l for l in log.read_text().splitlines() if l.startswith("app  |")] if log.exists() else []
+        if opened:
+            return opened
+        time.sleep(0.05)
+    return []
 
 
 def test_up_dresses_the_window_when_a_step_needs_a_terminal(world):
@@ -78,11 +90,12 @@ def test_run_uses_the_windows_own_settings_and_launcher(world):
     lines = r.stdout.splitlines()
     assert f"ORCHI_SETTINGS={window(world)}/orchi-settings.json" in lines
     assert f"ORCHI_APP_BIN={window(world)}/orchi-app" in lines
+    assert not [l for l in lines if l.startswith("LEGWORK_DIR=")]
 
 
 def test_the_window_and_the_install_get_the_windows_settings(world):
     run(world, "up", "t", str(world["repo"]))
-    opened = [l for l in (world["marks"] / "app.log").read_text().splitlines() if l.startswith("app  |")]
+    opened = wait_for_open(world)
     assert opened == [f"app  | settings={window(world)}/orchi-settings.json | appbin={window(world)}/orchi-app"]
     assert (world["marks"] / "orchi.log").read_text() == f"settings={window(world)}/orchi-settings.json\n"
 
