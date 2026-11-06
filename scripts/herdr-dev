@@ -20,12 +20,11 @@ inenv() { env -u CLAUDE_CODE_CHILD_SESSION -u HC_TERMINAL_SOCKET -u HC_TERMINAL_
 # The launcher sessions in the window find first on PATH: the herdr wrapper of the checkout under test.
 launcher() {
   local wrapper=${1:A}/bin/herdr
-  mkdir -p "$home/orchi-app"
-  print -r -- "#!/bin/sh"$'\n'"exec ${(qq)wrapper} \"\$@\"" > "$home/orchi-app/herdr"
-  chmod +x "$home/orchi-app/herdr"
+  mkdir -p "$home/orchi-app" && print -r -- "#!/bin/sh"$'\n'"exec ${(qq)wrapper} \"\$@\"" > "$home/orchi-app/herdr" &&
+    chmod +x "$home/orchi-app/herdr" || { echo "can't write the launcher in $home/orchi-app" >&2; return 1; }
 }
 # orchi from the repo being tested, with its own records and backups in this window's home, never yours.
-orchi() { launcher "$1"; inenv env PYTHONPATH="$1/src" ORCHI_STATE="$home/orchi-state" python3 -m orchi; }
+orchi() { launcher "$1" || return; inenv env PYTHONPATH="$1/src" ORCHI_STATE="$home/orchi-state" python3 -m orchi; }
 frontid() { lsappinfo info -only bundleID "$(lsappinfo front)" | sed -n 's/.*bundleID="\(.*\)".*/\1/p' | head -1; }
 openwin() {
   local f=$(frontid)
@@ -38,7 +37,7 @@ case $cmd in
     repo=${1:-$PWD}; mkdir -p "$home"
     [[ -f $home/shared.json ]] || print '{"frame.welcomed":"finished"}' > "$home/shared.json"
     if [[ ! -f $home/window.json ]]; then i=$(( $(print -n $slug | cksum | cut -d" " -f1) % 8 )); print "{\"state\":\"windowed\",\"bounds\":[$((120+70*i)),$((60+45*i)),1280,820]}" > "$home/window.json"; fi
-    launcher "$repo"
+    launcher "$repo" || exit
     openwin
     # Quiet when it works. A step that needs a terminal to answer, such as which ticket sources to read, makes orchi
     # exit 1 with everything else done, so the window still gets its layout, and the output and exit code show why.
