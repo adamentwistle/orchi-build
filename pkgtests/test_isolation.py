@@ -12,10 +12,17 @@ pkg_conftest = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pkg_conftest)
 scratch_env = pkg_conftest.scratch_env
 
-def test_no_tracker_from_the_caller(tmp_path):
+import pytest
+
+# A module fixture is built before the per-test fixture that unsets LEGWORK_DIR, as test_bundled.py's install is.
+@pytest.fixture(scope="module")
+def early_env(tmp_path_factory):
+    return scratch_env(tmp_path_factory.mktemp("early"))
+
+def test_no_tracker_from_the_caller(early_env):
     # By value, never the whole environment, which would print the caller's secrets.
     assert os.environ.get("LEGWORK_DIR") is None
-    assert scratch_env(tmp_path).get("LEGWORK_DIR") is None
+    assert early_env.get("LEGWORK_DIR") is None
 """
 
 
