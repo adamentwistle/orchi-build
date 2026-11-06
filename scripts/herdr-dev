@@ -15,7 +15,8 @@ cmd=$1; slug=$2; shift 2
 home=$HOME/.config/hd/$slug
 [[ $slug == default || -z $slug ]] && { echo "bad slug"; exit 2; }
 # The window, its core, every terminal in it and every command run against it use this window's own Orchi settings
-# file and herdr launcher, never yours, so a session started in it runs under the profile those settings name.
+# file and herdr launcher, never yours, so `herdr agent start` in it starts sessions under the profile those settings
+# name. `session` below runs plain claude in the caller's profile.
 inenv() { env -u CLAUDE_CODE_CHILD_SESSION -u HC_TERMINAL_SOCKET -u HC_TERMINAL_ID -u HC_SCOPE HC_SESSION="d$slug" HERDR_APP_HOME="$home" HERDR_TELEMETRY=0 ORCHI_SETTINGS="$home/orchi-settings.json" ORCHI_APP_BIN="$home/orchi-app" "$@"; }
 # The launcher sessions in the window find first on PATH: the herdr wrapper of the checkout under test.
 launcher() {
